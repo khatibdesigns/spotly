@@ -1,9 +1,10 @@
 // Spotly — Booking sheet + confirmation. Logs a request to Firestore (CRM-visible).
-import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Alert, Share } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, ScrollView, Pressable, TextInput, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
+import { shareQr } from '../lib/shareQr';
 import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Btn, SpotImage } from '../components/ui';
@@ -171,6 +172,7 @@ export function BookingConfirmedScreen() {
   const { popToRoot, setTab } = useStore();
   const { last } = useBookings();
   const { t } = useI18n();
+  const qrRef = useRef<any>(null);
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <LinearGradient colors={['#fbe4d8', C.bg]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320 }} />
@@ -192,7 +194,7 @@ export function BookingConfirmedScreen() {
           <View style={[{ marginHorizontal: 22, marginTop: 28, padding: 20, backgroundColor: C.surface, borderRadius: R.xl, alignItems: 'center' }, SH.card]}>
             <Text style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: C.ink3 }}>{t('qr.title')}</Text>
             <View style={{ marginTop: 14, padding: 12, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: C.line }}>
-              <QRCode value={`SPOTLY:${last.id}:${last.code}`} size={150} color={C.ink} backgroundColor="#fff" />
+              <QRCode value={`SPOTLY:${last.id}:${last.code}`} size={150} color={C.ink} backgroundColor="#fff" getRef={(c) => (qrRef.current = c)} />
             </View>
             <Text style={{ fontFamily: F.mono, fontSize: 18, letterSpacing: 2, color: C.ink, marginTop: 14 }}>{last.code}</Text>
             <Text style={{ fontSize: 12.5, color: C.ink3, fontFamily: F.regular, marginTop: 6, textAlign: 'center', maxWidth: 240, lineHeight: 17 }}>{t('qr.keep')}</Text>
@@ -201,7 +203,7 @@ export function BookingConfirmedScreen() {
               size="sm"
               style={{ marginTop: 14 }}
               icon={Icons.share({ size: 14, color: C.ink })}
-              onPress={() => Share.share({ message: `${t('qr.title')} — ${last.placeName}\n${t('qr.code')}: ${last.code}` }).catch(() => {})}
+              onPress={() => shareQr(qrRef.current, `${t('qr.title')} — ${last.placeName} · ${t('qr.code')}: ${last.code}`)}
             >
               {t('qr.share')}
             </Btn>

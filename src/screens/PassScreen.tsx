@@ -1,7 +1,7 @@
 // Spotly — booking pass. The QR + redemption code the customer presents in
 // person. Opened from Profile → a booking. Reads the booking from useBookings.
-import React from 'react';
-import { View, Text, ScrollView, Share } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { C, F, R, SH } from '../lib/theme';
@@ -10,6 +10,7 @@ import { Btn, CircBtn, SpotImage } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useBookings } from '../lib/bookings';
 import { useI18n } from '../lib/i18n';
+import { shareQr } from '../lib/shareQr';
 
 export function PassScreen() {
   const insets = useSafeAreaInsets();
@@ -19,6 +20,7 @@ export function PassScreen() {
 
   const bookingId: string | undefined = stack[stack.length - 1]?.params?.bookingId;
   const b = bookings.find((x) => x.id === bookingId);
+  const qrRef = useRef<any>(null);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -41,11 +43,11 @@ export function PassScreen() {
             {b.code ? (
               <View style={[{ marginTop: 18, padding: 22, backgroundColor: C.surface, borderRadius: R.xl, alignItems: 'center', width: '100%' }, SH.card]}>
                 <View style={{ padding: 14, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: C.line }}>
-                  <QRCode value={`SPOTLY:${b.id}:${b.code}`} size={190} color={C.ink} backgroundColor="#fff" />
+                  <QRCode value={`SPOTLY:${b.id}:${b.code}`} size={190} color={C.ink} backgroundColor="#fff" getRef={(c) => (qrRef.current = c)} />
                 </View>
                 <Text style={{ fontFamily: F.mono, fontSize: 22, letterSpacing: 3, color: C.ink, marginTop: 18 }}>{b.code}</Text>
                 <Text style={{ fontSize: 13, color: C.ink3, fontFamily: F.regular, marginTop: 8, textAlign: 'center', maxWidth: 260, lineHeight: 18 }}>{t('qr.keep')}</Text>
-                <Btn kind="ghost" size="sm" style={{ marginTop: 16 }} icon={Icons.share({ size: 14, color: C.ink })} onPress={() => Share.share({ message: `${t('qr.title')} — ${b.placeName}\n${t('qr.code')}: ${b.code}` }).catch(() => {})}>
+                <Btn kind="ghost" size="sm" style={{ marginTop: 16 }} icon={Icons.share({ size: 14, color: C.ink })} onPress={() => shareQr(qrRef.current, `${t('qr.title')} — ${b.placeName} · ${t('qr.code')}: ${b.code}`)}>
                   {t('qr.share')}
                 </Btn>
               </View>

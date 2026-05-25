@@ -2,7 +2,7 @@
 // Stored top-level (bookings/{id}, orders/{id}) with a uid field; partner/print
 // integrations come later.
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { collection, onSnapshot, addDoc, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, query, where, serverTimestamp } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useAuth } from './auth';
 
@@ -47,8 +47,18 @@ export function BookingsProvider({ children }: { children: React.ReactNode }) {
       setBookings([]);
       return;
     }
-    const q = query(collection(firestore, 'bookings'), where('uid', '==', user.uid), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => setBookings(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))), () => {});
+    // No orderBy here: equality + orderBy on a different field needs a composite
+    // index. We sort by createdAt client-side instead so it always works.
+    const q = query(collection(firestore, 'bookings'), where('uid', '==', user.uid));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        setBookings(rows);
+      },
+      (e) => console.warn('bookings query', e?.message)
+    );
     return unsub;
   }, [user]);
 

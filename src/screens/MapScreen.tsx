@@ -136,18 +136,11 @@ export function MapScreen() {
         <CircBtn onPress={() => push('filters')}>{Icons.filter({ size: 16, color: C.ink })}</CircBtn>
       </View>
 
-      {/* Passport stats */}
-      <View style={{ position: 'absolute', top: insets.top + 52, left: 16, right: 16, flexDirection: 'row', gap: 8 }}>
-        <StatPill icon={Icons.globe({ size: 14, color: C.coralDk })} v={String(stats.countries)} l={t('map.countries')} />
-        <StatPill icon={Icons.pin({ size: 14, color: C.sage, filled: true })} v={String(mode === 'been' ? stats.spots : pins.length)} l={mode === 'been' ? t('map.spots') : t('map.nearbyStat')} />
-        <StatPill icon={Icons.sparkle({ size: 14, color: C.sun })} v={String(stats.weekends)} l={t('map.weekends')} />
-      </View>
-
-      {/* Search pins */}
-      <View style={[{ position: 'absolute', top: insets.top + 104, left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.96)', borderRadius: R.pill, paddingHorizontal: 14, height: 42 }, SH.pill]}>
-        {Icons.search({ size: 16, color: C.ink3 })}
+      {/* Search (sits right under the toggle) */}
+      <View style={[{ position: 'absolute', top: insets.top + 52, left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 14, height: 46 }, SH.pop]}>
+        {Icons.search({ size: 17, color: C.coral })}
         <TextInput
-          style={{ flex: 1, fontFamily: F.medium, fontSize: 14, color: C.ink }}
+          style={{ flex: 1, fontFamily: F.medium, fontSize: 14.5, color: C.ink }}
           placeholder={t('common.searchPlaces')}
           placeholderTextColor={C.ink3}
           value={mq}
@@ -155,8 +148,25 @@ export function MapScreen() {
           autoCorrect={false}
           returnKeyType="search"
         />
-        {mq.length ? <Pressable onPress={() => setMq('')} hitSlop={8}>{Icons.close({ size: 15, color: C.ink3 })}</Pressable> : null}
+        {mq.length ? (
+          <Pressable onPress={() => setMq('')} hitSlop={8} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' }}>
+            {Icons.close({ size: 13, color: C.ink2 })}
+          </Pressable>
+        ) : null}
       </View>
+
+      {/* Passport stats — hidden while searching to reduce clutter */}
+      {!mq.trim() ? (
+        <View style={{ position: 'absolute', top: insets.top + 106, left: 16, right: 16, flexDirection: 'row', gap: 8 }}>
+          <StatPill icon={Icons.globe({ size: 14, color: C.coralDk })} v={String(stats.countries)} l={t('map.countries')} />
+          <StatPill icon={Icons.pin({ size: 14, color: C.sage, filled: true })} v={String(mode === 'been' ? stats.spots : pins.length)} l={mode === 'been' ? t('map.spots') : t('map.nearbyStat')} />
+          <StatPill icon={Icons.sparkle({ size: 14, color: C.sun })} v={String(stats.weekends)} l={t('map.weekends')} />
+        </View>
+      ) : (
+        <View style={[{ position: 'absolute', top: insets.top + 106, left: 16, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: R.pill, paddingHorizontal: 12, paddingVertical: 6 }]}>
+          <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 12 }}>{shownPins.length} {shownPins.length === 1 ? t('map.spots').replace(/s$/, '') : t('map.spots')}</Text>
+        </View>
+      )}
 
       {/* Empty hint for "been" */}
       {mode === 'been' && pins.length === 0 ? (

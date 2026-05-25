@@ -4,7 +4,7 @@
 // paid promotion (an admin flips it live from the CRM).
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
-  doc, onSnapshot, setDoc, updateDoc, addDoc, collection, query, where, orderBy, serverTimestamp,
+  doc, onSnapshot, setDoc, updateDoc, addDoc, collection, query, where, serverTimestamp,
 } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useAuth } from './auth';
@@ -120,8 +120,17 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
       setBookings([]);
       return;
     }
-    const q = query(collection(firestore, 'bookings'), where('placeOwnerUid', '==', user.uid), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => setBookings(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))), () => {});
+    // No orderBy (avoids a composite index requirement); sort client-side.
+    const q = query(collection(firestore, 'bookings'), where('placeOwnerUid', '==', user.uid));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        setBookings(rows);
+      },
+      (e) => console.warn('merchant bookings query', e?.message)
+    );
     return unsub;
   }, [user, merchant]);
 
