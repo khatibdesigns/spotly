@@ -11,6 +11,7 @@ import { usePlaces } from '../lib/placesStore';
 import { usePlans, Plan, Stop } from '../lib/plans';
 import { Spot } from '../lib/places';
 import { addPlanToCalendar } from '../lib/calendar';
+import { dayDateLabel } from '../lib/aiPlan';
 import { useI18n } from '../lib/i18n';
 
 // Carry the stop's original index so edit actions map back to the flat array.
@@ -166,9 +167,17 @@ function PlanCard({
       {plan.summary ? <Text style={{ fontSize: 13, color: C.ink2, fontFamily: F.regular, marginTop: 8, lineHeight: 18 }}>{plan.summary}</Text> : null}
 
       <View style={{ marginTop: 16, gap: 16 }}>
-        {groups.map((g, gi) => (
+        {groups.map((g, gi) => {
+          const dayNum = g.stops[0]?.day;
+          const date = plan.startDate && dayNum ? dayDateLabel(plan.startDate, dayNum) : '';
+          return (
           <View key={gi} style={{ gap: 12 }}>
-            {g.label ? <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.premium }}>{g.label}</Text> : null}
+            {g.label ? (
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.premium }}>{g.label}</Text>
+                {date ? <Text style={{ fontFamily: F.semibold, fontSize: 12, color: C.coralDk }}>{date}</Text> : null}
+              </View>
+            ) : null}
             {g.stops.map((s, i) => (
               <StopRow
                 key={`${s.placeId}-${s._i}`}
@@ -183,7 +192,8 @@ function PlanCard({
               />
             ))}
           </View>
-        ))}
+          );
+        })}
       </View>
 
       {editing ? (

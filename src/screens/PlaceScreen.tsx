@@ -1,5 +1,5 @@
 // Spotly — Place detail for a real selected place (Google/curated).
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, ScrollView, Alert, Linking, Share, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,6 +14,7 @@ import { useSaves } from '../lib/saves';
 import { useProfile, familyFood } from '../lib/profile';
 import { useI18n } from '../lib/i18n';
 import { formatDistance } from '../lib/places';
+import { bumpPlaceStat } from '../lib/stats';
 
 const AMENITY_META: Record<string, { ic: (p: any) => React.ReactNode; c: string; label: string }> = {
   playArea: { ic: Icons.playArea, c: C.coral, label: 'Play area' },
@@ -46,6 +47,11 @@ export function PlaceScreen() {
   const avoid = familyFood(profile).avoid;
   const showAllergy = spot?.kind === 'dining' && avoid.length > 0;
 
+  // Count a profile view for the merchant's analytics (curated/claimed places).
+  useEffect(() => {
+    if (spot?.source === 'curated' && spot.id) bumpPlaceStat(spot.id, 'views');
+  }, [spot?.id]);
+
   const addToPlan = async () => {
     if (!spot) return;
     try {
@@ -59,6 +65,7 @@ export function PlaceScreen() {
 
   const openDirections = () => {
     if (!spot || spot.lat == null) return;
+    if (spot.source === 'curated') bumpPlaceStat(spot.id, 'clicks');
     const q = encodeURIComponent(spot.name || '');
     const url = Platform.OS === 'ios'
       ? `http://maps.apple.com/?daddr=${spot.lat},${spot.lng}&q=${q}`

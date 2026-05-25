@@ -4,13 +4,34 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Alert, ActivityIndicator, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Btn } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import { storage } from '../lib/firebase';
 import { useMerchant } from '../lib/merchant';
 import { useI18n } from '../lib/i18n';
 import { getUserLocation, searchPlaces, PlaceSearchResult } from '../lib/places';
+
+// RN-reliable local-file → Blob upload (fetch().blob() is flaky in Hermes).
+async function uploadFile(uri: string, path: string, contentType: string): Promise<string> {
+  if (!storage) throw new Error('Storage not configured');
+  const blob: Blob = await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = () => resolve(xhr.response);
+    xhr.onerror = () => reject(new Error('Could not read the file.'));
+    xhr.responseType = 'blob';
+    xhr.open('GET', uri, true);
+    xhr.send(null);
+  });
+  const r = ref(storage, path);
+  await uploadBytes(r, blob, { contentType });
+  try { (blob as any).close?.(); } catch {}
+  return getDownloadURL(r);
+}
 
 function Field({ label, ...props }: any) {
   return (
@@ -37,6 +58,42 @@ export function MerchantSetupScreen() {
   const [selected, setSelected] = useState<PlaceSearchResult | null>(null);
   const [near, setNear] = useState<{ latitude: number; longitude: number } | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  const { user } = useAuth();
+  const [phone, setPhone] = useState('');
+  const [civilIdUrl, setCivilIdUrl] = useState<string | null>(null);
+  const [docs, setDocs] = useState<{ name: string; url: string }[]>([]);
+  const [uploading, setUploading] = useState<string | null>(null);
+
+  const pickCivilId = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert(t('mset.photoPerm')); return; }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
+    if (res.canceled || !res.assets?.[0] || !user) return;
+    setUploading('civil');
+    try {
+      const url = await uploadFile(res.assets[0].uri, `merchants/${user.uid}/civilId-${Date.now()}.jpg`, 'image/jpeg');
+      setCivilIdUrl(url);
+    } catch (e: any) {
+      Alert.alert(t('mset.couldNotSave'), e?.message || '');
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const pickDoc = async () => {
+    const res = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true, multiple: false });
+    if (res.canceled || !res.assets?.[0] || !user) return;
+    const a = res.assets[0];
+    setUploading('doc');
+    try {
+      const url = await uploadFile(a.uri, `merchants/${user.uid}/docs/${Date.now()}-${a.name}`, a.mimeType || 'application/octet-stream');
+      setDocs((d) => [...d, { name: a.name, url }]);
+    } catch (e: any) {
+      Alert.alert(t('mset.couldNotSave'), e?.message || '');
+    } finally {
+      setUploading(null);
+    }
+  };
 
   // Bias the search to the merchant's area when location is available.
   useEffect(() => {
@@ -58,16 +115,20 @@ export function MerchantSetupScreen() {
     if (!selected) { Alert.alert(t('mset.needPlace')); return; }
     setBusy(true);
     try {
-      await createMerchant(bizName.trim() || selected.name, {
-        name: selected.name,
-        category: selected.category || 'Family spot',
-        kind: selected.kind,
-        lat: selected.lat,
-        lng: selected.lng,
-        photoUrl: selected.photoUrl,
-        address: selected.address,
-        googlePlaceId: selected.placeId,
-      });
+      await createMerchant(
+        bizName.trim() || selected.name,
+        {
+          name: selected.name,
+          category: selected.category || 'Family spot',
+          kind: selected.kind,
+          lat: selected.lat,
+          lng: selected.lng,
+          photoUrl: selected.photoUrl,
+          address: selected.address,
+          googlePlaceId: selected.placeId,
+        },
+        { phone: phone.trim() || undefined, civilIdUrl: civilIdUrl || undefined, docs }
+      );
     } catch (e: any) {
       Alert.alert(t('mset.couldNotSave'), e?.message || 'Please try again.');
     } finally {
@@ -140,6 +201,40 @@ export function MerchantSetupScreen() {
             ) : null}
           </>
         )}
+
+        <Field label={t('mset.phone')} placeholder={t('mset.phoneHint')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+
+        {/* Verification documents */}
+        <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 22 }}>{t('mset.verify')}</Text>
+        <Text style={{ fontSize: 12.5, color: C.ink3, fontFamily: F.regular, marginTop: 4, marginBottom: 10 }}>{t('mset.verifySub')}</Text>
+
+        <Pressable onPress={pickCivilId} style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: C.line }]}>
+          <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: civilIdUrl ? C.sageLt : C.surface2, alignItems: 'center', justifyContent: 'center' }}>
+            {Icons.user({ size: 18, color: civilIdUrl ? C.sage : C.ink3 })}
+          </View>
+          <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.ink }}>{civilIdUrl ? t('mset.uploaded') : t('mset.addCivilId')}</Text>
+          {uploading === 'civil' ? <ActivityIndicator color={C.coral} /> : civilIdUrl ? Icons.check({ size: 18, color: C.sage, strokeWidth: 3 }) : Icons.plus({ size: 18, color: C.ink3 })}
+        </Pressable>
+
+        <Pressable onPress={pickDoc} style={[{ marginTop: 10, backgroundColor: C.surface, borderRadius: R.lg, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: C.line }]}>
+          <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' }}>
+            {Icons.album({ size: 18, color: C.ink3 })}
+          </View>
+          <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.ink }}>{t('mset.addDoc')}</Text>
+          {uploading === 'doc' ? <ActivityIndicator color={C.coral} /> : Icons.plus({ size: 18, color: C.ink3 })}
+        </Pressable>
+
+        {docs.length ? (
+          <View style={{ marginTop: 10, gap: 6 }}>
+            {docs.map((d, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: C.sageLt, borderRadius: R.md }}>
+                {Icons.check({ size: 14, color: C.sage, strokeWidth: 3 })}
+                <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.semibold, fontSize: 12.5, color: C.sage }}>{d.name}</Text>
+                <Pressable onPress={() => setDocs((x) => x.filter((_, j) => j !== i))} hitSlop={6}>{Icons.close({ size: 14, color: C.sage })}</Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
 
       <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 20 }}>

@@ -170,6 +170,26 @@ export function ProfileScreen() {
           <Row icon={<IconBox ic={Icons.calendar} c={C.sky} />} title={t('profile.bookings')} det={String(bookings.length)} onPress={() => setTab('plan')} last />
         </View>
 
+        {/* Bookings with their QR passes */}
+        <SectionLabel>{t('profile.yourBookings')}</SectionLabel>
+        <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
+          {bookings.length === 0 ? (
+            <Text style={{ padding: 14, color: C.ink3, fontFamily: F.regular, fontSize: 13.5 }}>{t('profile.noBookings')}</Text>
+          ) : (
+            bookings.map((b, i) => (
+              <Row
+                key={b.id}
+                icon={<IconBox ic={Icons.calendar} c={C.coral} />}
+                title={b.placeName}
+                sub={`${b.date} · ${b.time} · ${b.status}`}
+                det={b.code ? t('profile.viewPass') : undefined}
+                onPress={() => push('pass', { bookingId: b.id })}
+                last={i === bookings.length - 1}
+              />
+            ))
+          )}
+        </View>
+
         {/* Settings */}
         <SectionLabel>{t('profile.settings')}</SectionLabel>
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>

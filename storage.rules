@@ -5,5 +5,11 @@ service firebase.storage {
     match /families/{uid}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+
+    // Merchant verification files (civil ID, registration PDFs). The owner
+    // writes; the CRM displays them via tokenized download URLs.
+    match /merchants/{uid}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }

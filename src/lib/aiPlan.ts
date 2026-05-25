@@ -43,7 +43,7 @@ export type ItStop = {
   tone?: string;
 };
 export type ItDay = { day: number; label: string; stops: ItStop[] };
-export type Itinerary = { title: string; destination: string; summary?: string; days: ItDay[]; tips?: string[] };
+export type Itinerary = { title: string; destination: string; summary?: string; days: ItDay[]; tips?: string[]; startDate?: string };
 
 export type PlanInput = {
   destination: string;
@@ -53,9 +53,19 @@ export type PlanInput = {
   notes?: string;
   favFoods?: string[]; // foods the kids love — bias restaurant picks toward these
   avoidFoods?: string[]; // foods to avoid (allergies / not allowed) — never suggest
+  startDate?: string; // ISO yyyy-mm-dd — used to label each day with a real date
 };
 
 export class AiPlanError extends Error {}
+
+// "Mon 26 May" for day N of an itinerary, given the ISO start date of day 1.
+export function dayDateLabel(startDateISO: string | undefined | null, dayNumber: number): string {
+  if (!startDateISO) return '';
+  const d = new Date(`${startDateISO}T00:00:00`);
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + (dayNumber - 1));
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
 
 function buildPrompt(input: PlanInput): string {
   const kids = input.kids?.length ? input.kids.map((k) => `${k.name || 'child'} (${k.age})`).join(', ') : 'young kids';
@@ -216,5 +226,6 @@ export async function generateItinerary(input: PlanInput): Promise<Itinerary> {
   if (!parsed?.days?.length) throw new AiPlanError('The plan came back empty. Try adding a few more details.');
   parsed.destination = parsed.destination || input.destination;
   parsed.title = parsed.title || `${input.destination} · ${input.days} days`;
+  if (input.startDate) parsed.startDate = input.startDate;
   return enrich(parsed);
 }

@@ -31,6 +31,7 @@ import { SavedScreen } from './screens/SavedScreen';
 import { KidFoodScreen } from './screens/KidFoodScreen';
 import { MerchantSetupScreen } from './screens/MerchantSetupScreen';
 import { MerchantHomeScreen } from './screens/MerchantHomeScreen';
+import { PassScreen } from './screens/PassScreen';
 
 const OVERLAYS: Record<RouteName, React.ComponentType> = {
   place: PlaceScreen,
@@ -43,6 +44,7 @@ const OVERLAYS: Record<RouteName, React.ComponentType> = {
   aiPlan: AiPlanScreen,
   saved: SavedScreen,
   kidFood: KidFoodScreen,
+  pass: PassScreen,
 };
 
 function AnimatedOverlay({ children }: { children: React.ReactNode }) {

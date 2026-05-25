@@ -28,6 +28,7 @@ export type Plan = {
   summary?: string;
   tips?: string[];
   multiDay?: boolean;
+  startDate?: string; // ISO yyyy-mm-dd of day 1 (AI itineraries)
   createdAt?: any;
 };
 
@@ -113,6 +114,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
         summary: it.summary || null,
         tips: it.tips || [],
         multiDay: true,
+        startDate: it.startDate || null,
         stops,
         status: 'upcoming',
         createdAt: serverTimestamp(),

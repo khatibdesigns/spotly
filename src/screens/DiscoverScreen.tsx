@@ -1,6 +1,6 @@
 // Spotly — Discover. Real nearby places (Google Places + curated) with photos.
 import React, { useRef, useState } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, F, R, SH } from '../lib/theme';
@@ -145,6 +145,7 @@ export function DiscoverScreen() {
   const { spots, filtered, loading, locationGranted, reload, setSelected, filters, toggleFilter, clearFilters } = usePlaces();
   const { t } = useI18n();
   const [showLocBanner, setShowLocBanner] = useState(true);
+  const [q, setQ] = useState('');
   const scrollRef = useRef<ScrollView>(null);
   const feedY = useRef(0);
   const hour = new Date().getHours();
@@ -157,8 +158,14 @@ export function DiscoverScreen() {
 
   const seeAll = () => scrollRef.current?.scrollTo({ y: Math.max(0, feedY.current - 8), animated: true });
 
-  const heroes = filtered.slice(0, 2);
-  const feed = filtered;
+  const matchesQ = (s: Spot) => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return true;
+    return `${s.name} ${s.category}`.toLowerCase().includes(needle);
+  };
+  const searched = filtered.filter(matchesQ);
+  const heroes = q.trim() ? [] : filtered.slice(0, 2);
+  const feed = searched;
 
   // "Tastes they'll love" — dining spots, ranked so any matching the kids'
   // favourite foods (by name/category) come first.
@@ -191,6 +198,21 @@ export function DiscoverScreen() {
               {Icons.sparkle({ size: 16, color: C.premium })}
             </Pressable>
           </View>
+        </View>
+
+        {/* Search */}
+        <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, backgroundColor: C.surface, borderRadius: R.pill, paddingHorizontal: 16, height: 46 }, SH.pill]}>
+          {Icons.search({ size: 18, color: C.ink3 })}
+          <TextInput
+            style={{ flex: 1, fontFamily: F.medium, fontSize: 15, color: C.ink }}
+            placeholder={t('common.searchPlaces')}
+            placeholderTextColor={C.ink3}
+            value={q}
+            onChangeText={setQ}
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {q.length ? <Pressable onPress={() => setQ('')} hitSlop={8}>{Icons.close({ size: 16, color: C.ink3 })}</Pressable> : null}
         </View>
       </View>
 

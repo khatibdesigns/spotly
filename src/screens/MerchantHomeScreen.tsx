@@ -18,7 +18,16 @@ function statusMeta(s: string, t: (k: string) => string) {
   return { label: t('mh.pending'), c: C.ink2, bg: C.surface2 };
 }
 
-function PlaceCard({ place, count, onPromote }: { place: MerchantPlace; count: number; onPromote: () => void }) {
+function StatTile({ n, label, color }: { n: number; label: string; color: string }) {
+  return (
+    <View style={{ flex: 1, minWidth: 92, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 12 }}>
+      <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 22, lineHeight: 24 }}>{n}</Text>
+      <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10.5, fontFamily: F.bold, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 3 }}>{label}</Text>
+    </View>
+  );
+}
+
+function PlaceCard({ place, count, views, clicks, onPromote }: { place: MerchantPlace; count: number; views: number; clicks: number; onPromote: () => void }) {
   const { t } = useI18n();
   const st = statusMeta(place.status, t);
   const promotedActive = place.promoted;
@@ -35,11 +44,13 @@ function PlaceCard({ place, count, onPromote }: { place: MerchantPlace; count: n
           {promotedActive ? <Text style={{ fontSize: 10, fontFamily: F.extrabold, color: '#fff', backgroundColor: C.premium, paddingHorizontal: 8, paddingVertical: 4, borderRadius: R.pill, overflow: 'hidden', letterSpacing: 0.4 }}>{t('mh.promotedTag')}</Text> : null}
         </View>
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 16 }}>
-        <View>
-          <Text style={{ fontFamily: F.extrabold, fontSize: 20, color: C.ink }}>{count}</Text>
-          <Text style={{ fontSize: 10.5, color: C.ink3, fontFamily: F.bold, textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('mh.bookingsCount')}</Text>
-        </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 18 }}>
+        {[[views, t('mh.statViews')], [clicks, t('mh.statClicks')], [count, t('mh.statBookings')]].map(([n, l], i) => (
+          <View key={i}>
+            <Text style={{ fontFamily: F.extrabold, fontSize: 18, color: C.ink }}>{n}</Text>
+            <Text style={{ fontSize: 10, color: C.ink3, fontFamily: F.bold, textTransform: 'uppercase', letterSpacing: 0.3 }}>{l}</Text>
+          </View>
+        ))}
         <View style={{ flex: 1 }} />
         {place.status === 'approved' && !promotedActive ? (
           place.promotionRequested ? (
@@ -94,8 +105,16 @@ function BookingCard({ b, onConfirm, onRedeem }: { b: MerchantBooking; onConfirm
 export function MerchantHomeScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
-  const { merchant, places, bookings, requestPromotion, markRedeemed, confirmBooking } = useMerchant();
+  const { merchant, places, bookings, stats, requestPromotion, markRedeemed, confirmBooking } = useMerchant();
   const { t, lang, setLang } = useI18n();
+
+  const totals = {
+    views: places.reduce((a, p) => a + (stats[p.id]?.views || 0), 0),
+    clicks: places.reduce((a, p) => a + (stats[p.id]?.clicks || 0), 0),
+    bookings: bookings.length,
+    redeemed: bookings.filter((b) => b.status === 'redeemed').length,
+    clients: new Set(bookings.map((b) => b.uid).filter(Boolean)).size,
+  };
 
   const promote = (place: MerchantPlace) => {
     Alert.alert(t('mh.promoteTitle'), t('mh.promoteMsg'), [
@@ -126,6 +145,15 @@ export function MerchantHomeScreen() {
               {Icons.globe({ size: 18, color: '#fff' })}
             </Pressable>
           </View>
+
+          {/* Overview analytics */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 18 }}>
+            <StatTile n={totals.views} label={t('mh.statViews')} color={C.sky} />
+            <StatTile n={totals.clicks} label={t('mh.statClicks')} color={C.sun} />
+            <StatTile n={totals.bookings} label={t('mh.statBookings')} color={C.coral} />
+            <StatTile n={totals.redeemed} label={t('mh.statRedeemed')} color={C.sage} />
+            <StatTile n={totals.clients} label={t('mh.statClients')} color={C.plum} />
+          </View>
         </LinearGradient>
 
         {/* Places */}
@@ -137,7 +165,7 @@ export function MerchantHomeScreen() {
             {places.length === 0 ? (
               <Text style={{ color: C.ink3, fontFamily: F.regular, fontSize: 14 }}>{t('mh.noPlaces')}</Text>
             ) : (
-              places.map((p) => <PlaceCard key={p.id} place={p} count={countFor(p.id)} onPromote={() => promote(p)} />)
+              places.map((p) => <PlaceCard key={p.id} place={p} count={countFor(p.id)} views={stats[p.id]?.views || 0} clicks={stats[p.id]?.clicks || 0} onPromote={() => promote(p)} />)
             )}
           </View>
         </View>

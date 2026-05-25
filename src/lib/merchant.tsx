@@ -9,6 +9,7 @@ import {
 import { firestore } from './firebase';
 import { useAuth } from './auth';
 import { SpotKind } from './places';
+import { getPlaceStat, PlaceStat } from './stats';
 
 export type Merchant = { businessName: string; createdAt?: any };
 
@@ -28,6 +29,7 @@ export type MerchantPlace = {
 
 export type MerchantBooking = {
   id: string;
+  uid?: string; // the customer who booked (for unique-client counts)
   placeId?: string;
   placeName: string;
   familyName?: string;
@@ -52,13 +54,20 @@ export type NewPlaceInput = {
   googlePlaceId?: string; // links the claim to the real Google listing
 };
 
+export type MerchantVerification = {
+  phone?: string;
+  civilIdUrl?: string;
+  docs?: { name: string; url: string }[]; // registration / supporting PDFs or images
+};
+
 type MerchantState = {
   merchant: Merchant | null;
   isMerchant: boolean;
   loading: boolean;
   places: MerchantPlace[];
   bookings: MerchantBooking[];
-  createMerchant: (businessName: string, place: NewPlaceInput) => Promise<void>;
+  stats: Record<string, PlaceStat>; // placeId → { views, clicks }
+  createMerchant: (businessName: string, place: NewPlaceInput, verification?: MerchantVerification) => Promise<void>;
   addPlace: (place: NewPlaceInput) => Promise<void>;
   requestPromotion: (placeId: string) => Promise<void>;
   markRedeemed: (bookingId: string) => Promise<void>;
@@ -73,6 +82,7 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [places, setPlaces] = useState<MerchantPlace[]>([]);
   const [bookings, setBookings] = useState<MerchantBooking[]>([]);
+  const [stats, setStats] = useState<Record<string, PlaceStat>>({});
 
   // merchants/{uid}
   useEffect(() => {
@@ -115,16 +125,34 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, [user, merchant]);
 
+  // Pull view/click counters for each owned place (refreshes when places change).
+  useEffect(() => {
+    let cancelled = false;
+    if (!places.length) { setStats({}); return; }
+    Promise.all(places.map((p) => getPlaceStat(p.id).then((s) => [p.id, s] as const)))
+      .then((entries) => { if (!cancelled) setStats(Object.fromEntries(entries)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [places]);
+
   const createMerchant = useCallback(
-    async (businessName: string, place: NewPlaceInput) => {
+    async (businessName: string, place: NewPlaceInput, verification?: MerchantVerification) => {
       if (!user || !firestore) throw new Error('Not signed in');
-      await setDoc(doc(firestore, 'merchants', user.uid), { businessName: businessName.trim(), createdAt: serverTimestamp() }, { merge: true });
+      await setDoc(
+        doc(firestore, 'merchants', user.uid),
+        { businessName: businessName.trim(), verification: verification || null, createdAt: serverTimestamp() },
+        { merge: true }
+      );
       await addDoc(collection(firestore, 'places'), {
         ...place,
         ownerUid: user.uid,
         status: 'pending',
         promoted: false,
         promotionRequested: false,
+        // Copied onto the place so the CRM can vet the claim before approving.
+        ownerPhone: verification?.phone || null,
+        ownerDocs: verification?.docs || [],
+        ownerCivilIdUrl: verification?.civilIdUrl || null,
         createdAt: serverTimestamp(),
       });
     },
@@ -173,7 +201,7 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ merchant, isMerchant: !!merchant, loading, places, bookings, createMerchant, addPlace, requestPromotion, markRedeemed, confirmBooking }}>
+    <Ctx.Provider value={{ merchant, isMerchant: !!merchant, loading, places, bookings, stats, createMerchant, addPlace, requestPromotion, markRedeemed, confirmBooking }}>
       {children}
     </Ctx.Provider>
   );

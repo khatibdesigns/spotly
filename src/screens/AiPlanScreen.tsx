@@ -12,7 +12,7 @@ import { useProfile, familyFood } from '../lib/profile';
 import { usePlans } from '../lib/plans';
 import { usePlanner } from '../lib/planner';
 import { useI18n } from '../lib/i18n';
-import { Itinerary } from '../lib/aiPlan';
+import { Itinerary, dayDateLabel } from '../lib/aiPlan';
 
 const SUGGESTION_KEYS = ['ai.s1', 'ai.s2', 'ai.s3', 'ai.s4'];
 
@@ -34,6 +34,8 @@ export function AiPlanScreen() {
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(Date.now());
+  // Editable working copy of the generated plan (remove / add stops before saving).
+  const [edited, setEdited] = useState<Itinerary | null>(null);
 
   // tick the elapsed timer while generating
   useEffect(() => {
@@ -41,6 +43,31 @@ export function AiPlanScreen() {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [status]);
+
+  // When a fresh plan arrives, seed the editable copy; clear it otherwise.
+  useEffect(() => {
+    if (status === 'ready' && result) setEdited(JSON.parse(JSON.stringify(result)));
+    else if (status !== 'ready') setEdited(null);
+  }, [status, result]);
+
+  const removeStop = (dayIdx: number, stopIdx: number) => {
+    setEdited((it) => {
+      if (!it) return it;
+      const copy: Itinerary = JSON.parse(JSON.stringify(it));
+      copy.days[dayIdx].stops.splice(stopIdx, 1);
+      return copy;
+    });
+  };
+  const addStop = (dayIdx: number, name: string) => {
+    const n = name.trim();
+    if (!n) return;
+    setEdited((it) => {
+      if (!it) return it;
+      const copy: Itinerary = JSON.parse(JSON.stringify(it));
+      copy.days[dayIdx].stops.push({ name: n, tone: 'sage' });
+      return copy;
+    });
+  };
 
   const elapsed = startedAt ? Math.floor((now - startedAt) / 1000) : 0;
   const mmss = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
@@ -87,6 +114,29 @@ export function AiPlanScreen() {
     return (m ? m[1] : '').trim() || (profile?.homeCity || 'near me');
   };
 
+  // Day-1 date for the plan: the first date in the prompt ("tomorrow", "26 May",
+  // "May 26"), else this coming Saturday so days still show real dates.
+  const nextSaturdayISO = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
+    return d.toISOString().slice(0, 10);
+  };
+  const parseStartDate = (s: string): string => {
+    const lower = s.toLowerCase();
+    if (/\btomorrow\b|غدًا|غدا|بكرة/.test(lower)) { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); }
+    if (/\btoday\b|اليوم/.test(lower)) return new Date().toISOString().slice(0, 10);
+    const MN = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
+    const MI: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    const re = new RegExp(`(?:(\\d{1,2})(?:st|nd|rd|th)?\\s*(${MN})[a-z]*)|(?:(${MN})[a-z]*\\s*(\\d{1,2})(?:st|nd|rd|th)?)`, 'i');
+    const m = s.match(re);
+    if (m) {
+      const day = m[1] ? parseInt(m[1], 10) : parseInt(m[4], 10);
+      const mon = MI[(m[2] || m[3]).slice(0, 3).toLowerCase()];
+      if (day >= 1 && day <= 31) return new Date(2026, mon, day).toISOString().slice(0, 10);
+    }
+    return nextSaturdayISO();
+  };
+
   const onGenerate = () => {
     if (!text.trim()) return;
     const food = familyFood(profile);
@@ -97,14 +147,16 @@ export function AiPlanScreen() {
       notes: text.trim(),
       favFoods: food.likes,
       avoidFoods: food.avoid,
+      startDate: parseStartDate(text),
     });
   };
 
   const save = async () => {
-    if (!result) return;
+    const plan = edited || result;
+    if (!plan || !plan.days?.length) return;
     setSaving(true);
     try {
-      await saveItinerary(result);
+      await saveItinerary(plan);
       reset();
       popToRoot();
       setTab('plan');
@@ -130,8 +182,8 @@ export function AiPlanScreen() {
 
           {status === 'generating' ? (
             <Generating mmss={mmss} progressMsg={progressMsg} />
-          ) : status === 'ready' && result ? (
-            <ItineraryPreview it={result} />
+          ) : status === 'ready' && (edited || result) ? (
+            <ItineraryPreview it={(edited || result)!} onRemoveStop={removeStop} onAddStop={addStop} />
           ) : status === 'error' ? (
             <ErrorState message={error} />
           ) : (
@@ -152,7 +204,7 @@ export function AiPlanScreen() {
           </View>
         ) : (
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Btn kind="ghost" style={{ flex: 1 }} onPress={reset}>{t('ai.newPlan')}</Btn>
+            <Btn kind="ghost" style={{ flex: 1 }} onPress={reset}>{t('ai.editPrompt')}</Btn>
             <Btn kind="primary" style={{ flex: 1.6 }} onPress={save}>{saving ? t('gallery.saving') : t('ai.saveToPlans')}</Btn>
           </View>
         )}
@@ -229,7 +281,20 @@ function ErrorState({ message }: { message: string | null }) {
   );
 }
 
-function ItineraryPreview({ it }: { it: Itinerary }) {
+function DayAdder({ onAdd }: { onAdd: (name: string) => void }) {
+  const { t } = useI18n();
+  const [v, setV] = useState('');
+  return (
+    <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
+      <View style={{ flex: 1, backgroundColor: C.surface, borderRadius: R.lg, paddingHorizontal: 12, height: 42, justifyContent: 'center', borderWidth: 1, borderColor: C.line, borderStyle: 'dashed' }}>
+        <TextInput value={v} onChangeText={setV} placeholder={t('ai.addStop')} placeholderTextColor={C.ink3} style={{ fontFamily: F.medium, fontSize: 14, color: C.ink }} returnKeyType="done" onSubmitEditing={() => { onAdd(v); setV(''); }} />
+      </View>
+      <Btn kind="ghost" size="sm" onPress={() => { onAdd(v); setV(''); }}>{t('common.add')}</Btn>
+    </View>
+  );
+}
+
+function ItineraryPreview({ it, onRemoveStop, onAddStop }: { it: Itinerary; onRemoveStop: (d: number, s: number) => void; onAddStop: (d: number, name: string) => void }) {
   const { t } = useI18n();
   return (
     <View style={{ marginTop: 16 }}>
@@ -239,12 +304,17 @@ function ItineraryPreview({ it }: { it: Itinerary }) {
         {it.summary ? <Text style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.9)', fontFamily: F.regular, marginTop: 6, lineHeight: 19 }}>{it.summary}</Text> : null}
       </LinearGradient>
 
-      {it.days.map((d) => (
+      {it.days.map((d, di) => {
+        const date = dayDateLabel(it.startDate, d.day);
+        return (
         <View key={d.day} style={{ marginTop: 18 }}>
-          <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.ink, marginBottom: 10 }}>{d.label}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+            <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.ink }}>{d.label}</Text>
+            {date ? <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: C.coralDk }}>{date}</Text> : null}
+          </View>
           <View style={{ gap: 10 }}>
             {d.stops.map((s, i) => (
-              <View key={i} style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 12, flexDirection: 'row', gap: 12 }, SH.card]}>
+              <View key={i} style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 12, flexDirection: 'row', gap: 12, alignItems: 'center' }, SH.card]}>
                 <SpotImage photoUrl={s.photoUrl || undefined} tone={s.tone || 'sun'} height={56} radius={12} style={{ width: 56 }} />
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
@@ -255,11 +325,16 @@ function ItineraryPreview({ it }: { it: Itinerary }) {
                   {s.category ? <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{s.category}</Text> : null}
                   {s.note ? <Text style={{ fontSize: 12.5, color: C.ink2, fontFamily: F.regular, marginTop: 3, lineHeight: 17 }}>{s.note}</Text> : null}
                 </View>
+                <Pressable onPress={() => onRemoveStop(di, i)} hitSlop={6} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.coralLt, alignItems: 'center', justifyContent: 'center' }}>
+                  {Icons.close({ size: 14, color: C.coralDk })}
+                </Pressable>
               </View>
             ))}
+            <DayAdder onAdd={(name) => onAddStop(di, name)} />
           </View>
         </View>
-      ))}
+        );
+      })}
 
       {it.tips?.length ? (
         <View style={{ marginTop: 18, backgroundColor: C.sageLt, borderRadius: R.xl, padding: 16 }}>

@@ -1,7 +1,7 @@
 // Spotly — Map. Real Apple map; toggle between nearby discovery and the
 // family's "places we've been" (from memories). Passport stats are real.
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, Linking, Platform } from 'react-native';
+import { View, Text, Pressable, Linking, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import { C, F, R, SH } from '../lib/theme';
@@ -56,6 +56,7 @@ export function MapScreen() {
   const [active, setActive] = useState<Pin | null>(null);
   const [events, setEvents] = useState<SpotEvent[]>([]);
   const [activeEvent, setActiveEvent] = useState<SpotEvent | null>(null);
+  const [mq, setMq] = useState('');
 
   useEffect(() => {
     getEvents().then(setEvents).catch(() => {});
@@ -78,6 +79,12 @@ export function MapScreen() {
       .map((v) => ({ id: v.key, name: v.name, lat: v.lat as number, lng: v.lng as number, photoUrl: v.photoUrl, tone: v.tone, sub: `${v.city ? v.city + ' · ' : ''}${t(v.visits === 1 ? 'gallery.visit' : 'gallery.visits', { n: v.visits })}` }));
   }, [mode, filtered, visited, t]);
 
+  const shownPins = useMemo(() => {
+    const needle = mq.trim().toLowerCase();
+    if (!needle) return pins;
+    return pins.filter((p) => `${p.name} ${p.sub}`.toLowerCase().includes(needle));
+  }, [pins, mq]);
+
   return (
     <View style={{ flex: 1, backgroundColor: C.ink }}>
       <MapView
@@ -97,7 +104,7 @@ export function MapScreen() {
           setActiveEvent(null);
         }}
       >
-        {pins.map((p) => (
+        {shownPins.map((p) => (
           <Marker
             key={p.id}
             coordinate={{ latitude: p.lat, longitude: p.lng }}
@@ -134,6 +141,21 @@ export function MapScreen() {
         <StatPill icon={Icons.globe({ size: 14, color: C.coralDk })} v={String(stats.countries)} l={t('map.countries')} />
         <StatPill icon={Icons.pin({ size: 14, color: C.sage, filled: true })} v={String(mode === 'been' ? stats.spots : pins.length)} l={mode === 'been' ? t('map.spots') : t('map.nearbyStat')} />
         <StatPill icon={Icons.sparkle({ size: 14, color: C.sun })} v={String(stats.weekends)} l={t('map.weekends')} />
+      </View>
+
+      {/* Search pins */}
+      <View style={[{ position: 'absolute', top: insets.top + 104, left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.96)', borderRadius: R.pill, paddingHorizontal: 14, height: 42 }, SH.pill]}>
+        {Icons.search({ size: 16, color: C.ink3 })}
+        <TextInput
+          style={{ flex: 1, fontFamily: F.medium, fontSize: 14, color: C.ink }}
+          placeholder={t('common.searchPlaces')}
+          placeholderTextColor={C.ink3}
+          value={mq}
+          onChangeText={setMq}
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+        {mq.length ? <Pressable onPress={() => setMq('')} hitSlop={8}>{Icons.close({ size: 15, color: C.ink3 })}</Pressable> : null}
       </View>
 
       {/* Empty hint for "been" */}
