@@ -282,6 +282,61 @@ export async function findPlace(query: string, near?: string): Promise<FoundPlac
   }
 }
 
+// Infer our coarse kind from Google place types.
+const DINING_TYPESET = new Set(['restaurant', 'cafe', 'bakery', 'ice_cream_shop', 'meal_takeaway', 'food', 'coffee_shop']);
+const SHOP_TYPESET = new Set(['store', 'shopping_mall', 'clothing_store', 'shoe_store', 'book_store', 'toy_store', 'department_store', 'gift_shop', 'baby_store']);
+function kindFromTypes(types: string[] = []): SpotKind {
+  if (types.some((t) => DINING_TYPESET.has(t))) return 'dining';
+  if (types.some((t) => SHOP_TYPESET.has(t))) return 'shop';
+  return 'activity';
+}
+
+// Multi-result text search — used by merchant onboarding so a business can find
+// and claim their real Google listing instead of typing everything by hand.
+export type PlaceSearchResult = {
+  placeId: string;
+  name: string;
+  category?: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  photoUrl?: string;
+  rating?: number;
+  kind: SpotKind;
+};
+
+export async function searchPlaces(text: string, near?: { latitude: number; longitude: number }): Promise<PlaceSearchResult[]> {
+  if (!KEY || !text.trim()) return [];
+  try {
+    const body: any = { textQuery: text.trim(), maxResultCount: 8 };
+    if (near) body.locationBias = { circle: { center: near, radius: 30000 } };
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.photos,places.primaryTypeDisplayName,places.formattedAddress,places.rating,places.types',
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data?.places) return [];
+    return data.places.map((p: any): PlaceSearchResult => ({
+      placeId: p.id,
+      name: p.displayName?.text || 'Unnamed place',
+      category: p.primaryTypeDisplayName?.text || prettyType((p.types || [])[0]),
+      address: p.formattedAddress,
+      lat: p.location?.latitude,
+      lng: p.location?.longitude,
+      photoUrl: p.photos?.[0]?.name ? photoUrl(p.photos[0].name, 600) : undefined,
+      rating: p.rating,
+      kind: kindFromTypes(p.types || []),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // Curated spots first (hand-picked), then Google activities + dining + shops,
 // de-duped by name and sorted by distance.
 export async function getSpots(loc: UserLoc): Promise<Spot[]> {

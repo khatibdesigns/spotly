@@ -48,6 +48,8 @@ export type NewPlaceInput = {
   lat?: number;
   lng?: number;
   photoUrl?: string;
+  address?: string;
+  googlePlaceId?: string; // links the claim to the real Google listing
 };
 
 type MerchantState = {

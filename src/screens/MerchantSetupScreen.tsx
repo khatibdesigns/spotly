@@ -1,23 +1,16 @@
-// Spotly — merchant onboarding. Creates the merchants/{uid} doc + claims a first
-// place (pending admin approval). Shown when an authed user intends to be a
-// business but has no merchant doc yet.
-import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
+// Spotly — merchant onboarding. Creates merchants/{uid} + claims a place by
+// searching Google Places (no manual data entry). The claim is saved as
+// pending; an admin approves it and the merchant is linked to the place.
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, Pressable, TextInput, Alert, ActivityIndicator, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
-import { Btn, Chip } from '../components/ui';
+import { Btn } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { useMerchant } from '../lib/merchant';
 import { useI18n } from '../lib/i18n';
-import { getUserLocation } from '../lib/places';
-import type { SpotKind } from '../lib/places';
-
-const KINDS: { id: SpotKind; key: string }[] = [
-  { id: 'activity', key: 'kind.activity' },
-  { id: 'dining', key: 'kind.dining' },
-  { id: 'shop', key: 'kind.shop' },
-];
+import { getUserLocation, searchPlaces, PlaceSearchResult } from '../lib/places';
 
 function Field({ label, ...props }: any) {
   return (
@@ -37,38 +30,44 @@ export function MerchantSetupScreen() {
   const { t } = useI18n();
 
   const [bizName, setBizName] = useState('');
-  const [placeName, setPlaceName] = useState('');
-  const [category, setCategory] = useState('');
-  const [kind, setKind] = useState<SpotKind>('activity');
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locating, setLocating] = useState(false);
+  const [queryText, setQueryText] = useState('');
+  const [results, setResults] = useState<PlaceSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [selected, setSelected] = useState<PlaceSearchResult | null>(null);
+  const [near, setNear] = useState<{ latitude: number; longitude: number } | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
-  const pinLocation = async () => {
-    setLocating(true);
+  // Bias the search to the merchant's area when location is available.
+  useEffect(() => {
+    getUserLocation().then((l) => { if (l.granted) setNear({ latitude: l.latitude, longitude: l.longitude }); }).catch(() => {});
+  }, []);
+
+  const runSearch = async () => {
+    if (!queryText.trim()) return;
+    setSearching(true);
+    setSearched(true);
     try {
-      const loc = await getUserLocation();
-      setCoords({ lat: loc.latitude, lng: loc.longitude });
+      setResults(await searchPlaces(queryText, near));
     } finally {
-      setLocating(false);
+      setSearching(false);
     }
   };
 
   const submit = async () => {
-    if (!bizName.trim() || !placeName.trim()) {
-      Alert.alert(t('mset.needName'));
-      return;
-    }
+    if (!selected) { Alert.alert(t('mset.needPlace')); return; }
     setBusy(true);
     try {
-      await createMerchant(bizName, {
-        name: placeName.trim(),
-        category: category.trim() || 'Family spot',
-        kind,
-        lat: coords?.lat,
-        lng: coords?.lng,
+      await createMerchant(bizName.trim() || selected.name, {
+        name: selected.name,
+        category: selected.category || 'Family spot',
+        kind: selected.kind,
+        lat: selected.lat,
+        lng: selected.lng,
+        photoUrl: selected.photoUrl,
+        address: selected.address,
+        googlePlaceId: selected.placeId,
       });
-      // merchants/{uid} snapshot flips Shell to the merchant home.
     } catch (e: any) {
       Alert.alert(t('mset.couldNotSave'), e?.message || 'Please try again.');
     } finally {
@@ -89,23 +88,58 @@ export function MerchantSetupScreen() {
         <Text style={{ marginTop: 8, fontSize: 14.5, color: C.ink2, fontFamily: F.regular, lineHeight: 21 }}>{t('mset.sub')}</Text>
 
         <Field label={t('mset.bizName')} placeholder={t('mset.bizHint')} value={bizName} onChangeText={setBizName} autoCapitalize="words" />
-        <Field label={t('mset.placeName')} placeholder={t('mset.placeHint')} value={placeName} onChangeText={setPlaceName} autoCapitalize="words" />
-        <Field label={t('mset.category')} placeholder={t('mset.catHint')} value={category} onChangeText={setCategory} autoCapitalize="words" />
 
-        <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 20, marginBottom: 10 }}>{t('mset.kind')}</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {KINDS.map((k) => (
-            <Chip key={k.id} active={kind === k.id} onPress={() => setKind(k.id)}>{t(k.key)}</Chip>
-          ))}
-        </View>
+        {/* Find your place via Google */}
+        <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 22, marginBottom: 8 }}>{t('mset.findPlace')}</Text>
 
-        <Pressable onPress={pinLocation} style={{ marginTop: 20, padding: 16, borderRadius: R.lg, backgroundColor: coords ? C.sageLt : C.coralLt, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          {Icons.pin({ size: 22, color: coords ? C.sage : C.coralDk, filled: true })}
-          <Text style={{ flex: 1, fontSize: 13.5, color: coords ? C.sage : C.coralDk, fontFamily: F.semibold }}>
-            {coords ? t('mset.locationSet') : t('mset.useLocation')}
-          </Text>
-          {locating ? <ActivityIndicator color={C.coralDk} /> : null}
-        </Pressable>
+        {selected ? (
+          <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 12, flexDirection: 'row', gap: 12, alignItems: 'center', borderWidth: 2, borderColor: C.sage }, SH.card]}>
+            {selected.photoUrl ? <Image source={{ uri: selected.photoUrl }} style={{ width: 52, height: 52, borderRadius: 10 }} /> : <View style={{ width: 52, height: 52, borderRadius: 10, backgroundColor: C.surface2 }} />}
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 15, color: C.ink }}>{selected.name}</Text>
+              <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{selected.address || selected.category}</Text>
+            </View>
+            <Pressable onPress={() => { setSelected(null); }} hitSlop={8}><Text style={{ color: C.coralDk, fontFamily: F.bold, fontSize: 13 }}>{t('mset.changePlace')}</Text></Pressable>
+          </View>
+        ) : (
+          <>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface, borderRadius: R.lg, paddingHorizontal: 14, height: 50, borderWidth: 1, borderColor: C.line }}>
+                {Icons.search({ size: 18, color: C.ink3 })}
+                <TextInput
+                  style={{ flex: 1, fontFamily: F.medium, fontSize: 15, color: C.ink }}
+                  placeholder={t('mset.searchHint')}
+                  placeholderTextColor={C.ink3}
+                  value={queryText}
+                  onChangeText={setQueryText}
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  onSubmitEditing={runSearch}
+                />
+              </View>
+              <Btn kind="dark" onPress={runSearch}>{t('mset.searchBtn')}</Btn>
+            </View>
+
+            {searching ? (
+              <ActivityIndicator color={C.coral} style={{ marginTop: 18 }} />
+            ) : results.length ? (
+              <View style={{ marginTop: 12, gap: 8 }}>
+                {results.map((r) => (
+                  <Pressable key={r.placeId} onPress={() => setSelected(r)} style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 12, flexDirection: 'row', gap: 12, alignItems: 'center' }, SH.card]}>
+                    {r.photoUrl ? <Image source={{ uri: r.photoUrl }} style={{ width: 48, height: 48, borderRadius: 10 }} /> : <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' }}>{Icons.pin({ size: 18, color: C.ink3 })}</View>}
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 14.5, color: C.ink }}>{r.name}</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{r.address || r.category}</Text>
+                    </View>
+                    {Icons.chevR({ size: 16, color: C.ink3 })}
+                  </Pressable>
+                ))}
+              </View>
+            ) : searched ? (
+              <Text style={{ marginTop: 14, color: C.ink3, fontFamily: F.regular, fontSize: 14 }}>{t('mset.noResults')}</Text>
+            ) : null}
+          </>
+        )}
       </ScrollView>
 
       <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 20 }}>
