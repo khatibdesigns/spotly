@@ -9,11 +9,13 @@ import { Icons } from '../components/icons';
 import { Btn, CircBtn, TitleHeader } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useMemories, Memory } from '../lib/memories';
+import { useI18n } from '../lib/i18n';
 
 export function GalleryScreen() {
   const insets = useSafeAreaInsets();
   const { push } = useStore();
   const { memories, visited, addMemory, uploading } = useMemories();
+  const { t } = useI18n();
   const [picked, setPicked] = useState<string | null>(null);
   const [placeName, setPlaceName] = useState('');
   const [city, setCity] = useState('');
@@ -29,7 +31,7 @@ export function GalleryScreen() {
   const pick = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Photos permission needed', 'Allow photo access to add a memory.');
+      Alert.alert(t('gallery.permTitle'), t('gallery.permMsg'));
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
@@ -54,8 +56,8 @@ export function GalleryScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <TitleHeader
-        title="Gallery"
-        eyebrow={`${memories.length} ${memories.length === 1 ? 'memory' : 'memories'} · ${visited.length} ${visited.length === 1 ? 'place' : 'places'}`}
+        title={t('gallery.title')}
+        eyebrow={t('gallery.memoryCount', { m: memories.length, p: visited.length })}
         topInset={insets.top}
         right={<CircBtn onPress={pick}>{Icons.camera({ size: 18, color: C.ink })}</CircBtn>}
       />
@@ -66,12 +68,12 @@ export function GalleryScreen() {
               <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.sageLt, borderRadius: 60 }} />
               {Icons.album({ size: 58, color: C.sage, filled: true })}
             </View>
-            <Text style={{ fontFamily: F.serif, fontSize: 26, marginTop: 22, letterSpacing: -0.5, color: C.ink, textAlign: 'center' }}>Start your family album.</Text>
+            <Text style={{ fontFamily: F.serif, fontSize: 26, marginTop: 22, letterSpacing: -0.5, color: C.ink, textAlign: 'center' }}>{t('gallery.startAlbum')}</Text>
             <Text style={{ marginTop: 8, color: C.ink2, fontFamily: F.regular, fontSize: 14.5, lineHeight: 21, textAlign: 'center', maxWidth: 290 }}>
-              Add a photo from a place you visited — we’ll build your timeline, map, and printable albums over time.
+              {t('gallery.startSub')}
             </Text>
             <View style={{ marginTop: 22, width: '100%' }}>
-              <Btn kind="sage" full onPress={pick} icon={Icons.camera({ size: 16, color: '#fff' })}>Add a memory</Btn>
+              <Btn kind="sage" full onPress={pick} icon={Icons.camera({ size: 16, color: '#fff' })}>{t('gallery.addMemory')}</Btn>
             </View>
           </View>
         ) : (
@@ -81,20 +83,20 @@ export function GalleryScreen() {
               <View style={{ position: 'absolute', right: -10, top: -10, opacity: 0.18, transform: [{ rotate: '8deg' }] }}>
                 {Icons.album({ size: 160, color: '#fff', filled: true })}
               </View>
-              <Text style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' }}>Keepsake</Text>
-              <Text style={{ fontFamily: F.serif, fontSize: 24, color: '#fff', marginTop: 6, lineHeight: 27, letterSpacing: -0.5 }}>Turn {memories.length} memories into{'\n'}a printed album.</Text>
+              <Text style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' }}>{t('gallery.keepsake')}</Text>
+              <Text style={{ fontFamily: F.serif, fontSize: 24, color: '#fff', marginTop: 6, lineHeight: 27, letterSpacing: -0.5 }}>{t('gallery.turnInto', { n: memories.length })}</Text>
               <View style={{ marginTop: 14, flexDirection: 'row', gap: 8 }}>
                 <Btn kind="dark" size="sm" style={{ backgroundColor: '#fff' }} onPress={() => push('albumEditor')} icon={Icons.album({ size: 14, color: C.sage, filled: true })}>
-                  <Text style={{ color: C.sage, fontFamily: F.bold, fontSize: 13.5 }}>Make album</Text>
+                  <Text style={{ color: C.sage, fontFamily: F.bold, fontSize: 13.5 }}>{t('gallery.makeAlbum')}</Text>
                 </Btn>
                 <Btn kind="ghost" size="sm" style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'transparent' }} onPress={pick}>
-                  <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 13.5 }}>Add more</Text>
+                  <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 13.5 }}>{t('gallery.addMore')}</Text>
                 </Btn>
               </View>
             </LinearGradient>
 
             {/* Timeline grid */}
-            <Text style={{ fontFamily: F.serif, fontSize: 22, letterSpacing: -0.4, color: C.ink, marginTop: 26 }}>Recent memories</Text>
+            <Text style={{ fontFamily: F.serif, fontSize: 22, letterSpacing: -0.4, color: C.ink, marginTop: 26 }}>{t('gallery.recent')}</Text>
             <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {memories.map((m) => (
                 <Pressable key={m.id} onPress={() => setViewing(m)} style={{ width: '32%', aspectRatio: 1, borderRadius: R.md, overflow: 'hidden', backgroundColor: C.surface2 }}>
@@ -106,14 +108,14 @@ export function GalleryScreen() {
             {/* By place */}
             {visited.length ? (
               <>
-                <Text style={{ fontFamily: F.serif, fontSize: 22, letterSpacing: -0.4, color: C.ink, marginTop: 26 }}>Places we’ve been</Text>
+                <Text style={{ fontFamily: F.serif, fontSize: 22, letterSpacing: -0.4, color: C.ink, marginTop: 26 }}>{t('gallery.placesBeen')}</Text>
                 <View style={{ marginTop: 12, gap: 10 }}>
                   {visited.map((p) => (
                     <Pressable key={p.key} onPress={() => openPlace(p.key)} style={[{ flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: C.surface, borderRadius: R.lg, padding: 12 }, SH.card]}>
                       {p.photoUrl ? <Image source={{ uri: p.photoUrl }} style={{ width: 56, height: 56, borderRadius: 12 }} /> : <View style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: C.surface2 }} />}
                       <View style={{ flex: 1 }}>
                         <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 14, color: C.ink }}>{p.name}</Text>
-                        <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{p.city ? `${p.city} · ` : ''}{p.visits} {p.visits === 1 ? 'visit' : 'visits'}</Text>
+                        <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{p.city ? `${p.city} · ` : ''}{t(p.visits === 1 ? 'gallery.visit' : 'gallery.visits', { n: p.visits })}</Text>
                       </View>
                       {Icons.chevR({ size: 16, color: C.ink3 })}
                     </Pressable>
@@ -131,17 +133,17 @@ export function GalleryScreen() {
           <ScrollView keyboardShouldPersistTaps="handled" bounces={false} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: insets.bottom + 22 }}>
             <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 16 }} />
-            <Text style={{ fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>Add a memory</Text>
+            <Text style={{ fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>{t('gallery.addMemory')}</Text>
             {picked ? <Image source={{ uri: picked }} style={{ width: '100%', height: 180, borderRadius: R.lg, marginTop: 14, backgroundColor: C.surface2 }} resizeMode="cover" /> : null}
-            <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 16, marginBottom: 6 }}>Place *</Text>
-            <TextInput value={placeName} onChangeText={setPlaceName} placeholder="Where was this?" placeholderTextColor={C.ink3} style={inputStyle} />
-            <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 12, marginBottom: 6 }}>City</Text>
-            <TextInput value={city} onChangeText={setCity} placeholder="e.g. Kuwait City" placeholderTextColor={C.ink3} style={inputStyle} />
-            <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 12, marginBottom: 6 }}>Note</Text>
-            <TextInput value={note} onChangeText={setNote} placeholder="A little memory…" placeholderTextColor={C.ink3} style={[inputStyle, { height: 70 }]} multiline />
+            <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 16, marginBottom: 6 }}>{t('gallery.place')} *</Text>
+            <TextInput value={placeName} onChangeText={setPlaceName} placeholder={t('gallery.placeHint')} placeholderTextColor={C.ink3} style={inputStyle} />
+            <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 12, marginBottom: 6 }}>{t('gallery.city')}</Text>
+            <TextInput value={city} onChangeText={setCity} placeholder={t('gallery.cityHint')} placeholderTextColor={C.ink3} style={inputStyle} />
+            <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 12, marginBottom: 6 }}>{t('gallery.note')}</Text>
+            <TextInput value={note} onChangeText={setNote} placeholder={t('gallery.noteHint')} placeholderTextColor={C.ink3} style={[inputStyle, { height: 70 }]} multiline />
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-              <Btn kind="ghost" style={{ flex: 1 }} onPress={() => setPicked(null)}>Cancel</Btn>
-              <Btn kind="sage" style={{ flex: 1.6 }} onPress={save}>{uploading ? 'Saving…' : 'Save memory'}</Btn>
+              <Btn kind="ghost" style={{ flex: 1 }} onPress={() => setPicked(null)}>{t('common.cancel')}</Btn>
+              <Btn kind="sage" style={{ flex: 1.6 }} onPress={save}>{uploading ? t('gallery.saving') : t('gallery.saveMemory')}</Btn>
             </View>
             {uploading ? <ActivityIndicator color={C.sage} style={{ marginTop: 12 }} /> : null}
           </View>

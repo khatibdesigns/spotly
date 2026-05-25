@@ -11,6 +11,8 @@ import { useStore } from '../lib/store';
 import { usePlaces } from '../lib/placesStore';
 import { usePlans } from '../lib/plans';
 import { useSaves } from '../lib/saves';
+import { useProfile, familyFood } from '../lib/profile';
+import { useI18n } from '../lib/i18n';
 import { formatDistance } from '../lib/places';
 
 const AMENITY_META: Record<string, { ic: (p: any) => React.ReactNode; c: string; label: string }> = {
@@ -36,9 +38,13 @@ export function PlaceScreen() {
   const { selected } = usePlaces();
   const { addSpotToPlan } = usePlans();
   const { isSaved, toggleSave } = useSaves();
+  const { profile } = useProfile();
+  const { t } = useI18n();
 
   const spot = selected;
   const saved = spot ? isSaved(spot.id) : false;
+  const avoid = familyFood(profile).avoid;
+  const showAllergy = spot?.kind === 'dining' && avoid.length > 0;
 
   const addToPlan = async () => {
     if (!spot) return;
@@ -47,7 +53,7 @@ export function PlaceScreen() {
       popToRoot();
       setTab('plan');
     } catch (e: any) {
-      Alert.alert('Could not add to plan', e?.message || 'Please try again.');
+      Alert.alert(t('place.couldNotAdd'), e?.message || 'Please try again.');
     }
   };
 
@@ -90,17 +96,28 @@ export function PlaceScreen() {
             </View>
             {spot?.openNow != null ? (
               <Text style={{ backgroundColor: spot.openNow ? C.good : C.ink3, color: '#fff', fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>
-                {spot.openNow ? 'OPEN NOW' : 'CLOSED'}
+                {spot.openNow ? t('place.openNow') : t('place.closed')}
               </Text>
             ) : null}
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 }}>
             {spot?.rating ? <Stars value={spot.rating.toFixed(1)} /> : null}
-            {spot?.reviews ? <Text style={{ color: C.ink3, fontSize: 12, fontFamily: F.regular }}>· {spot.reviews} reviews</Text> : null}
+            {spot?.reviews ? <Text style={{ color: C.ink3, fontSize: 12, fontFamily: F.regular }}>· {t('place.reviews', { n: spot.reviews })}</Text> : null}
             {spot?.price ? <Text style={{ color: C.ink3, fontSize: 12, fontFamily: F.regular }}>· {spot.price}</Text> : null}
             {spot?.ages ? <Text style={{ marginLeft: 'auto', backgroundColor: C.sageLt, color: C.sage, fontSize: 10.5, fontFamily: F.extrabold, paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.pill, overflow: 'hidden' }}>AGE {spot.ages}</Text> : null}
           </View>
+
+          {showAllergy ? (
+            <View style={{ marginTop: 18, flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: C.coralLt, borderRadius: R.lg, padding: 12 }}>
+              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
+                {Icons.foodOnSite({ size: 16, color: C.coralDk })}
+              </View>
+              <Text style={{ flex: 1, fontSize: 12.5, color: C.coralDk, fontFamily: F.semibold, lineHeight: 17 }}>
+                {t('place.allergy', { foods: avoid.join(', ') })}
+              </Text>
+            </View>
+          ) : null}
 
           {spot?.address ? (
             <Text style={{ marginTop: 18, fontSize: 14, color: C.ink2, fontFamily: F.regular, lineHeight: 21 }}>{spot.address}</Text>
@@ -109,7 +126,7 @@ export function PlaceScreen() {
           {/* Amenities */}
           {spot?.amenities?.length ? (
             <>
-              <Text style={{ marginTop: 22, fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase' }}>What you’ll find</Text>
+              <Text style={{ marginTop: 22, fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase' }}>{t('place.whatFind')}</Text>
               <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 {spot.amenities.map((a) => {
                   const m = AMENITY_META[a];
@@ -134,9 +151,9 @@ export function PlaceScreen() {
               <View style={{ position: 'absolute', bottom: 12, left: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: R.lg, paddingVertical: 10, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <View style={{ flex: 1 }}>
                   <Text numberOfLines={1} style={{ fontSize: 12, fontFamily: F.bold, color: C.ink }}>{spot?.name}</Text>
-                  <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular }}>{spot?.address || 'Tap Go for directions'}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular }}>{spot?.address || t('place.tapGo')}</Text>
                 </View>
-                <Btn kind="dark" size="sm" icon={Icons.directions({ size: 14, color: '#fff' })} onPress={openDirections}>Go</Btn>
+                <Btn kind="dark" size="sm" icon={Icons.directions({ size: 14, color: '#fff' })} onPress={openDirections}>{t('place.go')}</Btn>
               </View>
             </View>
           ) : null}
@@ -154,8 +171,8 @@ export function PlaceScreen() {
 
       {/* Sticky CTA */}
       <View style={[{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 12, height: 72, backgroundColor: C.surface, borderRadius: 24, flexDirection: 'row', alignItems: 'center', padding: 10, gap: 10 }, SH.pop]}>
-        <Btn kind="ghost" style={{ flex: 1, height: 52 }} icon={Icons.calendar({ size: 15, color: C.ink })} onPress={addToPlan}>Add to plan</Btn>
-        <Btn kind="primary" style={{ flex: 1.3, height: 52 }} onPress={() => push('booking')}>Request to book →</Btn>
+        <Btn kind="ghost" style={{ flex: 1, height: 52 }} icon={Icons.calendar({ size: 15, color: C.ink })} onPress={addToPlan}>{t('place.addToPlan')}</Btn>
+        <Btn kind="primary" style={{ flex: 1.3, height: 52 }} onPress={() => push('booking')}>{t('place.requestBook')}</Btn>
       </View>
     </View>
   );

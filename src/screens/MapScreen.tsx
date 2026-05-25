@@ -10,6 +10,7 @@ import { Btn, SpotImage, CircBtn } from '../components/ui';
 import { useStore } from '../lib/store';
 import { usePlaces } from '../lib/placesStore';
 import { useMemories } from '../lib/memories';
+import { useI18n } from '../lib/i18n';
 import { Spot, formatDistance } from '../lib/places';
 
 type Pin = { id: string; name: string; lat: number; lng: number; photoUrl?: string; tone?: string; sub: string; spot?: Spot };
@@ -27,6 +28,7 @@ function StatPill({ icon, v, l }: { icon: React.ReactNode; v: string; l: string 
 }
 
 function Toggle({ mode, onChange }: { mode: 'nearby' | 'been'; onChange: (m: 'nearby' | 'been') => void }) {
+  const { t } = useI18n();
   const Seg = ({ id, label, icon }: { id: 'nearby' | 'been'; label: string; icon?: React.ReactNode }) => {
     const on = mode === id;
     return (
@@ -38,8 +40,8 @@ function Toggle({ mode, onChange }: { mode: 'nearby' | 'been'; onChange: (m: 'ne
   };
   return (
     <View style={[{ flex: 1, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.96)', flexDirection: 'row', alignItems: 'center', padding: 4 }, SH.pill]}>
-      <Seg id="nearby" label="Discover nearby" icon={Icons.compass({ size: 13, color: '#fff', filled: true })} />
-      <Seg id="been" label="Places we’ve been" icon={Icons.pin({ size: 13, color: '#fff', filled: true })} />
+      <Seg id="nearby" label={t('map.discoverNearby')} icon={Icons.compass({ size: 13, color: '#fff', filled: true })} />
+      <Seg id="been" label={t('map.placesBeen')} icon={Icons.pin({ size: 13, color: '#fff', filled: true })} />
     </View>
   );
 }
@@ -49,6 +51,7 @@ export function MapScreen() {
   const { push } = useStore();
   const { loc, filtered, setSelected } = usePlaces();
   const { visited, stats } = useMemories();
+  const { t } = useI18n();
   const [mode, setMode] = useState<'nearby' | 'been'>('nearby');
   const [active, setActive] = useState<Pin | null>(null);
 
@@ -65,8 +68,8 @@ export function MapScreen() {
     }
     return visited
       .filter((v) => v.lat != null)
-      .map((v) => ({ id: v.key, name: v.name, lat: v.lat as number, lng: v.lng as number, photoUrl: v.photoUrl, tone: v.tone, sub: `${v.city ? v.city + ' · ' : ''}${v.visits} ${v.visits === 1 ? 'visit' : 'visits'}` }));
-  }, [mode, filtered, visited]);
+      .map((v) => ({ id: v.key, name: v.name, lat: v.lat as number, lng: v.lng as number, photoUrl: v.photoUrl, tone: v.tone, sub: `${v.city ? v.city + ' · ' : ''}${t(v.visits === 1 ? 'gallery.visit' : 'gallery.visits', { n: v.visits })}` }));
+  }, [mode, filtered, visited, t]);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.ink }}>
@@ -107,17 +110,17 @@ export function MapScreen() {
 
       {/* Passport stats */}
       <View style={{ position: 'absolute', top: insets.top + 52, left: 16, right: 16, flexDirection: 'row', gap: 8 }}>
-        <StatPill icon={Icons.globe({ size: 14, color: C.coralDk })} v={String(stats.countries)} l="countries" />
-        <StatPill icon={Icons.pin({ size: 14, color: C.sage, filled: true })} v={String(mode === 'been' ? stats.spots : pins.length)} l={mode === 'been' ? 'spots' : 'nearby'} />
-        <StatPill icon={Icons.sparkle({ size: 14, color: C.sun })} v={String(stats.weekends)} l="weekends" />
+        <StatPill icon={Icons.globe({ size: 14, color: C.coralDk })} v={String(stats.countries)} l={t('map.countries')} />
+        <StatPill icon={Icons.pin({ size: 14, color: C.sage, filled: true })} v={String(mode === 'been' ? stats.spots : pins.length)} l={mode === 'been' ? t('map.spots') : t('map.nearbyStat')} />
+        <StatPill icon={Icons.sparkle({ size: 14, color: C.sun })} v={String(stats.weekends)} l={t('map.weekends')} />
       </View>
 
       {/* Empty hint for "been" */}
       {mode === 'been' && pins.length === 0 ? (
         <View style={[{ position: 'absolute', left: 24, right: 24, top: '45%', backgroundColor: C.surface, borderRadius: R.xl, padding: 18, alignItems: 'center' }, SH.pop]}>
           <Icons.Mark size={40} color={C.coral} />
-          <Text style={{ fontFamily: F.serif, fontSize: 19, color: C.ink, marginTop: 10, textAlign: 'center' }}>No memories pinned yet.</Text>
-          <Text style={{ fontSize: 13, color: C.ink2, fontFamily: F.regular, textAlign: 'center', marginTop: 4 }}>Add photos with a city in Gallery and they’ll appear here.</Text>
+          <Text style={{ fontFamily: F.serif, fontSize: 19, color: C.ink, marginTop: 10, textAlign: 'center' }}>{t('map.noMemories')}</Text>
+          <Text style={{ fontSize: 13, color: C.ink2, fontFamily: F.regular, textAlign: 'center', marginTop: 4 }}>{t('map.noMemoriesSub')}</Text>
         </View>
       ) : null}
 
@@ -134,12 +137,12 @@ export function MapScreen() {
           </View>
           <View style={{ marginTop: 12, flexDirection: 'row', gap: 8 }}>
             {active.spot ? (
-              <Btn kind="ghost" size="sm" style={{ flex: 1 }} onPress={() => { setSelected(active.spot!); push('place'); }}>See details</Btn>
+              <Btn kind="ghost" size="sm" style={{ flex: 1 }} onPress={() => { setSelected(active.spot!); push('place'); }}>{t('map.seeDetails')}</Btn>
             ) : null}
             <Btn kind="dark" size="sm" style={{ flex: 1 }} icon={Icons.directions({ size: 14, color: '#fff' })} onPress={() => {
               const url = Platform.OS === 'ios' ? `http://maps.apple.com/?daddr=${active.lat},${active.lng}` : `https://www.google.com/maps/dir/?api=1&destination=${active.lat},${active.lng}`;
               Linking.openURL(url).catch(() => {});
-            }}>Directions</Btn>
+            }}>{t('map.directions')}</Btn>
           </View>
         </View>
       ) : null}

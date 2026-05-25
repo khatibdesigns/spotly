@@ -11,6 +11,7 @@ import { usePlaces } from '../lib/placesStore';
 import { usePlans, Plan, Stop } from '../lib/plans';
 import { Spot } from '../lib/places';
 import { addPlanToCalendar } from '../lib/calendar';
+import { useI18n } from '../lib/i18n';
 
 // Carry the stop's original index so edit actions map back to the flat array.
 type IndexedStop = Stop & { _i: number };
@@ -122,23 +123,24 @@ function PlanCard({
   onRemoveStop: (index: number) => void;
   onMoveStop: (index: number, dir: 'up' | 'down') => void;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const groups = plan.multiDay ? groupByDay(plan.stops || []) : [{ label: null, stops: groupByDay(plan.stops || []).flatMap((g) => g.stops) }];
   const addToCalendar = () => {
     addPlanToCalendar(plan)
-      .then(() => Alert.alert('Added to calendar', 'Your plan is on your calendar for the upcoming weekend.'))
-      .catch((e) => Alert.alert('Calendar', e?.message || 'Could not add to calendar.'));
+      .then(() => Alert.alert(t('plan.calAdded'), t('plan.calAddedMsg')))
+      .catch((e) => Alert.alert('Calendar', e?.message || t('plan.calErr')));
   };
   const confirmRemove = (index: number, name: string) => {
-    Alert.alert('Remove stop', `Remove “${name}” from this plan?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => onRemoveStop(index) },
+    Alert.alert(t('plan.removeStopTitle'), t('plan.removeStopMsg', { name }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('plan.remove'), style: 'destructive', onPress: () => onRemoveStop(index) },
     ]);
   };
   const confirmDelete = () => {
-    Alert.alert('Delete plan', `Delete “${plan.title}”? This can’t be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete plan', style: 'destructive', onPress: onDelete },
+    Alert.alert(t('plan.deleteTitle'), t('plan.deleteMsg', { title: plan.title }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('plan.deleteTitle'), style: 'destructive', onPress: onDelete },
     ]);
   };
   const hasStops = (plan.stops || []).length > 0;
@@ -151,12 +153,12 @@ function PlanCard({
             <Text style={{ fontFamily: F.extrabold, fontSize: 17, color: C.ink }}>{plan.title}</Text>
           </View>
           <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 2 }}>
-            {plan.multiDay ? `${groups.length} days · ${plan.dateLabel}` : `${(plan.stops || []).length} stops · ${plan.dateLabel}`}
+            {plan.multiDay ? `${t('plan.days', { n: groups.length })} · ${plan.dateLabel}` : `${t('plan.stops', { n: (plan.stops || []).length })} · ${plan.dateLabel}`}
           </Text>
         </View>
         {hasStops ? (
           <Pressable onPress={() => setEditing((e) => !e)} hitSlop={8}>
-            <Text style={{ fontSize: 12, fontFamily: F.bold, color: C.coralDk }}>{editing ? 'Done' : 'Edit'}</Text>
+            <Text style={{ fontSize: 12, fontFamily: F.bold, color: C.coralDk }}>{editing ? t('common.done') : t('common.edit')}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -187,18 +189,18 @@ function PlanCard({
       {editing ? (
         <View style={{ marginTop: 16 }}>
           <Btn kind="ghost" size="sm" full onPress={confirmDelete} icon={Icons.close({ size: 14, color: C.coralDk })}>
-            <Text style={{ color: C.coralDk, fontFamily: F.bold, fontSize: 13.5 }}>Delete whole plan</Text>
+            <Text style={{ color: C.coralDk, fontFamily: F.bold, fontSize: 13.5 }}>{t('plan.deleteWhole')}</Text>
           </Btn>
         </View>
       ) : (
         <View style={{ marginTop: 16, flexDirection: 'row', gap: 8 }}>
           {plan.status === 'upcoming' ? (
             <>
-              <Btn kind="dark" size="sm" style={{ flex: 1 }} icon={Icons.calendar({ size: 14, color: '#fff' })} onPress={addToCalendar}>Add to calendar</Btn>
-              <Btn kind="ghost" size="sm" onPress={onDone}>Mark done</Btn>
+              <Btn kind="dark" size="sm" style={{ flex: 1 }} icon={Icons.calendar({ size: 14, color: '#fff' })} onPress={addToCalendar}>{t('plan.addCalendar')}</Btn>
+              <Btn kind="ghost" size="sm" onPress={onDone}>{t('plan.markDone')}</Btn>
             </>
           ) : (
-            <Btn kind="sage" size="sm" style={{ flex: 1 }} icon={Icons.camera({ size: 14, color: '#fff' })} onPress={onAddPhotos}>Add photos</Btn>
+            <Btn kind="sage" size="sm" style={{ flex: 1 }} icon={Icons.camera({ size: 14, color: '#fff' })} onPress={onAddPhotos}>{t('plan.addPhotos')}</Btn>
           )}
         </View>
       )}
@@ -207,6 +209,7 @@ function PlanCard({
 }
 
 function AiBanner({ onPress }: { onPress: () => void }) {
+  const { t } = useI18n();
   return (
     <Pressable onPress={onPress}>
       <LinearGradient colors={[C.premium, '#363a82']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[{ borderRadius: R.xl, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }, SH.card]}>
@@ -214,8 +217,8 @@ function AiBanner({ onPress }: { onPress: () => void }) {
           {Icons.sparkle({ size: 20, color: '#fff' })}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: F.extrabold, fontSize: 15, color: '#fff' }}>Plan a trip with AI</Text>
-          <Text style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.88)', fontFamily: F.regular, marginTop: 1 }}>“4 days in France with the kids…” → a full itinerary</Text>
+          <Text style={{ fontFamily: F.extrabold, fontSize: 15, color: '#fff' }}>{t('plan.aiTitle')}</Text>
+          <Text style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.88)', fontFamily: F.regular, marginTop: 1 }}>{t('plan.aiSub')}</Text>
         </View>
         {Icons.chevR({ size: 18, color: '#fff' })}
       </LinearGradient>
@@ -228,6 +231,7 @@ export function PlanScreen() {
   const { setTab, push } = useStore();
   const { plans, markDone, deletePlan, removeStop, moveStop } = usePlans();
   const { setSelected } = usePlaces();
+  const { t } = useI18n();
   const upcoming = plans.filter((p) => p.status === 'upcoming');
   const done = plans.filter((p) => p.status === 'done');
 
@@ -238,7 +242,7 @@ export function PlanScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <TitleHeader title="Plan" eyebrow="Your weekends, sorted" topInset={insets.top} right={<CircBtn onPress={() => push('aiPlan')}>{Icons.plus({ size: 18, color: C.ink })}</CircBtn>} />
+      <TitleHeader title={t('plan.title')} eyebrow={t('plan.eyebrow')} topInset={insets.top} right={<CircBtn onPress={() => push('aiPlan')}>{Icons.plus({ size: 18, color: C.ink })}</CircBtn>} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }}>
         <View style={{ marginTop: 4 }}><AiBanner onPress={() => push('aiPlan')} /></View>
 
@@ -248,17 +252,17 @@ export function PlanScreen() {
               <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: C.coralLt, borderRadius: 55 }} />
               {Icons.calendar({ size: 52, color: C.coral })}
             </View>
-            <Text style={{ fontFamily: F.serif, fontSize: 26, marginTop: 22, letterSpacing: -0.5, color: C.ink, textAlign: 'center' }}>No plans yet.</Text>
+            <Text style={{ fontFamily: F.serif, fontSize: 26, marginTop: 22, letterSpacing: -0.5, color: C.ink, textAlign: 'center' }}>{t('plan.empty')}</Text>
             <Text style={{ marginTop: 8, color: C.ink2, fontFamily: F.regular, fontSize: 14.5, lineHeight: 21, textAlign: 'center', maxWidth: 280 }}>
-              Ask the AI planner above, or add a spot from Discover with “Add to Plan.”
+              {t('plan.emptySub')}
             </Text>
             <View style={{ marginTop: 22, width: '100%' }}>
-              <Btn kind="ghost" full onPress={() => setTab('discover')}>Browse places</Btn>
+              <Btn kind="ghost" full onPress={() => setTab('discover')}>{t('plan.browse')}</Btn>
             </View>
           </View>
         ) : (
           <>
-            {upcoming.length ? <SectionLabel>Upcoming</SectionLabel> : null}
+            {upcoming.length ? <SectionLabel>{t('plan.upcoming')}</SectionLabel> : null}
             <View style={{ gap: 14 }}>
               {upcoming.map((p) => (
                 <PlanCard
@@ -272,7 +276,7 @@ export function PlanScreen() {
                 />
               ))}
             </View>
-            {done.length ? <SectionLabel>After the day · add your memories</SectionLabel> : null}
+            {done.length ? <SectionLabel>{t('plan.afterDay')}</SectionLabel> : null}
             <View style={{ gap: 14 }}>
               {done.map((p) => (
                 <PlanCard

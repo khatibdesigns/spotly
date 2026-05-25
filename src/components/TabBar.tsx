@@ -4,17 +4,19 @@ import { View, Text, Pressable } from 'react-native';
 import { C, F, SH } from '../lib/theme';
 import { Icons } from './icons';
 import { TabId, useStore } from '../lib/store';
+import { useI18n } from '../lib/i18n';
 
-const TABS: { id: TabId; label: string; icon: (p: any) => React.ReactNode }[] = [
-  { id: 'discover', label: 'Discover', icon: Icons.compass },
-  { id: 'plan', label: 'Plan', icon: Icons.calendar },
-  { id: 'map', label: 'Map', icon: Icons.pin },
-  { id: 'gallery', label: 'Gallery', icon: Icons.album },
-  { id: 'profile', label: 'Profile', icon: Icons.user },
+const TABS: { id: TabId; key: string; icon: (p: any) => React.ReactNode }[] = [
+  { id: 'discover', key: 'tab.discover', icon: Icons.compass },
+  { id: 'plan', key: 'tab.plan', icon: Icons.calendar },
+  { id: 'map', key: 'tab.map', icon: Icons.pin },
+  { id: 'gallery', key: 'tab.gallery', icon: Icons.album },
+  { id: 'profile', key: 'tab.profile', icon: Icons.user },
 ];
 
 export function TabBar({ bottomInset = 0 }: { bottomInset?: number }) {
   const { tab, setTab } = useStore();
+  const { t } = useI18n();
   return (
     <View
       style={[
@@ -34,19 +36,19 @@ export function TabBar({ bottomInset = 0 }: { bottomInset?: number }) {
         SH.pop,
       ]}
     >
-      {TABS.map((t) => {
-        const on = t.id === tab;
+      {TABS.map((tab_) => {
+        const on = tab_.id === tab;
         const tint = on ? C.coral : C.ink3;
         return (
           <Pressable
-            key={t.id}
-            onPress={() => setTab(t.id)}
+            key={tab_.id}
+            onPress={() => setTab(tab_.id)}
             style={{ alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4 }}
           >
             <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}>
-              {t.icon({ size: 22, filled: on, color: tint })}
+              {tab_.icon({ size: 22, filled: on, color: tint })}
             </View>
-            <Text style={{ fontFamily: on ? F.bold : F.semibold, fontSize: 10.5, color: tint }}>{t.label}</Text>
+            <Text style={{ fontFamily: on ? F.bold : F.semibold, fontSize: 10.5, color: tint }}>{t(tab_.key)}</Text>
           </Pressable>
         );
       })}

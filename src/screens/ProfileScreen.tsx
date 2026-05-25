@@ -9,6 +9,7 @@ import { CircBtn, SectionLabel } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { useProfile } from '../lib/profile';
+import { useI18n } from '../lib/i18n';
 import { useMemories } from '../lib/memories';
 import { useBookings } from '../lib/bookings';
 import { useSaves } from '../lib/saves';
@@ -69,6 +70,15 @@ export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { profile, saveProfile } = useProfile();
   const { stats, memories, visited } = useMemories();
+  const { t, lang, setLang } = useI18n();
+
+  const pickLanguage = () => {
+    Alert.alert(t('profile.langTitle'), t('profile.langChoose'), [
+      { text: 'English', onPress: () => setLang('en') },
+      { text: 'العربية', onPress: () => setLang('ar') },
+      { text: t('common.cancel'), style: 'cancel' },
+    ]);
+  };
 
   const editHome = () => {
     if (Platform.OS === 'ios' && (Alert as any).prompt) {
@@ -109,33 +119,33 @@ export function ProfileScreen() {
               {Icons.sparkle({ size: 18, color: '#fff' })}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: F.extrabold, fontSize: 14, color: '#fff' }}>Spotly Plus</Text>
+              <Text style={{ fontFamily: F.extrabold, fontSize: 14, color: '#fff' }}>{t('profile.plusTitle')}</Text>
               <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.88)', fontFamily: F.regular, marginTop: 1 }}>
-                {isPlus ? 'Unlimited memories · active' : 'Unlock unlimited memories & more'}
+                {isPlus ? t('profile.plusActive') : t('profile.plusUnlock')}
               </Text>
             </View>
             <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: R.pill, paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ fontSize: 12, color: '#fff', fontFamily: F.bold }}>{isPlus ? 'Manage' : 'Upgrade'}</Text>
+              <Text style={{ fontSize: 12, color: '#fff', fontFamily: F.bold }}>{isPlus ? t('profile.manage') : t('profile.upgrade')}</Text>
             </View>
           </LinearGradient>
         </Pressable>
 
         {/* Family members */}
-        <SectionLabel>Family</SectionLabel>
+        <SectionLabel>{t('profile.family')}</SectionLabel>
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
-          <Row icon={<Avatar letter={initial(profile?.parentName, 'Y')} color={C.coral} />} title={profile?.parentName || 'You'} sub="Parent · you" last={kids.length === 0} />
+          <Row icon={<Avatar letter={initial(profile?.parentName, 'Y')} color={C.coral} />} title={profile?.parentName || 'You'} sub={t('profile.parentYou')} last={kids.length === 0} />
           {kids.map((k, i) => {
             const fav = (k.favFoods || []).length;
             const avoid = (k.avoidFoods || []).length;
             const foodSub = fav || avoid
-              ? [fav ? `loves ${fav}` : '', avoid ? `avoids ${avoid}` : ''].filter(Boolean).join(' · ')
-              : 'Add food preferences';
+              ? [fav ? t('profile.lovesAvoids', { fav }) : '', avoid ? t('profile.avoids', { n: avoid }) : ''].filter(Boolean).join(' · ')
+              : t('profile.addFood');
             return (
               <Row
                 key={k.id}
                 icon={<Avatar letter={initial(k.name, '?')} color={KID_COLORS[i % KID_COLORS.length]} />}
                 title={k.name || `Child ${i + 1}`}
-                sub={`Age ${k.age} · ${foodSub}`}
+                sub={`${t('profile.ageFmt', { age: k.age })} · ${foodSub}`}
                 last={i === kids.length - 1}
                 onPress={() => push('kidFood', { kidId: k.id })}
               />
@@ -144,34 +154,34 @@ export function ProfileScreen() {
         </View>
 
         {/* Passport */}
-        <SectionLabel>Your passport</SectionLabel>
+        <SectionLabel>{t('profile.passport')}</SectionLabel>
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <StatCard n={stats.spots} l="spots" c={C.sage} />
-          <StatCard n={stats.countries} l="countries" c={C.coral} />
-          <StatCard n={stats.weekends} l="weekends" c={C.sun} />
+          <StatCard n={stats.spots} l={t('map.spots')} c={C.sage} />
+          <StatCard n={stats.countries} l={t('map.countries')} c={C.coral} />
+          <StatCard n={stats.weekends} l={t('map.weekends')} c={C.sun} />
         </View>
 
         {/* Activity */}
-        <SectionLabel>Activity</SectionLabel>
+        <SectionLabel>{t('profile.activity')}</SectionLabel>
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
-          <Row icon={<IconBox ic={Icons.bookmark} c={C.coral} />} title="Saved spots" det={String(saved.length)} onPress={() => push('saved')} />
-          <Row icon={<IconBox ic={Icons.clock} c={C.sage} />} title="Places visited" det={String(visited.length)} onPress={() => setTab('gallery')} />
-          <Row icon={<IconBox ic={Icons.album} c={C.plum} />} title="Memories" det={String(memories.length)} onPress={() => setTab('gallery')} />
-          <Row icon={<IconBox ic={Icons.calendar} c={C.sky} />} title="Bookings" det={String(bookings.length)} onPress={() => setTab('plan')} last />
+          <Row icon={<IconBox ic={Icons.bookmark} c={C.coral} />} title={t('profile.savedSpots')} det={String(saved.length)} onPress={() => push('saved')} />
+          <Row icon={<IconBox ic={Icons.clock} c={C.sage} />} title={t('profile.placesVisited')} det={String(visited.length)} onPress={() => setTab('gallery')} />
+          <Row icon={<IconBox ic={Icons.album} c={C.plum} />} title={t('profile.memories')} det={String(memories.length)} onPress={() => setTab('gallery')} />
+          <Row icon={<IconBox ic={Icons.calendar} c={C.sky} />} title={t('profile.bookings')} det={String(bookings.length)} onPress={() => setTab('plan')} last />
         </View>
 
         {/* Settings */}
-        <SectionLabel>Settings</SectionLabel>
+        <SectionLabel>{t('profile.settings')}</SectionLabel>
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
-          <Row icon={<IconBox ic={Icons.pin} c={C.ink2} />} title="Home & location" det={profile?.homeCity || 'Set'} onPress={editHome} />
-          <Row icon={<IconBox ic={Icons.globe} c={C.ink2} />} title="Language" det="English" onPress={() => Alert.alert('Language', 'English is the only language for now — more coming soon.')} />
-          <Row icon={<IconBox ic={Icons.lock} c={C.ink2} />} title="Privacy" sub={user?.email || 'Photos are private by default'} onPress={() => openURL('https://meetspotly.com/privacy.html')} />
-          <Row icon={<IconBox ic={Icons.sparkle} c={C.ink2} />} title="Notifications" onPress={() => Linking.openSettings().catch(() => {})} last />
+          <Row icon={<IconBox ic={Icons.pin} c={C.ink2} />} title={t('profile.homeLoc')} det={profile?.homeCity || t('common.set')} onPress={editHome} />
+          <Row icon={<IconBox ic={Icons.globe} c={C.ink2} />} title={t('profile.language')} det={lang === 'ar' ? 'العربية' : 'English'} onPress={pickLanguage} />
+          <Row icon={<IconBox ic={Icons.lock} c={C.ink2} />} title={t('profile.privacy')} sub={user?.email || 'Photos are private by default'} onPress={() => openURL('https://meetspotly.com/privacy.html')} />
+          <Row icon={<IconBox ic={Icons.sparkle} c={C.ink2} />} title={t('profile.notifications')} onPress={() => Linking.openSettings().catch(() => {})} last />
         </View>
 
         {/* Sign out */}
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden', marginTop: 16 }, SH.card]}>
-          <Row icon={<IconBox ic={Icons.arrowL} c={C.coralDk} />} title="Sign out" onPress={() => signOut()} danger last />
+          <Row icon={<IconBox ic={Icons.arrowL} c={C.coralDk} />} title={t('profile.signOut')} onPress={() => signOut()} danger last />
         </View>
       </ScrollView>
     </View>

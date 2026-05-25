@@ -7,6 +7,7 @@ import { Icons } from '../components/icons';
 import { Chip, Btn } from '../components/ui';
 import { useStore } from '../lib/store';
 import { usePlaces } from '../lib/placesStore';
+import { useI18n } from '../lib/i18n';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -18,9 +19,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 const KINDS = [
-  { id: 'activity', label: 'Activities', ic: Icons.compass },
-  { id: 'dining', label: 'Dining', ic: Icons.dining },
-  { id: 'shop', label: 'Kids & baby shops', ic: Icons.shop },
+  { id: 'activity', key: 'kind.activity', ic: Icons.compass },
+  { id: 'dining', key: 'kind.dining', ic: Icons.dining },
+  { id: 'shop', key: 'kind.shop', ic: Icons.shop },
 ];
 const AMENITIES = [
   { id: 'playArea', label: 'Play area', ic: Icons.playArea },
@@ -39,6 +40,7 @@ export function FiltersSheet() {
   const insets = useSafeAreaInsets();
   const { pop } = useStore();
   const { filters, toggleFilter, clearFilters, filtered } = usePlaces();
+  const { t } = useI18n();
 
   return (
     <View style={{ flex: 1 }}>
@@ -46,21 +48,21 @@ export function FiltersSheet() {
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: insets.top + 60, backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24 }}>
         <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginTop: 10, marginBottom: 14 }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ fontFamily: F.serif, fontSize: 26, letterSpacing: -0.6, color: C.ink }}>Filters</Text>
-          <Pressable onPress={clearFilters}><Text style={{ fontSize: 13, color: C.coralDk, fontFamily: F.bold }}>Reset</Text></Pressable>
+          <Text style={{ fontFamily: F.serif, fontSize: 26, letterSpacing: -0.6, color: C.ink }}>{t('filters.title')}</Text>
+          <Pressable onPress={clearFilters}><Text style={{ fontSize: 13, color: C.coralDk, fontFamily: F.bold }}>{t('filters.reset')}</Text></Pressable>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-          <Section title="Looking for">
+          <Section title={t('filters.lookingFor')}>
             {KINDS.map((k) => {
               const on = filters.has(k.id);
               return (
-                <Chip key={k.id} active={on} onPress={() => toggleFilter(k.id)} icon={k.ic({ size: 14, color: on ? '#fff' : C.ink })}>{k.label}</Chip>
+                <Chip key={k.id} active={on} onPress={() => toggleFilter(k.id)} icon={k.ic({ size: 14, color: on ? '#fff' : C.ink })}>{t(k.key)}</Chip>
               );
             })}
           </Section>
 
-          <Section title="Amenities">
+          <Section title={t('filters.amenities')}>
             {AMENITIES.map((a) => {
               const on = filters.has(a.id);
               return (
@@ -69,20 +71,20 @@ export function FiltersSheet() {
             })}
           </Section>
 
-          <Section title="Price">
+          <Section title={t('filters.price')}>
             {PRICES.map((p) => (
               <Chip key={p} active={filters.has(PRICE_ID[p])} onPress={() => toggleFilter(PRICE_ID[p])}>{p}</Chip>
             ))}
           </Section>
 
-          <Section title="More">
-            <Chip active={filters.has('openNow')} onPress={() => toggleFilter('openNow')}>Open now</Chip>
+          <Section title={t('filters.more')}>
+            <Chip active={filters.has('openNow')} onPress={() => toggleFilter('openNow')}>{t('filter.openNow')}</Chip>
           </Section>
         </ScrollView>
 
         <View style={{ flexDirection: 'row', gap: 10, paddingBottom: insets.bottom + 12, paddingTop: 6 }}>
-          <Btn kind="ghost" style={{ flex: 1 }} onPress={() => { clearFilters(); }}>Clear</Btn>
-          <Btn kind="primary" style={{ flex: 2 }} onPress={pop}>Show {filtered.length} {filtered.length === 1 ? 'place' : 'places'}</Btn>
+          <Btn kind="ghost" style={{ flex: 1 }} onPress={() => { clearFilters(); }}>{t('common.clear')}</Btn>
+          <Btn kind="primary" style={{ flex: 2 }} onPress={pop}>{t(filtered.length === 1 ? 'filters.showOne' : 'filters.showN', { n: filtered.length })}</Btn>
         </View>
       </View>
     </View>

@@ -27,10 +27,15 @@ try {
   });
 } catch {}
 import { StoreProvider } from './src/lib/store';
+import { I18nManager } from 'react-native';
 import { AuthProvider } from './src/lib/auth';
 import { ProfileProvider } from './src/lib/profile';
 import { PurchasesProvider } from './src/lib/purchases';
+import { I18nProvider } from './src/lib/i18n';
 import { Shell } from './src/Shell';
+
+// Allow RTL so Arabic can flip layout direction (forceRTL persists natively).
+try { I18nManager.allowRTL(true); } catch {}
 
 export default function App() {
   const [loaded] = useFonts({
@@ -50,16 +55,18 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <PurchasesProvider>
-          <ProfileProvider>
-            <StoreProvider>
-              <Shell />
-              <StatusBar style="dark" />
-            </StoreProvider>
-          </ProfileProvider>
-        </PurchasesProvider>
-      </AuthProvider>
+      <I18nProvider>
+        <AuthProvider>
+          <PurchasesProvider>
+            <ProfileProvider>
+              <StoreProvider>
+                <Shell />
+                <StatusBar style="dark" />
+              </StoreProvider>
+            </ProfileProvider>
+          </PurchasesProvider>
+        </AuthProvider>
+      </I18nProvider>
     </SafeAreaProvider>
   );
 }

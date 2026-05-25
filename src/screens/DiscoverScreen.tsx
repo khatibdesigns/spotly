@@ -7,9 +7,10 @@ import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Chip, Btn, SpotImage, Stars } from '../components/ui';
 import { useStore } from '../lib/store';
-import { useProfile, firstName, kidNames } from '../lib/profile';
+import { useProfile, firstName, kidNames, familyFood } from '../lib/profile';
 import { usePlaces } from '../lib/placesStore';
 import { useSaves } from '../lib/saves';
+import { useI18n } from '../lib/i18n';
 import { Spot, formatDistance } from '../lib/places';
 
 const AMENITY_ICON: Record<string, (p: any) => React.ReactNode> = {
@@ -25,6 +26,7 @@ function Eyebrow({ children, color = C.coral }: { children: React.ReactNode; col
 
 function HeroCard({ spot, onPress }: { spot: Spot; onPress: () => void }) {
   const { isSaved, toggleSave } = useSaves();
+  const { t } = useI18n();
   const saved = isSaved(spot.id);
   return (
     <Pressable onPress={onPress} style={[{ width: 280, borderRadius: R.xxl, overflow: 'hidden', backgroundColor: C.surface }, SH.card]}>
@@ -32,7 +34,7 @@ function HeroCard({ spot, onPress }: { spot: Spot; onPress: () => void }) {
         <SpotImage photoUrl={spot.photoUrl} tone={spot.tone} height={170} radius={0} label={spot.name} />
         <View style={{ position: 'absolute', top: 12, left: 12 }}>
           <Text style={{ backgroundColor: 'rgba(255,255,255,0.92)', color: C.coralDk, fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 9, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>
-            {spot.source === 'curated' ? "EDITOR’S PICK" : 'NEAR YOU'}
+            {spot.source === 'curated' ? t('discover.editorPick') : t('discover.nearYouTag')}
           </Text>
         </View>
         <Pressable onPress={() => toggleSave(spot)} hitSlop={8} style={{ position: 'absolute', top: 12, right: 12, width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' }}>
@@ -64,24 +66,24 @@ function CatTile({ ic, color, label, active, onPress }: { ic: (p: any) => React.
 
 // Top-level "what are you looking for" kinds (OR-filtered).
 const KINDS = [
-  { id: 'activity', label: 'Activities' },
-  { id: 'dining', label: 'Dining' },
-  { id: 'shop', label: 'Kids & baby shops' },
+  { id: 'activity', key: 'kind.activity' },
+  { id: 'dining', key: 'kind.dining' },
+  { id: 'shop', key: 'kind.shop' },
 ];
 const FILTER_CHIPS = [
-  { id: 'playArea', label: 'Has play area' },
-  { id: 'openNow', label: 'Open now' },
-  { id: 'free', label: 'Free' },
-  { id: 'indoor', label: 'Indoor' },
+  { id: 'playArea', key: 'filter.playArea' },
+  { id: 'openNow', key: 'filter.openNow' },
+  { id: 'free', key: 'filter.free' },
+  { id: 'indoor', key: 'filter.indoor' },
 ];
 const CATEGORIES = [
-  { id: 'outdoor', ic: Icons.outdoor, color: C.sage, label: 'Parks' },
-  { id: 'playArea', ic: Icons.playArea, color: C.coral, label: 'Indoor play' },
-  { id: 'dining', ic: Icons.dining, color: C.coralDk, label: 'Dining' },
-  { id: 'shop', ic: Icons.shop, color: C.plum, label: 'Kids shops' },
-  { id: 'museum', ic: Icons.museum, color: C.ink2, label: 'Museums' },
-  { id: 'animals', ic: Icons.animals, color: C.sun, label: 'Zoos' },
-  { id: 'water', ic: Icons.water, color: C.sky, label: 'Water' },
+  { id: 'outdoor', ic: Icons.outdoor, color: C.sage, key: 'cat.parks' },
+  { id: 'playArea', ic: Icons.playArea, color: C.coral, key: 'cat.indoorPlay' },
+  { id: 'dining', ic: Icons.dining, color: C.coralDk, key: 'cat.dining' },
+  { id: 'shop', ic: Icons.shop, color: C.plum, key: 'cat.kidsShops' },
+  { id: 'museum', ic: Icons.museum, color: C.ink2, key: 'cat.museums' },
+  { id: 'animals', ic: Icons.animals, color: C.sun, key: 'cat.zoos' },
+  { id: 'water', ic: Icons.water, color: C.sky, key: 'cat.water' },
 ];
 
 function FeedCard({ spot, onPress }: { spot: Spot; onPress: () => void }) {
@@ -128,12 +130,13 @@ export function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const { push } = useStore();
   const { profile } = useProfile();
-  const { filtered, loading, locationGranted, reload, setSelected, filters, toggleFilter, clearFilters } = usePlaces();
+  const { spots, filtered, loading, locationGranted, reload, setSelected, filters, toggleFilter, clearFilters } = usePlaces();
+  const { t } = useI18n();
   const [showLocBanner, setShowLocBanner] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
   const feedY = useRef(0);
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning,' : hour < 18 ? 'Good afternoon,' : 'Good evening,';
+  const greeting = hour < 12 ? t('discover.morning') : hour < 18 ? t('discover.afternoon') : t('discover.evening');
 
   const open = (spot: Spot) => {
     setSelected(spot);
@@ -144,6 +147,19 @@ export function DiscoverScreen() {
 
   const heroes = filtered.slice(0, 2);
   const feed = filtered;
+
+  // "Tastes they'll love" — dining spots, ranked so any matching the kids'
+  // favourite foods (by name/category) come first.
+  const likes = familyFood(profile).likes;
+  const tasteRail = (() => {
+    if (!likes.length) return [];
+    const dining = spots.filter((s) => s.kind === 'dining');
+    const matches = (s: Spot) => {
+      const hay = `${s.name} ${s.category}`.toLowerCase();
+      return likes.some((l) => hay.includes(l.toLowerCase()));
+    };
+    return [...dining].sort((a, b) => Number(matches(b)) - Number(matches(a))).slice(0, 8);
+  })();
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -157,7 +173,7 @@ export function DiscoverScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Pressable onPress={reload} style={[{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill, backgroundColor: C.surface }, SH.pill]}>
               {Icons.pin({ size: 13, color: C.coral, filled: true })}
-              <Text style={{ fontSize: 12, fontFamily: F.bold, color: C.ink }}>{locationGranted ? 'Near you' : profile?.homeCity || 'Kuwait'}</Text>
+              <Text style={{ fontSize: 12, fontFamily: F.bold, color: C.ink }}>{locationGranted ? t('discover.nearYou') : profile?.homeCity || 'Kuwait'}</Text>
             </Pressable>
             <Pressable onPress={() => push('paywall')} style={[{ width: 38, height: 38, borderRadius: 19, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }, SH.pill]}>
               {Icons.sparkle({ size: 16, color: C.premium })}
@@ -169,22 +185,22 @@ export function DiscoverScreen() {
       {loading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 120 }}>
           <ActivityIndicator color={C.coral} />
-          <Text style={{ marginTop: 12, color: C.ink3, fontFamily: F.semibold }}>Finding spots near you…</Text>
+          <Text style={{ marginTop: 12, color: C.ink3, fontFamily: F.semibold }}>{t('discover.finding')}</Text>
         </View>
       ) : (
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
           {!locationGranted && showLocBanner ? (
             <View style={{ marginHorizontal: 20, marginBottom: 6, padding: 14, borderRadius: R.lg, backgroundColor: C.coralLt, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               {Icons.pin({ size: 18, color: C.coralDk, filled: true })}
-              <Text style={{ flex: 1, fontSize: 12.5, color: C.coralDk, fontFamily: F.semibold }}>Showing Kuwait. Turn on location for spots near you.</Text>
-              <Pressable onPress={reload}><Text style={{ color: C.coralDk, fontFamily: F.bold, fontSize: 12.5 }}>Enable</Text></Pressable>
+              <Text style={{ flex: 1, fontSize: 12.5, color: C.coralDk, fontFamily: F.semibold }}>{t('discover.locBanner')}</Text>
+              <Pressable onPress={reload}><Text style={{ color: C.coralDk, fontFamily: F.bold, fontSize: 12.5 }}>{t('discover.enable')}</Text></Pressable>
             </View>
           ) : null}
 
           {/* What are you looking for — kind selector */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 10 }}>
             {KINDS.map((k) => (
-              <Chip key={k.id} active={filters.has(k.id)} onPress={() => toggleFilter(k.id)}>{k.label}</Chip>
+              <Chip key={k.id} active={filters.has(k.id)} onPress={() => toggleFilter(k.id)}>{t(k.key)}</Chip>
             ))}
           </ScrollView>
 
@@ -192,11 +208,11 @@ export function DiscoverScreen() {
           <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
               <View>
-                <Eyebrow>This week near you</Eyebrow>
-                <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, marginTop: 2, letterSpacing: -0.5 }}>Where to today?</Text>
+                <Eyebrow>{t('discover.thisWeek')}</Eyebrow>
+                <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, marginTop: 2, letterSpacing: -0.5 }}>{t('discover.whereToday')}</Text>
               </View>
               <Pressable onPress={seeAll} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                <Text style={{ fontSize: 12, color: C.coralDk, fontFamily: F.bold }}>See all</Text>
+                <Text style={{ fontSize: 12, color: C.coralDk, fontFamily: F.bold }}>{t('common.seeAll')}</Text>
                 {Icons.chevR({ size: 14, color: C.coralDk })}
               </Pressable>
             </View>
@@ -210,23 +226,38 @@ export function DiscoverScreen() {
 
           {/* Filters */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingBottom: 14 }}>
-            <Chip icon={Icons.filter({ size: 13, color: C.ink })} onPress={() => push('filters')}>Filters</Chip>
+            <Chip icon={Icons.filter({ size: 13, color: C.ink })} onPress={() => push('filters')}>{t('discover.filters')}</Chip>
             {FILTER_CHIPS.map((f) => (
-              <Chip key={f.id} active={filters.has(f.id)} onPress={() => toggleFilter(f.id)}>{f.label}</Chip>
+              <Chip key={f.id} active={filters.has(f.id)} onPress={() => toggleFilter(f.id)}>{t(f.key)}</Chip>
             ))}
           </ScrollView>
 
           {/* Categories */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20, paddingBottom: 18 }}>
             {CATEGORIES.map((c, i) => (
-              <CatTile key={`${c.id}-${i}`} ic={c.ic} color={c.color} label={c.label} active={filters.has(c.id)} onPress={() => toggleFilter(c.id)} />
+              <CatTile key={`${c.id}-${i}`} ic={c.ic} color={c.color} label={t(c.key)} active={filters.has(c.id)} onPress={() => toggleFilter(c.id)} />
             ))}
           </ScrollView>
+
+          {/* Tastes they'll love — food-aware dining rail */}
+          {tasteRail.length ? (
+            <View style={{ paddingTop: 4, paddingBottom: 18 }}>
+              <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+                <Eyebrow color={C.coralDk}>{t('discover.tastesEyebrow')}</Eyebrow>
+                <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, marginTop: 2, letterSpacing: -0.5 }}>
+                  {t('discover.eatsFor', { names: likes.slice(0, 3).join(', ') })}
+                </Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 20 }}>
+                {tasteRail.map((s) => <HeroCard key={`taste-${s.id}`} spot={s} onPress={() => open(s)} />)}
+              </ScrollView>
+            </View>
+          ) : null}
 
           {/* Feed */}
           {feed.length ? (
             <View style={{ paddingHorizontal: 20, gap: 14 }} onLayout={(e) => { feedY.current = e.nativeEvent.layout.y; }}>
-              <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, letterSpacing: -0.5 }}>Picked for {kidNames(profile)}</Text>
+              <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, letterSpacing: -0.5 }}>{t('discover.pickedFor', { names: kidNames(profile) })}</Text>
               {feed.map((s) => <FeedCard key={s.id} spot={s} onPress={() => open(s)} />)}
             </View>
           ) : (
@@ -239,6 +270,7 @@ export function DiscoverScreen() {
 }
 
 function Empty({ hasFilters, onClear, onRetry }: { hasFilters: boolean; onClear: () => void; onRetry: () => void }) {
+  const { t } = useI18n();
   return (
     <View style={{ paddingHorizontal: 24, paddingTop: 30, alignItems: 'center' }}>
       <View style={{ width: 120, height: 120, alignItems: 'center', justifyContent: 'center' }}>
@@ -246,13 +278,13 @@ function Empty({ hasFilters, onClear, onRetry }: { hasFilters: boolean; onClear:
         <View style={{ opacity: 0.55 }}><Icons.Mark size={66} color={C.coral} /></View>
       </View>
       <Text style={{ fontFamily: F.serif, fontSize: 28, marginTop: 22, letterSpacing: -0.6, color: C.ink, textAlign: 'center' }}>
-        {hasFilters ? 'No spots match those filters.' : 'No spots found nearby.'}
+        {hasFilters ? t('discover.noMatch') : t('discover.noNearby')}
       </Text>
       <Text style={{ marginTop: 8, color: C.ink2, fontFamily: F.regular, fontSize: 14.5, lineHeight: 21, maxWidth: 280, textAlign: 'center' }}>
-        {hasFilters ? 'Loosen a filter and we’ll find you somewhere new.' : 'Try again, or check your connection and location settings.'}
+        {hasFilters ? t('discover.loosen') : t('discover.checkConn')}
       </Text>
       <View style={{ marginTop: 24, width: '100%' }}>
-        {hasFilters ? <Btn kind="primary" full onPress={onClear}>Clear filters</Btn> : <Btn kind="primary" full onPress={onRetry}>Try again</Btn>}
+        {hasFilters ? <Btn kind="primary" full onPress={onClear}>{t('discover.clearFilters')}</Btn> : <Btn kind="primary" full onPress={onRetry}>{t('common.retry')}</Btn>}
       </View>
     </View>
   );
