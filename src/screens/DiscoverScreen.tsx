@@ -33,9 +33,15 @@ function HeroCard({ spot, onPress }: { spot: Spot; onPress: () => void }) {
       <View>
         <SpotImage photoUrl={spot.photoUrl} tone={spot.tone} height={170} radius={0} label={spot.name} />
         <View style={{ position: 'absolute', top: 12, left: 12 }}>
-          <Text style={{ backgroundColor: 'rgba(255,255,255,0.92)', color: C.coralDk, fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 9, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>
-            {spot.source === 'curated' ? t('discover.editorPick') : t('discover.nearYouTag')}
-          </Text>
+          {spot.promoted ? (
+            <Text style={{ backgroundColor: C.premium, color: '#fff', fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 9, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>
+              {t('discover.promoted')}
+            </Text>
+          ) : (
+            <Text style={{ backgroundColor: 'rgba(255,255,255,0.92)', color: C.coralDk, fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 9, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>
+              {spot.source === 'curated' ? t('discover.editorPick') : t('discover.nearYouTag')}
+            </Text>
+          )}
         </View>
         <Pressable onPress={() => toggleSave(spot)} hitSlop={8} style={{ position: 'absolute', top: 12, right: 12, width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' }}>
           {Icons.bookmark({ size: 16, color: saved ? C.coral : C.ink, filled: saved })}
@@ -88,13 +94,19 @@ const CATEGORIES = [
 
 function FeedCard({ spot, onPress }: { spot: Spot; onPress: () => void }) {
   const { isSaved, toggleSave } = useSaves();
+  const { t } = useI18n();
   const saved = isSaved(spot.id);
   return (
     <Pressable onPress={onPress} style={[{ backgroundColor: C.surface, borderRadius: R.xxl, overflow: 'hidden' }, SH.card]}>
       <View>
         <SpotImage photoUrl={spot.photoUrl} tone={spot.tone} height={180} radius={0} label={spot.name} />
-        {spot.bookable ? <Text style={{ position: 'absolute', top: 12, left: 12, backgroundColor: C.ink, color: '#fff', fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>BOOKABLE</Text> : null}
-        {spot.openNow === false ? <Text style={{ position: 'absolute', top: 12, left: 12, backgroundColor: C.warn, color: '#fff', fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>CLOSED</Text> : null}
+        {spot.promoted ? (
+          <Text style={{ position: 'absolute', top: 12, left: 12, backgroundColor: C.premium, color: '#fff', fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>{t('discover.promoted')}</Text>
+        ) : spot.bookable ? (
+          <Text style={{ position: 'absolute', top: 12, left: 12, backgroundColor: C.ink, color: '#fff', fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>BOOKABLE</Text>
+        ) : spot.openNow === false ? (
+          <Text style={{ position: 'absolute', top: 12, left: 12, backgroundColor: C.warn, color: '#fff', fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>CLOSED</Text>
+        ) : null}
         <Pressable onPress={() => toggleSave(spot)} hitSlop={8} style={{ position: 'absolute', top: 12, right: 12, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' }}>
           {Icons.bookmark({ size: 16, color: saved ? C.coral : C.ink, filled: saved })}
         </Pressable>

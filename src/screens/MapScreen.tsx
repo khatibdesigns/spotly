@@ -1,6 +1,6 @@
 // Spotly — Map. Real Apple map; toggle between nearby discovery and the
 // family's "places we've been" (from memories). Passport stats are real.
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, Linking, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
@@ -11,7 +11,7 @@ import { useStore } from '../lib/store';
 import { usePlaces } from '../lib/placesStore';
 import { useMemories } from '../lib/memories';
 import { useI18n } from '../lib/i18n';
-import { Spot, formatDistance } from '../lib/places';
+import { Spot, formatDistance, getEvents, SpotEvent } from '../lib/places';
 
 type Pin = { id: string; name: string; lat: number; lng: number; photoUrl?: string; tone?: string; sub: string; spot?: Spot };
 
@@ -54,6 +54,13 @@ export function MapScreen() {
   const { t } = useI18n();
   const [mode, setMode] = useState<'nearby' | 'been'>('nearby');
   const [active, setActive] = useState<Pin | null>(null);
+  const [events, setEvents] = useState<SpotEvent[]>([]);
+  const [activeEvent, setActiveEvent] = useState<SpotEvent | null>(null);
+
+  useEffect(() => {
+    getEvents().then(setEvents).catch(() => {});
+  }, []);
+  const eventPins = useMemo(() => events.filter((e) => e.lat != null && e.lng != null), [events]);
 
   const region = useMemo(
     () => ({ latitude: loc.latitude, longitude: loc.longitude, latitudeDelta: 0.25, longitudeDelta: 0.25 }),
@@ -87,16 +94,30 @@ export function MapScreen() {
           // sheet isn't opened then instantly closed.
           if ((e.nativeEvent as any)?.action === 'marker-press') return;
           setActive(null);
+          setActiveEvent(null);
         }}
       >
         {pins.map((p) => (
           <Marker
             key={p.id}
             coordinate={{ latitude: p.lat, longitude: p.lng }}
-            onPress={(e) => { (e as any)?.stopPropagation?.(); setActive(p); }}
+            onPress={(e) => { (e as any)?.stopPropagation?.(); setActiveEvent(null); setActive(p); }}
           >
             <View style={{ padding: 6 }}>
-              <Icons.Mark size={30} color={mode === 'been' ? C.coral : C.sage} />
+              <Icons.Mark size={p.spot?.promoted ? 36 : 30} color={p.spot?.promoted ? C.premium : mode === 'been' ? C.coral : C.sage} />
+            </View>
+          </Marker>
+        ))}
+
+        {/* Hot events this week — distinct premium hotspot markers (nearby mode). */}
+        {mode === 'nearby' && eventPins.map((ev) => (
+          <Marker
+            key={`ev-${ev.id}`}
+            coordinate={{ latitude: ev.lat as number, longitude: ev.lng as number }}
+            onPress={(e) => { (e as any)?.stopPropagation?.(); setActive(null); setActiveEvent(ev); }}
+          >
+            <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: C.premium, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: '#fff' }}>
+              {Icons.sparkle({ size: 18, color: '#fff' })}
             </View>
           </Marker>
         ))}
@@ -141,6 +162,31 @@ export function MapScreen() {
             ) : null}
             <Btn kind="dark" size="sm" style={{ flex: 1 }} icon={Icons.directions({ size: 14, color: '#fff' })} onPress={() => {
               const url = Platform.OS === 'ios' ? `http://maps.apple.com/?daddr=${active.lat},${active.lng}` : `https://www.google.com/maps/dir/?api=1&destination=${active.lat},${active.lng}`;
+              Linking.openURL(url).catch(() => {});
+            }}>{t('map.directions')}</Btn>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Event hotspot sheet */}
+      {activeEvent ? (
+        <View style={[{ position: 'absolute', left: 12, right: 12, bottom: 110, backgroundColor: C.surface, borderRadius: 24, padding: 16, borderTopWidth: 4, borderTopColor: C.premium }, SH.pop]}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 12 }} />
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+            <View style={{ width: 56, height: 56, borderRadius: 14, backgroundColor: C.premium, alignItems: 'center', justifyContent: 'center' }}>
+              {Icons.sparkle({ size: 26, color: '#fff' })}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, color: C.premium, fontFamily: F.extrabold, textTransform: 'uppercase', letterSpacing: 0.6 }}>{t('map.eventTag')}</Text>
+              <Text numberOfLines={1} style={{ fontFamily: F.extrabold, fontSize: 16, color: C.ink, marginTop: 2 }}>{activeEvent.title}</Text>
+              <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>
+                {activeEvent.partner ? t('map.withPartner', { partner: activeEvent.partner }) : ''}{activeEvent.venue ? `${activeEvent.partner ? ' · ' : ''}${activeEvent.venue}` : ''}
+              </Text>
+            </View>
+          </View>
+          <View style={{ marginTop: 12 }}>
+            <Btn kind="dark" size="sm" style={{ flex: 1 }} icon={Icons.directions({ size: 14, color: '#fff' })} onPress={() => {
+              const url = Platform.OS === 'ios' ? `http://maps.apple.com/?daddr=${activeEvent.lat},${activeEvent.lng}` : `https://www.google.com/maps/dir/?api=1&destination=${activeEvent.lat},${activeEvent.lng}`;
               Linking.openURL(url).catch(() => {});
             }}>{t('map.directions')}</Btn>
           </View>

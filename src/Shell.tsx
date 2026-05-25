@@ -6,6 +6,7 @@ import { C } from './lib/theme';
 import { useStore, RouteName } from './lib/store';
 import { useAuth } from './lib/auth';
 import { useProfile } from './lib/profile';
+import { useMerchant } from './lib/merchant';
 import { PlacesProvider } from './lib/placesStore';
 import { PlansProvider } from './lib/plans';
 import { MemoriesProvider } from './lib/memories';
@@ -28,6 +29,8 @@ import { PaywallScreen } from './screens/PaywallScreen';
 import { AiPlanScreen } from './screens/AiPlanScreen';
 import { SavedScreen } from './screens/SavedScreen';
 import { KidFoodScreen } from './screens/KidFoodScreen';
+import { MerchantSetupScreen } from './screens/MerchantSetupScreen';
+import { MerchantHomeScreen } from './screens/MerchantHomeScreen';
 
 const OVERLAYS: Record<RouteName, React.ComponentType> = {
   place: PlaceScreen,
@@ -75,7 +78,8 @@ function Splash() {
 export function Shell() {
   const { user, loading: authLoading } = useAuth();
   const { hasProfile, loading: profileLoading } = useProfile();
-  const { tab, stack, push } = useStore();
+  const { isMerchant, loading: merchantLoading } = useMerchant();
+  const { tab, stack, push, authIntent } = useStore();
   const insets = useSafeAreaInsets();
 
   // Tapping a planner notification opens the AI planner.
@@ -92,7 +96,11 @@ export function Shell() {
 
   if (authLoading) return <Splash />;
   if (!user) return <OnboardingScreen />;
-  if (profileLoading) return <Splash />;
+  if (merchantLoading || profileLoading) return <Splash />;
+  // Merchant account → the business dashboard (separate from the customer app).
+  if (isMerchant) return <MerchantHomeScreen />;
+  // A new sign-up that chose "business" but hasn't created their merchant doc yet.
+  if (!hasProfile && authIntent === 'merchant') return <MerchantSetupScreen />;
   if (!hasProfile) return <SetupScreen />;
 
   return (

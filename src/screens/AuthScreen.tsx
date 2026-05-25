@@ -8,12 +8,15 @@ import { Icons } from '../components/icons';
 import { Btn } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
+import { useStore } from '../lib/store';
 
 export function AuthScreen({ onBack, initialMode = 'signup' }: { onBack?: () => void; initialMode?: 'signin' | 'signup' }) {
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
+  const { setAuthIntent } = useStore();
   const { signIn, signUp, signInWithApple, signInWithGoogle, appleAvailable, googleAvailable, configured } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+  const [acct, setAcct] = useState<'customer' | 'merchant'>('customer');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
@@ -56,6 +59,22 @@ export function AuthScreen({ onBack, initialMode = 'signup' }: { onBack?: () => 
           <Text style={{ fontSize: 14.5, color: C.ink2, fontFamily: F.regular, textAlign: 'center', marginTop: 6, lineHeight: 21 }}>
             {mode === 'signup' ? t('auth.createSub') : t('auth.signinSub')}
           </Text>
+
+          {mode === 'signup' ? (
+            <View style={{ marginTop: 18 }}>
+              <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8, textAlign: 'center' }}>{t('auth.accountType')}</Text>
+              <View style={{ flexDirection: 'row', backgroundColor: C.surface, borderRadius: R.pill, padding: 4, borderWidth: 1, borderColor: C.line }}>
+                {(['customer', 'merchant'] as const).map((v) => {
+                  const on = acct === v;
+                  return (
+                    <Pressable key={v} onPress={() => { setAcct(v); setAuthIntent(v); }} style={{ flex: 1, height: 40, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.ink : 'transparent' }}>
+                      <Text style={{ color: on ? '#fff' : C.ink2, fontFamily: F.bold, fontSize: 14 }}>{v === 'customer' ? t('auth.asCustomer') : t('auth.asMerchant')}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
 
           {!configured ? (
             <View style={{ marginTop: 18, padding: 14, borderRadius: R.lg, backgroundColor: C.coralLt }}>

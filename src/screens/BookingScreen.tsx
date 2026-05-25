@@ -1,8 +1,9 @@
 // Spotly — Booking sheet + confirmation. Logs a request to Firestore (CRM-visible).
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Alert } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Alert, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import QRCode from 'react-native-qrcode-svg';
 import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Btn, SpotImage } from '../components/ui';
@@ -79,6 +80,7 @@ export function BookingScreen() {
       const day = days.find((d) => d.key === dayKey);
       await addBooking({
         placeId: place?.id,
+        placeOwnerUid: place?.ownerUid,
         placeName: place?.name || 'Spot',
         photoUrl: place?.photoUrl,
         date: day?.label || dayKey,
@@ -185,7 +187,28 @@ export function BookingConfirmedScreen() {
           </Text>
         </View>
 
-        <View style={[{ marginHorizontal: 22, marginTop: 28, padding: 18, backgroundColor: C.surface, borderRadius: R.xl }, SH.card]}>
+        {/* Booking pass — QR code presented in person at the venue. */}
+        {last?.code ? (
+          <View style={[{ marginHorizontal: 22, marginTop: 28, padding: 20, backgroundColor: C.surface, borderRadius: R.xl, alignItems: 'center' }, SH.card]}>
+            <Text style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: C.ink3 }}>{t('qr.title')}</Text>
+            <View style={{ marginTop: 14, padding: 12, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: C.line }}>
+              <QRCode value={`SPOTLY:${last.id}:${last.code}`} size={150} color={C.ink} backgroundColor="#fff" />
+            </View>
+            <Text style={{ fontFamily: F.mono, fontSize: 18, letterSpacing: 2, color: C.ink, marginTop: 14 }}>{last.code}</Text>
+            <Text style={{ fontSize: 12.5, color: C.ink3, fontFamily: F.regular, marginTop: 6, textAlign: 'center', maxWidth: 240, lineHeight: 17 }}>{t('qr.keep')}</Text>
+            <Btn
+              kind="ghost"
+              size="sm"
+              style={{ marginTop: 14 }}
+              icon={Icons.share({ size: 14, color: C.ink })}
+              onPress={() => Share.share({ message: `${t('qr.title')} — ${last.placeName}\n${t('qr.code')}: ${last.code}` }).catch(() => {})}
+            >
+              {t('qr.share')}
+            </Btn>
+          </View>
+        ) : null}
+
+        <View style={[{ marginHorizontal: 22, marginTop: 14, padding: 18, backgroundColor: C.surface, borderRadius: R.xl }, SH.card]}>
           <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
             <SpotImage photoUrl={last?.photoUrl} tone="sun" height={64} radius={14} style={{ width: 64 }} />
             <View style={{ flex: 1 }}>

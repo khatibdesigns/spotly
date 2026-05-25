@@ -8,6 +8,7 @@ import { useAuth } from './auth';
 
 export type BookingInput = {
   placeId?: string;
+  placeOwnerUid?: string; // merchant who owns the place (for merchant dashboard)
   placeName: string;
   photoUrl?: string;
   date: string;
@@ -18,7 +19,15 @@ export type BookingInput = {
   familyName?: string;
 };
 
-export type Booking = BookingInput & { id: string; status: string; createdAt?: any };
+export type Booking = BookingInput & { id: string; status: string; code?: string; createdAt?: any };
+
+// Short, human-readable redemption code shown as a QR + presented in person.
+function makeCode(): string {
+  const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous 0/O/1/I
+  let s = '';
+  for (let i = 0; i < 6; i++) s += a[Math.floor(Math.random() * a.length)];
+  return `SPOT-${s}`;
+}
 
 type BookingsState = {
   bookings: Booking[];
@@ -46,9 +55,10 @@ export function BookingsProvider({ children }: { children: React.ReactNode }) {
   const addBooking = useCallback(
     async (input: BookingInput) => {
       if (!user || !firestore) throw new Error('Not signed in');
-      const payload = { ...input, uid: user.uid, status: 'requested', createdAt: serverTimestamp() };
-      await addDoc(collection(firestore, 'bookings'), payload);
-      setLast({ id: 'local', status: 'requested', ...input });
+      const code = makeCode();
+      const payload = { ...input, uid: user.uid, status: 'requested', code, createdAt: serverTimestamp() };
+      const ref = await addDoc(collection(firestore, 'bookings'), payload);
+      setLast({ id: ref.id, status: 'requested', code, ...input });
     },
     [user]
   );

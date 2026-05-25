@@ -8,6 +8,7 @@ import { Btn, Switch } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { useProfile, Kid, EMPTY_STATS } from '../lib/profile';
 import { useI18n } from '../lib/i18n';
+import { useStore } from '../lib/store';
 
 const KID_COLORS = [C.sky, C.plum, C.sun, C.sage, C.coral];
 let _kidSeq = 0;
@@ -28,6 +29,7 @@ export function SetupScreen() {
   const { user } = useAuth();
   const { saveProfile } = useProfile();
   const { t } = useI18n();
+  const { setAuthIntent } = useStore();
   const [step, setStep] = useState<0 | 1>(0);
   const [busy, setBusy] = useState(false);
 
@@ -123,6 +125,10 @@ export function SetupScreen() {
               <Text style={{ flex: 1, fontSize: 13.5, color: C.coralDk, fontFamily: F.semibold }}>{t('setup.useLocation')}</Text>
               <Pressable onPress={() => setLocationEnabled((v) => !v)}><Switch on={locationEnabled} /></Pressable>
             </View>
+
+            <Pressable onPress={() => setAuthIntent('merchant')} style={{ marginTop: 18, alignItems: 'center' }}>
+              <Text style={{ color: C.ink3, fontFamily: F.bold, fontSize: 13 }}>{t('auth.businessLink')}</Text>
+            </Pressable>
           </>
         ) : (
           <>

@@ -33,6 +33,8 @@ export type Spot = {
   bookable?: boolean;
   address?: string;
   tone: string; // fallback placeholder tone when no photo
+  promoted?: boolean; // merchant-paid placement → shown first + badged
+  ownerUid?: string; // merchant who owns this place (curated/claimed only)
 };
 
 export type UserLoc = { latitude: number; longitude: number; granted: boolean };
@@ -207,30 +209,42 @@ async function fetchCurated(loc: UserLoc): Promise<Spot[]> {
   if (!firestore) return [];
   try {
     const snap = await getDocs(collection(firestore, 'places'));
-    return snap.docs.map((d): Spot => {
-      const v = d.data() as any;
-      const lat = v.lat ?? v.location?.latitude;
-      const lng = v.lng ?? v.location?.longitude;
-      return {
-        id: d.id,
-        source: 'curated',
-        kind: (v.kind as SpotKind) || 'activity',
-        name: v.name || 'Untitled',
-        category: v.category || 'Curated',
-        lat,
-        lng,
-        rating: v.rating,
-        reviews: v.reviews,
-        price: v.price,
-        ages: v.ages,
-        amenities: Array.isArray(v.amenities) ? v.amenities : [],
-        photoUrl: v.photoUrl || undefined,
-        distanceKm: lat != null ? distKm(loc.latitude, loc.longitude, lat, lng) : undefined,
-        bookable: !!v.bookable,
-        address: v.address,
-        tone: v.tone || 'sun',
-      };
-    });
+    const now = Date.now();
+    return snap.docs
+      // Hide merchant-submitted places until an admin approves them.
+      .filter((d) => {
+        const v = d.data() as any;
+        return v.status !== 'pending' && v.status !== 'rejected';
+      })
+      .map((d): Spot => {
+        const v = d.data() as any;
+        const lat = v.lat ?? v.location?.latitude;
+        const lng = v.lng ?? v.location?.longitude;
+        // A promotion is active if flagged and (no expiry, or expiry in future).
+        const promotedUntil = v.promotedUntil?.toMillis ? v.promotedUntil.toMillis() : v.promotedUntil;
+        const promoted = !!v.promoted && (!promotedUntil || promotedUntil > now);
+        return {
+          id: d.id,
+          source: 'curated',
+          kind: (v.kind as SpotKind) || 'activity',
+          name: v.name || 'Untitled',
+          category: v.category || 'Curated',
+          lat,
+          lng,
+          rating: v.rating,
+          reviews: v.reviews,
+          price: v.price,
+          ages: v.ages,
+          amenities: Array.isArray(v.amenities) ? v.amenities : [],
+          photoUrl: v.photoUrl || undefined,
+          distanceKm: lat != null ? distKm(loc.latitude, loc.longitude, lat, lng) : undefined,
+          bookable: !!v.bookable,
+          address: v.address,
+          tone: v.tone || 'sun',
+          promoted,
+          ownerUid: v.ownerUid || undefined,
+        };
+      });
   } catch {
     return [];
   }
@@ -286,6 +300,56 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
     google.push(g);
   }
   const merged = [...curated, ...google];
-  merged.sort((a, b) => (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999));
+  // Promoted places float to the top; otherwise nearest first.
+  merged.sort((a, b) => {
+    if (!!a.promoted !== !!b.promoted) return a.promoted ? -1 : 1;
+    return (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999);
+  });
   return merged;
+}
+
+// Hot events this week (admin-managed collabs, e.g. a 24am pop-up). Surfaced as
+// map hotspots and a "hot this week" rail. Only currently-active ones are kept.
+export type SpotEvent = {
+  id: string;
+  title: string;
+  partner?: string;
+  venue?: string;
+  lat?: number;
+  lng?: number;
+  photoUrl?: string;
+  startsAt?: number;
+  endsAt?: number;
+  tone: string;
+};
+
+export async function getEvents(): Promise<SpotEvent[]> {
+  if (!firestore) return [];
+  try {
+    const snap = await getDocs(collection(firestore, 'events'));
+    const now = Date.now();
+    return snap.docs
+      .map((d) => {
+        const v = d.data() as any;
+        const toMs = (x: any) => (x?.toMillis ? x.toMillis() : x);
+        return {
+          id: d.id,
+          title: v.title || 'Event',
+          partner: v.partner || undefined,
+          venue: v.venue || undefined,
+          lat: v.lat ?? v.location?.latitude,
+          lng: v.lng ?? v.location?.longitude,
+          photoUrl: v.photoUrl || undefined,
+          startsAt: toMs(v.startsAt),
+          endsAt: toMs(v.endsAt),
+          tone: v.tone || 'plum',
+          active: v.active !== false,
+        };
+      })
+      // Keep active events that haven't ended yet.
+      .filter((e) => e.active && (!e.endsAt || e.endsAt > now))
+      .map(({ active, ...e }) => e);
+  } catch {
+    return [];
+  }
 }
