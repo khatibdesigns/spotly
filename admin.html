@@ -285,10 +285,18 @@ async function loadDashboard() {
 }
 
 // ---------- Places ----------
+function verifyLinks(p){
+  if (!p.ownerUid) return '';
+  const bits = [];
+  if (p.ownerPhone) bits.push(`<span>📞 ${esc(p.ownerPhone)}</span>`);
+  if (p.ownerCivilIdUrl) bits.push(`<a href="${esc(p.ownerCivilIdUrl)}" target="_blank">Civil ID</a>`);
+  (p.ownerDocs||[]).forEach((d,i)=> bits.push(`<a href="${esc(d.url)}" target="_blank">${esc(d.name||('Doc '+(i+1)))}</a>`));
+  return bits.length ? `<div style="margin-top:6px;font-size:11px;display:flex;gap:10px;flex-wrap:wrap;color:var(--ink3)">${bits.join('')}</div>` : '';
+}
 function placeStatusCell(p){
   const st = p.status || 'approved';
-  if (st === 'pending') return `<span style="color:#9a7b00;background:#fff7e0;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Pending</span> <button class="btn sage sm" data-approve="${p.id}">Approve</button> <button class="danger" data-reject="${p.id}">Reject</button>`;
-  if (st === 'rejected') return `<span style="color:#b3261e;background:#fde8e6;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Rejected</span> <button class="btn sage sm" data-approve="${p.id}">Approve</button>`;
+  if (st === 'pending') return `<span style="color:#9a7b00;background:#fff7e0;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Pending</span> <button class="btn sage sm" data-approve="${p.id}">Approve</button> <button class="danger" data-reject="${p.id}">Reject</button>${verifyLinks(p)}`;
+  if (st === 'rejected') return `<span style="color:#b3261e;background:#fde8e6;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Rejected</span> <button class="btn sage sm" data-approve="${p.id}">Approve</button>${verifyLinks(p)}`;
   return `<span style="color:#1c7a52;background:#e4f3ec;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Live</span>`;
 }
 function placePromoteCell(p){
