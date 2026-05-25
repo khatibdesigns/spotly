@@ -123,6 +123,7 @@ export function MerchantHomeScreen() {
     ]);
   };
   const countFor = (placeId: string) => bookings.filter((b) => b.placeId === placeId).length;
+  const newCount = bookings.filter((b) => b.status === 'requested').length;
   const pickLanguage = () => {
     Alert.alert(t('profile.langTitle'), t('profile.langChoose'), [
       { text: 'English', onPress: () => setLang('en') },
@@ -172,7 +173,14 @@ export function MerchantHomeScreen() {
 
         {/* Bookings */}
         <View style={{ paddingHorizontal: 20, marginTop: 26 }}>
-          <Text style={{ fontFamily: F.serif, fontSize: 20, color: C.ink, letterSpacing: -0.4 }}>{t('mh.bookings')}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontFamily: F.serif, fontSize: 20, color: C.ink, letterSpacing: -0.4 }}>{t('mh.bookings')}</Text>
+            {newCount > 0 ? (
+              <View style={{ backgroundColor: C.coral, borderRadius: 999, minWidth: 22, height: 22, paddingHorizontal: 7, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 12 }}>{newCount}</Text>
+              </View>
+            ) : null}
+          </View>
           <View style={{ gap: 10, marginTop: 12 }}>
             {bookings.length === 0 ? (
               <Text style={{ color: C.ink3, fontFamily: F.regular, fontSize: 14 }}>{t('mh.noBookings')}</Text>

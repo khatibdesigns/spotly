@@ -5,6 +5,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { collection, onSnapshot, addDoc, query, where, serverTimestamp } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useAuth } from './auth';
+import { sendBookingEmail } from './email';
 
 export type BookingInput = {
   placeId?: string;
@@ -69,6 +70,10 @@ export function BookingsProvider({ children }: { children: React.ReactNode }) {
       const payload = { ...input, uid: user.uid, status: 'requested', code, createdAt: serverTimestamp() };
       const ref = await addDoc(collection(firestore, 'bookings'), payload);
       setLast({ id: ref.id, status: 'requested', code, ...input });
+      // Branded confirmation email (sends once the EC2 /email endpoint is live).
+      if (user.email) {
+        sendBookingEmail({ to: user.email, placeName: input.placeName, date: input.date, time: input.time, adults: input.adults, kids: input.kids, code, bookingId: ref.id });
+      }
     },
     [user]
   );
