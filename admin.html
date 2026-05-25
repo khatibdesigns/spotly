@@ -98,6 +98,7 @@
       <button data-view="bookings"><span class="ico">◷</span><span class="lbl">Bookings</span></button>
       <button data-view="orders"><span class="ico">▤</span><span class="lbl">Orders</span></button>
       <button data-view="campaigns"><span class="ico">✦</span><span class="lbl">Campaigns</span></button>
+      <button data-view="events"><span class="ico">✸</span><span class="lbl">Hotspots</span></button>
       <button data-view="reports"><span class="ico">↧</span><span class="lbl">Reports</span></button>
     </nav>
     <div class="foot">Signed in as<br/><b id="whoFoot" style="color:rgba(255,255,255,.8)"></b></div>
@@ -152,6 +153,12 @@
       <section id="view-campaigns" class="hide">
         <div class="toolbar"><div class="spacer"></div><button class="btn sage" id="addCampaignBtn">+ New campaign</button></div>
         <div class="panel" style="padding:6px 6px 0"><div id="campaignsTable"></div></div>
+      </section>
+
+      <!-- HOTSPOTS / EVENTS -->
+      <section id="view-events" class="hide">
+        <div class="toolbar"><div class="spacer"></div><button class="btn sage" id="addEventBtn">+ New hotspot</button></div>
+        <div class="panel" style="padding:6px 6px 0"><div id="eventsTable"></div></div>
       </section>
 
       <!-- REPORTS -->
@@ -224,7 +231,7 @@ $('loginBtn').onclick = async () => {
 $('signout').onclick = () => signOut(auth);
 
 // ---------- Navigation ----------
-const TITLES = { dashboard:'Dashboard', places:'Places', bookings:'Bookings', orders:'Album orders', campaigns:'Campaigns', reports:'Reports' };
+const TITLES = { dashboard:'Dashboard', places:'Places', bookings:'Bookings', orders:'Album orders', campaigns:'Campaigns', events:'Hotspots', reports:'Reports' };
 $('nav').addEventListener('click', (e) => { const b = e.target.closest('button[data-view]'); if (b) show(b.dataset.view); });
 function show(view) {
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
@@ -236,6 +243,7 @@ function show(view) {
   if (view === 'bookings') loadBookings();
   if (view === 'orders') loadOrders();
   if (view === 'campaigns') loadCampaigns();
+  if (view === 'events') loadEvents();
 }
 
 async function fetchAll(name, withOrder = true) {
@@ -277,17 +285,36 @@ async function loadDashboard() {
 }
 
 // ---------- Places ----------
+function placeStatusCell(p){
+  const st = p.status || 'approved';
+  if (st === 'pending') return `<span style="color:#9a7b00;background:#fff7e0;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Pending</span> <button class="btn sage sm" data-approve="${p.id}">Approve</button> <button class="danger" data-reject="${p.id}">Reject</button>`;
+  if (st === 'rejected') return `<span style="color:#b3261e;background:#fde8e6;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Rejected</span> <button class="btn sage sm" data-approve="${p.id}">Approve</button>`;
+  return `<span style="color:#1c7a52;background:#e4f3ec;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Live</span>`;
+}
+function placePromoteCell(p){
+  if (p.promoted) return `<button class="btn ghost sm" data-promote="${p.id}" data-on="1">★ Promoted — turn off</button>`;
+  const req = p.promotionRequested ? ' <span style="color:#5b5be0;font-size:11px;font-weight:700">requested</span>' : '';
+  return `<button class="btn ghost sm" data-promote="${p.id}" data-on="0">Promote</button>${req}`;
+}
 async function loadPlaces() {
   const places = await fetchAll('places'); cache.places = places;
+  // Sort: pending first (need action), then promoted, then the rest.
+  places.sort((a,b)=>{ const r=(x)=> x.status==='pending'?0:(x.promoted?1:2); return r(a)-r(b); });
   $('placesTable').innerHTML = places.length ? table(
-    ['', 'Name','Category','City','Price',''],
+    ['', 'Name','Category','Status','Promotion',''],
     places.map((p)=>[
       p.photoUrl?`<img src="${esc(p.photoUrl)}" onerror="this.style.visibility='hidden'"/>`:'',
-      `<b>${esc(p.name)}</b>`, esc(p.category||''), esc(p.city||''), esc(p.price||'—'),
+      `<b>${esc(p.name)}</b>${p.ownerUid?' <span style="color:var(--ink3);font-size:11px">· merchant</span>':''}`,
+      esc(p.category||''),
+      placeStatusCell(p),
+      placePromoteCell(p),
       `<button class="danger" data-del-place="${p.id}">Delete</button>`
     ])
   ) : '<div class="muted-note">No places yet. Add your first curated place.</div>';
   $('placesTable').querySelectorAll('[data-del-place]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Delete this place?')){ await deleteDoc(doc(db,'places',b.dataset.delPlace)); loadPlaces(); } });
+  $('placesTable').querySelectorAll('[data-approve]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'places',b.dataset.approve),{status:'approved'}); loadPlaces(); });
+  $('placesTable').querySelectorAll('[data-reject]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Reject this place?')){ await updateDoc(doc(db,'places',b.dataset.reject),{status:'rejected'}); loadPlaces(); } });
+  $('placesTable').querySelectorAll('[data-promote]').forEach((b)=> b.onclick = async ()=>{ const on = b.dataset.on==='1'; await updateDoc(doc(db,'places',b.dataset.promote),{ promoted: !on, promotionRequested:false }); loadPlaces(); });
 }
 $('addPlaceBtn').onclick = () => openPlaceModal();
 function openPlaceModal() {
@@ -398,6 +425,51 @@ $('addCampaignBtn').onclick = () => {
     try{ await addDoc(collection(db,'campaigns'),{ title, message:$('c_msg').value.trim()||null, audience:$('c_aud').value, status:$('c_stat').value, starts:$('c_start').value||null, ends:$('c_end').value||null, createdAt:serverTimestamp() });
       $('modalRoot').innerHTML=''; loadCampaigns();
     }catch(e){ $('c_err').textContent=e.message.replace('Firebase: ',''); }
+  };
+};
+
+// ---------- Hotspots / Events ----------
+async function loadEvents() {
+  const events = await fetchAll('events'); cache.events = events;
+  $('eventsTable').innerHTML = events.length ? table(
+    ['Title','Partner','Venue','Active',''],
+    events.map((ev)=>[
+      `<b>${esc(ev.title||'')}</b>`, esc(ev.partner||'—'), esc(ev.venue||'—'),
+      ev.active===false?'<span style="color:var(--ink3)">off</span>':'<span style="color:#1c7a52;font-weight:700">on</span>',
+      `<button class="btn ghost sm" data-tog-ev="${ev.id}" data-on="${ev.active===false?0:1}">${ev.active===false?'Turn on':'Turn off'}</button> <button class="danger" data-del-ev="${ev.id}">Delete</button>`
+    ])
+  ) : '<div class="muted-note">No hotspots yet. Add a hot event or collab (e.g. a 24am pop-up).</div>';
+  $('eventsTable').querySelectorAll('[data-del-ev]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Delete hotspot?')){ await deleteDoc(doc(db,'events',b.dataset.delEv)); loadEvents(); } });
+  $('eventsTable').querySelectorAll('[data-tog-ev]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'events',b.dataset.togEv),{active: b.dataset.on!=='1'}); loadEvents(); });
+}
+$('addEventBtn').onclick = () => {
+  $('modalRoot').innerHTML = `
+  <div class="modal-bg"><div class="modal">
+    <h2>Add a hotspot</h2>
+    <div class="form-grid">
+      <div class="full"><label class="fld">Title *</label><input id="e_title" placeholder="Eid weekend pop-up"/></div>
+      <div><label class="fld">Partner</label><input id="e_partner" placeholder="24am"/></div>
+      <div><label class="fld">Venue</label><input id="e_venue" placeholder="The Avenues"/></div>
+      <div><label class="fld">Latitude *</label><input id="e_lat" type="number" step="any" placeholder="29.3033"/></div>
+      <div><label class="fld">Longitude *</label><input id="e_lng" type="number" step="any" placeholder="47.9389"/></div>
+      <div><label class="fld">Ends (date)</label><input id="e_end" type="date"/></div>
+      <div class="full"><label class="fld">Photo URL</label><input id="e_photo" placeholder="https://…"/></div>
+    </div>
+    <p id="e_err" class="err"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn ghost" id="e_cancel">Cancel</button>
+      <button class="btn sage" id="e_save">Add hotspot</button>
+    </div>
+  </div></div>`;
+  $('e_cancel').onclick = () => $('modalRoot').innerHTML='';
+  $('e_save').onclick = async () => {
+    const title=$('e_title').value.trim(), lat=parseFloat($('e_lat').value), lng=parseFloat($('e_lng').value);
+    if(!title||isNaN(lat)||isNaN(lng)){ $('e_err').textContent='Title, latitude and longitude are required.'; return; }
+    const endsAt = $('e_end').value ? new Date($('e_end').value).getTime() : null;
+    try{
+      await addDoc(collection(db,'events'),{ title, partner:$('e_partner').value.trim()||null, venue:$('e_venue').value.trim()||null, lat, lng, photoUrl:$('e_photo').value.trim()||null, endsAt, active:true, tone:'plum', createdAt:serverTimestamp() });
+      $('modalRoot').innerHTML=''; loadEvents();
+    }catch(e){ $('e_err').textContent=e.message.replace('Firebase: ',''); }
   };
 };
 
