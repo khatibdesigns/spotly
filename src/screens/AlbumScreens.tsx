@@ -8,6 +8,7 @@ import { Btn, Placeholder, CircBtn, SectionLabel } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { createAlbumOrder } from '../lib/bookings';
+import { useI18n } from '../lib/i18n';
 
 export function BookPreview({ size = 'md', title = 'Our France Trip', sub = 'Summer 2026', tone = 'sun' as const }: { size?: 'md' | 'lg'; title?: string; sub?: string; tone?: any }) {
   const w = size === 'lg' ? 220 : 180;
@@ -46,24 +47,25 @@ function SpreadCard({ idx, tones }: { idx: string; tones: [string, string] }) {
 export function AlbumEditorScreen() {
   const insets = useSafeAreaInsets();
   const { pop, push } = useStore();
+  const { t } = useI18n();
   return (
     <View style={{ flex: 1, backgroundColor: '#f4f1ec' }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + 56, paddingHorizontal: 20, paddingBottom: 120 }}>
         {/* Title card */}
         <View style={[{ backgroundColor: C.surface, borderRadius: R.xl, paddingVertical: 14, paddingHorizontal: 16 }, SH.card]}>
-          <Text style={{ fontSize: 10.5, color: C.ink3, fontFamily: F.extrabold, letterSpacing: 0.5, textTransform: 'uppercase' }}>Title</Text>
+          <Text style={{ fontSize: 10.5, color: C.ink3, fontFamily: F.extrabold, letterSpacing: 0.5, textTransform: 'uppercase' }}>{t('al.albumTitle')}</Text>
           <Text style={{ fontFamily: F.serif, fontSize: 26, lineHeight: 29, marginTop: 4, letterSpacing: -0.5, color: C.ink }}>Our France Trip</Text>
           <Text style={{ fontSize: 13, color: C.ink3, fontFamily: F.regular, marginTop: 4 }}>Summer 2026 · 24 pages</Text>
         </View>
 
-        <SectionLabel>Cover</SectionLabel>
+        <SectionLabel>{t('al.cover')}</SectionLabel>
         <View style={{ backgroundColor: '#efe6da', borderRadius: R.xl, padding: 22, alignItems: 'center', borderWidth: 1, borderColor: C.line }}>
           <BookPreview />
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <SectionLabel>Pages</SectionLabel>
-          <Text style={{ marginLeft: 'auto', marginTop: 24, marginBottom: 10, fontSize: 11, color: C.coralDk, fontFamily: F.bold }}>Auto-arrange</Text>
+          <SectionLabel>{t('al.pages')}</SectionLabel>
+          <Text style={{ marginLeft: 'auto', marginTop: 24, marginBottom: 10, fontSize: 11, color: C.coralDk, fontFamily: F.bold }}>{t('al.autoArrange')}</Text>
         </View>
         <View style={{ gap: 10 }}>
           <SpreadCard idx="1–2" tones={['sun', 'sage']} />
@@ -71,7 +73,7 @@ export function AlbumEditorScreen() {
           <SpreadCard idx="5–6" tones={['plum', 'sun']} />
         </View>
 
-        <SectionLabel>Layout for this spread</SectionLabel>
+        <SectionLabel>{t('al.layout')}</SectionLabel>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {[1, 2, 3, 4, 5].map((i) => (
             <View key={i} style={{ width: 70, height: 56, backgroundColor: C.surface, borderRadius: 10, borderWidth: i === 2 ? 2 : 1, borderColor: i === 2 ? C.sage : C.line, padding: 6, flexDirection: 'row', gap: 4 }}>
@@ -92,21 +94,21 @@ export function AlbumEditorScreen() {
       <View style={{ position: 'absolute', top: insets.top + 6, left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <CircBtn onPress={pop}>{Icons.arrowL({ size: 18, color: C.ink })}</CircBtn>
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={{ fontSize: 11, color: C.ink3, fontFamily: F.bold, letterSpacing: 0.4, textTransform: 'uppercase' }}>Step 2 of 4</Text>
-          <Text style={{ fontFamily: F.extrabold, fontSize: 15, color: C.ink }}>Edit album</Text>
+          <Text style={{ fontSize: 11, color: C.ink3, fontFamily: F.bold, letterSpacing: 0.4, textTransform: 'uppercase' }}>{t('al.step2')}</Text>
+          <Text style={{ fontFamily: F.extrabold, fontSize: 15, color: C.ink }}>{t('al.editAlbum')}</Text>
         </View>
-        <Btn kind="primary" size="sm">Preview</Btn>
+        <Btn kind="primary" size="sm">{t('al.preview')}</Btn>
       </View>
 
       {/* Sticky footer */}
       <View style={[{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 12, height: 72, backgroundColor: C.surface, borderRadius: 24, flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 }, SH.pop]}>
         <View style={{ paddingLeft: 6 }}>
-          <Text style={{ fontSize: 10, color: C.ink3, fontFamily: F.extrabold, letterSpacing: 0.5, textTransform: 'uppercase' }}>Hardcover · 24 pp</Text>
+          <Text style={{ fontSize: 10, color: C.ink3, fontFamily: F.extrabold, letterSpacing: 0.5, textTransform: 'uppercase' }}>{t('al.hardcover')}</Text>
           <Text style={{ fontSize: 19, fontFamily: F.extrabold, color: C.ink }}>
-            €49<Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular }}> · ships in 5 days</Text>
+            €49<Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular }}> · {t('al.shipsIn')}</Text>
           </Text>
         </View>
-        <Btn kind="sage" style={{ marginLeft: 'auto', height: 50 }} onPress={() => push('albumCheckout')}>Order album →</Btn>
+        <Btn kind="sage" style={{ marginLeft: 'auto', height: 50 }} onPress={() => push('albumCheckout')}>{t('al.orderAlbum')}</Btn>
       </View>
     </View>
   );
@@ -125,6 +127,7 @@ export function AlbumCheckoutScreen() {
   const insets = useSafeAreaInsets();
   const { pop, popToRoot } = useStore();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const sizes = [
     { n: 'Petite', d: '6×6 in', price: 29 },
@@ -155,12 +158,12 @@ export function AlbumCheckoutScreen() {
           pages: 24,
         });
       Alert.alert(
-        'Thank you for your order! 🎉',
-        'Your album order is logged. We’ll email you when it ships — printing partners are coming soon.',
-        [{ text: 'Done', onPress: popToRoot }]
+        t('al.thankYou'),
+        t('al.thankYouMsg'),
+        [{ text: t('common.done'), onPress: popToRoot }]
       );
     } catch (e: any) {
-      Alert.alert('Could not place order', e?.message || 'Please try again.');
+      Alert.alert(t('al.couldNotOrder'), e?.message || 'Please try again.');
     } finally {
       setBusy(false);
     }
@@ -174,7 +177,7 @@ export function AlbumCheckoutScreen() {
         <Text style={{ marginTop: 18, fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>Our France Trip</Text>
         <Text style={{ fontSize: 13, color: C.ink3, fontFamily: F.regular, marginTop: 2 }}>Summer 2026 · 24 pages · 12 spots</Text>
 
-        <SectionLabel>Size</SectionLabel>
+        <SectionLabel>{t('al.size')}</SectionLabel>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {sizes.map((s, i) => {
             const sel = i === sizeIdx;
@@ -188,7 +191,7 @@ export function AlbumCheckoutScreen() {
           })}
         </View>
 
-        <SectionLabel>Cover</SectionLabel>
+        <SectionLabel>{t('al.cover')}</SectionLabel>
         <View style={{ flexDirection: 'row', gap: 10 }}>
           {covers.map((cv, i) => {
             const sel = i === coverIdx;
@@ -201,7 +204,7 @@ export function AlbumCheckoutScreen() {
           })}
         </View>
 
-        <SectionLabel>Ship to</SectionLabel>
+        <SectionLabel>{t('al.shipTo')}</SectionLabel>
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }, SH.card]}>
           <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.coralLt, alignItems: 'center', justifyContent: 'center' }}>
             {Icons.pin({ size: 18, color: C.coralDk, filled: true })}
@@ -210,28 +213,28 @@ export function AlbumCheckoutScreen() {
             <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.ink }}>Maya Khalil — Home</Text>
             <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>14 Rue de la Soie · 69005 Lyon</Text>
           </View>
-          <Text style={{ fontSize: 12, color: C.coralDk, fontFamily: F.bold }}>Change</Text>
+          <Text style={{ fontSize: 12, color: C.coralDk, fontFamily: F.bold }}>{t('al.change')}</Text>
         </View>
 
-        <SectionLabel>Summary</SectionLabel>
+        <SectionLabel>{t('al.summary')}</SectionLabel>
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 16 }, SH.card]}>
           <SummaryRow k={`${sizes[sizeIdx].n} ${sizes[sizeIdx].d} hardcover`} v={money(sizes[sizeIdx].price)} />
-          <SummaryRow k={`${covers[coverIdx].n} cover`} v="—" />
-          <SummaryRow k="Shipping · 5 days" v={money(SHIPPING)} />
+          <SummaryRow k={`${covers[coverIdx].n} ${t('al.coverWord')}`} v="—" />
+          <SummaryRow k={t('al.shipping')} v={money(SHIPPING)} />
           <View style={{ borderTopWidth: 1, borderTopColor: C.line, borderStyle: 'dashed', marginTop: 10, paddingTop: 10 }}>
-            <SummaryRow k="Total" v={money(total)} bold />
+            <SummaryRow k={t('al.total')} v={money(total)} bold />
           </View>
         </View>
       </ScrollView>
 
       <View style={{ position: 'absolute', top: insets.top + 6, left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <CircBtn onPress={pop}>{Icons.arrowL({ size: 18, color: C.ink })}</CircBtn>
-        <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.extrabold, fontSize: 15, color: C.ink }}>Review & order</Text>
+        <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.extrabold, fontSize: 15, color: C.ink }}>{t('al.reviewOrder')}</Text>
         <View style={{ width: 38 }} />
       </View>
 
       <View style={[{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 12, backgroundColor: C.surface, borderRadius: 24, padding: 12 }, SH.pop]}>
-        <Btn kind="sage" full style={{ height: 52 }} onPress={placeOrder} icon={Icons.lock({ size: 14, color: '#fff' })}>{busy ? 'Placing order…' : 'Place order'}</Btn>
+        <Btn kind="sage" full style={{ height: 52 }} onPress={placeOrder} icon={Icons.lock({ size: 14, color: '#fff' })}>{busy ? t('al.placingOrder') : t('al.placeOrder')}</Btn>
       </View>
     </View>
   );

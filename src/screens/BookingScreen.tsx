@@ -11,6 +11,7 @@ import { usePlaces } from '../lib/placesStore';
 import { useProfile } from '../lib/profile';
 import { useBookings } from '../lib/bookings';
 import { addBookingToCalendar } from '../lib/calendar';
+import { useI18n } from '../lib/i18n';
 
 function Label({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   return (
@@ -60,6 +61,7 @@ export function BookingScreen() {
   const { selected } = usePlaces();
   const { profile } = useProfile();
   const { addBooking } = useBookings();
+  const { t } = useI18n();
 
   const days = nextDays(7);
   const [dayKey, setDayKey] = useState(days[1]?.key || days[0].key);
@@ -88,7 +90,7 @@ export function BookingScreen() {
       });
       push('bookingConfirmed');
     } catch (e: any) {
-      Alert.alert('Could not send request', e?.message || 'Please try again.');
+      Alert.alert(t('bk.couldNotSend'), e?.message || 'Please try again.');
     } finally {
       setBusy(false);
     }
@@ -103,12 +105,12 @@ export function BookingScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 }}>
             <SpotImage photoUrl={place?.photoUrl} tone={place?.tone || 'sun'} height={54} radius={14} style={{ width: 54 }} />
             <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={{ fontFamily: F.extrabold, fontSize: 16, color: C.ink }}>{place?.name || 'Request a visit'}</Text>
-              <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular }}>{place?.category || 'Request to book'}</Text>
+              <Text numberOfLines={1} style={{ fontFamily: F.extrabold, fontSize: 16, color: C.ink }}>{place?.name || t('bk.requestVisit')}</Text>
+              <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular }}>{place?.category || t('bk.requestToBook')}</Text>
             </View>
           </View>
 
-          <Label>Date</Label>
+          <Label>{t('bk.date')}</Label>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
             {days.map((d) => {
               const sel = d.key === dayKey;
@@ -121,7 +123,7 @@ export function BookingScreen() {
             })}
           </ScrollView>
 
-          <Label right={<Text style={{ fontSize: 11, color: C.warn, fontFamily: F.bold }}>Requested time</Text>}>Time</Label>
+          <Label right={<Text style={{ fontSize: 11, color: C.warn, fontFamily: F.bold }}>{t('bk.requestedTime')}</Text>}>{t('bk.time')}</Label>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {SLOTS.map((s) => {
               const sel = s === slot;
@@ -133,17 +135,17 @@ export function BookingScreen() {
             })}
           </View>
 
-          <Label>Party</Label>
+          <Label>{t('bk.party')}</Label>
           <View style={{ gap: 10 }}>
-            <Stepper label="Adults" value={adults} onChange={setAdults} />
-            <Stepper label="Kids" sub={profile?.kids?.map((k) => `${k.name || 'Child'} ${k.age}`).join(', ') || undefined} value={kids} onChange={setKids} />
+            <Stepper label={t('bk.adults')} value={adults} onChange={setAdults} />
+            <Stepper label={t('bk.kids')} sub={profile?.kids?.map((k) => `${k.name || 'Child'} ${k.age}`).join(', ') || undefined} value={kids} onChange={setKids} />
           </View>
 
-          <Label>Anything we should know?</Label>
+          <Label>{t('bk.anything')}</Label>
           <TextInput
             value={note}
             onChangeText={setNote}
-            placeholder="High chair, allergies, stroller…"
+            placeholder={t('bk.notePlaceholder')}
             placeholderTextColor={C.ink3}
             multiline
             style={[{ backgroundColor: C.surface, borderRadius: R.lg, paddingHorizontal: 16, paddingVertical: 14, minHeight: 64, fontFamily: F.medium, fontSize: 14, color: C.ink, borderWidth: 1, borderColor: C.line }]}
@@ -151,11 +153,11 @@ export function BookingScreen() {
 
           <View style={{ marginTop: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 16, backgroundColor: C.coralLt, borderRadius: R.lg }}>
             <Text style={{ fontSize: 12.5, color: C.coralDk, fontFamily: F.semibold, flex: 1, lineHeight: 17 }}>
-              We’ll send your request to the venue. No charge now — they’ll confirm availability.
+              {t('bk.disclaimer')}
             </Text>
           </View>
 
-          <Btn kind="primary" size="lg" full style={{ marginTop: 16 }} onPress={confirm}>{busy ? 'Sending…' : 'Request booking'}</Btn>
+          <Btn kind="primary" size="lg" full style={{ marginTop: 16 }} onPress={confirm}>{busy ? t('bk.sending') : t('bk.requestBooking')}</Btn>
         </ScrollView>
       </View>
     </View>
@@ -166,6 +168,7 @@ export function BookingConfirmedScreen() {
   const insets = useSafeAreaInsets();
   const { popToRoot, setTab } = useStore();
   const { last } = useBookings();
+  const { t } = useI18n();
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <LinearGradient colors={['#fbe4d8', C.bg]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320 }} />
@@ -176,9 +179,9 @@ export function BookingConfirmedScreen() {
               {Icons.check({ size: 30, color: '#fff', strokeWidth: 3 })}
             </View>
           </View>
-          <Text style={{ fontFamily: F.serif, fontSize: 30, textAlign: 'center', marginTop: 22, letterSpacing: -0.6, lineHeight: 33, color: C.ink }}>Request sent!{'\n'}We’ll confirm soon.</Text>
+          <Text style={{ fontFamily: F.serif, fontSize: 30, textAlign: 'center', marginTop: 22, letterSpacing: -0.6, lineHeight: 33, color: C.ink }}>{t('bk.sentTitle')}</Text>
           <Text style={{ marginTop: 8, fontSize: 14, color: C.ink2, fontFamily: F.regular, textAlign: 'center' }}>
-            {last ? `${last.date} · ${last.time}` : 'Your request is logged.'}
+            {last ? `${last.date} · ${last.time}` : t('bk.logged')}
           </Text>
         </View>
 
@@ -186,9 +189,9 @@ export function BookingConfirmedScreen() {
           <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
             <SpotImage photoUrl={last?.photoUrl} tone="sun" height={64} radius={14} style={{ width: 64 }} />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: F.extrabold, fontSize: 16, color: C.ink }}>{last?.placeName || 'Your spot'}</Text>
+              <Text style={{ fontFamily: F.extrabold, fontSize: 16, color: C.ink }}>{last?.placeName || t('bk.yourSpot')}</Text>
               <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 2 }}>
-                {last ? `${last.adults} adults · ${last.kids} kids` : ''} · Requested
+                {last ? t('bk.partyCount', { a: last.adults, k: last.kids }) : ''} · {t('bk.requested')}
               </Text>
             </View>
           </View>
@@ -199,26 +202,26 @@ export function BookingConfirmedScreen() {
             icon={Icons.calendar({ size: 14, color: C.ink })}
             onPress={() =>
               addBookingToCalendar({ placeName: last?.placeName || 'Spot', date: last?.date, time: last?.time })
-                .then(() => Alert.alert('Added to calendar', 'Your booking is on your calendar.'))
-                .catch((e) => Alert.alert('Calendar', e?.message || 'Could not add.'))
+                .then(() => Alert.alert(t('bk.calAdded'), t('bk.calAddedMsg')))
+                .catch((e) => Alert.alert('Calendar', e?.message || t('bk.calErr')))
             }
           >
-            Add to calendar
+            {t('plan.addCalendar')}
           </Btn>
         </View>
 
         <View style={{ marginHorizontal: 22, marginTop: 14, padding: 16, backgroundColor: C.sageLt, borderRadius: R.xl, flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
           <View style={{ marginTop: 2 }}>{Icons.sparkle({ size: 18, color: C.sage })}</View>
           <Text style={{ flex: 1, fontSize: 13, color: C.sage, fontFamily: F.regular, lineHeight: 19 }}>
-            <Text style={{ fontFamily: F.bold }}>We’ll remind you the night before. </Text>
-            After the visit, add a photo and we’ll save it to your map.
+            <Text style={{ fontFamily: F.bold }}>{t('bk.remindBold')}</Text>
+            {t('bk.remindRest')}
           </Text>
         </View>
       </ScrollView>
 
       <View style={{ position: 'absolute', left: 22, right: 22, bottom: insets.bottom + 16, flexDirection: 'row', gap: 10 }}>
-        <Btn kind="ghost" style={{ flex: 1 }} onPress={popToRoot}>Done</Btn>
-        <Btn kind="primary" style={{ flex: 1.4 }} onPress={() => { popToRoot(); setTab('plan'); }}>View plans</Btn>
+        <Btn kind="ghost" style={{ flex: 1 }} onPress={popToRoot}>{t('common.done')}</Btn>
+        <Btn kind="primary" style={{ flex: 1.4 }} onPress={() => { popToRoot(); setTab('plan'); }}>{t('bk.viewPlans')}</Btn>
       </View>
     </View>
   );

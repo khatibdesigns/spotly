@@ -11,14 +11,10 @@ import { useStore } from '../lib/store';
 import { useProfile, familyFood } from '../lib/profile';
 import { usePlans } from '../lib/plans';
 import { usePlanner } from '../lib/planner';
+import { useI18n } from '../lib/i18n';
 import { Itinerary } from '../lib/aiPlan';
 
-const SUGGESTIONS = [
-  '4 days in France with the kids, mid budget',
-  'A weekend out in Kuwait with a 5 & 8 year old',
-  '3 days in London, rainy-day friendly, budget-conscious',
-  'Day trip near me, outdoors + lunch',
-];
+const SUGGESTION_KEYS = ['ai.s1', 'ai.s2', 'ai.s3', 'ai.s4'];
 
 const PROGRESS_STEPS = [
   'Asking the planner…',
@@ -34,6 +30,7 @@ export function AiPlanScreen() {
   const { profile } = useProfile();
   const { saveItinerary } = usePlans();
   const { status, result, error, startedAt, generate, retry, reset } = usePlanner();
+  const { t } = useI18n();
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -112,7 +109,7 @@ export function AiPlanScreen() {
       popToRoot();
       setTab('plan');
     } catch (e: any) {
-      Alert.alert('Could not save', e?.message || 'Please try again.');
+      Alert.alert(t('ai.couldNotSave'), e?.message || 'Please try again.');
     } finally {
       setSaving(false);
     }
@@ -126,7 +123,7 @@ export function AiPlanScreen() {
             <CircBtn onPress={pop}>{Icons.arrowL({ size: 18, color: C.ink })}</CircBtn>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {Icons.sparkle({ size: 16, color: C.premium })}
-              <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.premium }}>AI Planner</Text>
+              <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.premium }}>{t('ai.planner')}</Text>
             </View>
             <View style={{ width: 38 }} />
           </View>
@@ -145,18 +142,18 @@ export function AiPlanScreen() {
 
       <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 14 }}>
         {status === 'idle' ? (
-          <Btn kind="premium" size="lg" full onPress={onGenerate} icon={Icons.sparkle({ size: 16, color: '#fff' })}>Generate plan</Btn>
+          <Btn kind="premium" size="lg" full onPress={onGenerate} icon={Icons.sparkle({ size: 16, color: '#fff' })}>{t('ai.generate')}</Btn>
         ) : status === 'generating' ? (
-          <Btn kind="ghost" size="lg" full onPress={pop}>Close — I’ll get a notification</Btn>
+          <Btn kind="ghost" size="lg" full onPress={pop}>{t('ai.closeNotify')}</Btn>
         ) : status === 'error' ? (
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Btn kind="ghost" style={{ flex: 1 }} onPress={reset}>Edit</Btn>
-            <Btn kind="premium" style={{ flex: 1.4 }} onPress={retry}>Try again</Btn>
+            <Btn kind="ghost" style={{ flex: 1 }} onPress={reset}>{t('common.edit')}</Btn>
+            <Btn kind="premium" style={{ flex: 1.4 }} onPress={retry}>{t('common.retry')}</Btn>
           </View>
         ) : (
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Btn kind="ghost" style={{ flex: 1 }} onPress={reset}>New plan</Btn>
-            <Btn kind="primary" style={{ flex: 1.6 }} onPress={save}>{saving ? 'Saving…' : 'Save to Plans'}</Btn>
+            <Btn kind="ghost" style={{ flex: 1 }} onPress={reset}>{t('ai.newPlan')}</Btn>
+            <Btn kind="primary" style={{ flex: 1.6 }} onPress={save}>{saving ? t('gallery.saving') : t('ai.saveToPlans')}</Btn>
           </View>
         )}
       </View>
@@ -165,48 +162,54 @@ export function AiPlanScreen() {
 }
 
 function Idle({ text, setText, profile }: { text: string; setText: (s: string) => void; profile: any }) {
+  const { t } = useI18n();
+  const forKids = profile?.kids?.length ? t('ai.forKids', { names: profile.kids.map((k: any) => k.name || 'your child').join(' & ') }) : '';
   return (
     <>
-      <Text style={{ fontFamily: F.serif, fontSize: 30, letterSpacing: -0.8, color: C.ink, marginTop: 18 }}>Plan our trip.</Text>
+      <Text style={{ fontFamily: F.serif, fontSize: 30, letterSpacing: -0.8, color: C.ink, marginTop: 18 }}>{t('ai.planOurTrip')}</Text>
       <Text style={{ fontSize: 15, color: C.ink2, fontFamily: F.regular, marginTop: 8, lineHeight: 22 }}>
-        Tell me where you’re going, for how long, and your budget — I’ll build a kid-friendly day-by-day itinerary{profile?.kids?.length ? ` for ${profile.kids.map((k: any) => k.name || 'your child').join(' & ')}` : ''}.
+        {t('ai.idleSub', { forKids })}
       </Text>
       <View style={{ marginTop: 18, backgroundColor: C.surface, borderRadius: R.xl, borderWidth: 1, borderColor: C.line, padding: 14 }}>
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder="e.g. We’re going to France for 4 days with the kids, budget around €150/day…"
+          placeholder={t('ai.inputPlaceholder')}
           placeholderTextColor={C.ink3}
           multiline
           style={{ fontFamily: F.medium, fontSize: 15.5, color: C.ink, minHeight: 96, textAlignVertical: 'top', lineHeight: 22 }}
         />
       </View>
-      <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 18, marginBottom: 10 }}>Try</Text>
+      <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 18, marginBottom: 10 }}>{t('ai.try')}</Text>
       <View style={{ gap: 8 }}>
-        {SUGGESTIONS.map((s) => (
-          <Pressable key={s} onPress={() => setText(s)} style={{ backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {Icons.sparkle({ size: 14, color: C.coral })}
-            <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 14, color: C.ink2 }}>{s}</Text>
-          </Pressable>
-        ))}
+        {SUGGESTION_KEYS.map((key) => {
+          const s = t(key);
+          return (
+            <Pressable key={key} onPress={() => setText(s)} style={{ backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {Icons.sparkle({ size: 14, color: C.coral })}
+              <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 14, color: C.ink2 }}>{s}</Text>
+            </Pressable>
+          );
+        })}
       </View>
     </>
   );
 }
 
 function Generating({ mmss, progressMsg }: { mmss: string; progressMsg: string }) {
+  const { t } = useI18n();
   return (
     <View style={{ alignItems: 'center', paddingTop: 60 }}>
       <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: '#ecebf7', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={C.premium} size="large" />
       </View>
-      <Text style={{ fontFamily: F.serif, fontSize: 26, color: C.ink, marginTop: 24, letterSpacing: -0.5 }}>Building your plan…</Text>
+      <Text style={{ fontFamily: F.serif, fontSize: 26, color: C.ink, marginTop: 24, letterSpacing: -0.5 }}>{t('ai.building')}</Text>
       <Text style={{ fontFamily: F.mono, fontSize: 28, color: C.premium, marginTop: 10, letterSpacing: 1 }}>{mmss}</Text>
       <Text style={{ fontSize: 14, color: C.ink2, fontFamily: F.semibold, marginTop: 6 }}>{progressMsg}</Text>
       <View style={{ marginTop: 26, backgroundColor: C.sageLt, borderRadius: R.xl, padding: 16, flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
         <View style={{ marginTop: 1 }}>{Icons.sparkle({ size: 18, color: C.sage })}</View>
         <Text style={{ flex: 1, fontSize: 13.5, color: C.sage, fontFamily: F.regular, lineHeight: 19 }}>
-          <Text style={{ fontFamily: F.bold }}>You can leave this screen.</Text> We’ll send you a notification with a sound the moment your plan is ready — it usually takes 20–60 seconds.
+          <Text style={{ fontFamily: F.bold }}>{t('ai.youCanLeaveBold')}</Text>{t('ai.youCanLeaveRest')}
         </Text>
       </View>
     </View>
@@ -214,22 +217,24 @@ function Generating({ mmss, progressMsg }: { mmss: string; progressMsg: string }
 }
 
 function ErrorState({ message }: { message: string | null }) {
+  const { t } = useI18n();
   return (
     <View style={{ alignItems: 'center', paddingTop: 60, paddingHorizontal: 10 }}>
       <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: C.coralLt, alignItems: 'center', justifyContent: 'center' }}>
         <Icons.Mark size={48} color={C.coral} />
       </View>
-      <Text style={{ fontFamily: F.serif, fontSize: 24, color: C.ink, marginTop: 22, textAlign: 'center' }}>That didn’t work.</Text>
+      <Text style={{ fontFamily: F.serif, fontSize: 24, color: C.ink, marginTop: 22, textAlign: 'center' }}>{t('ai.didntWork')}</Text>
       <Text style={{ fontSize: 14.5, color: C.ink2, fontFamily: F.regular, marginTop: 8, textAlign: 'center', lineHeight: 21 }}>{message || 'Please try again.'}</Text>
     </View>
   );
 }
 
 function ItineraryPreview({ it }: { it: Itinerary }) {
+  const { t } = useI18n();
   return (
     <View style={{ marginTop: 16 }}>
       <LinearGradient colors={[C.premium, '#363a82']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[{ borderRadius: R.xxl, padding: 20 }, SH.card]}>
-        <Text style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' }}>AI itinerary</Text>
+        <Text style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' }}>{t('ai.itinerary')}</Text>
         <Text style={{ fontFamily: F.serif, fontSize: 24, color: '#fff', marginTop: 6, letterSpacing: -0.5 }}>{it.title}</Text>
         {it.summary ? <Text style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.9)', fontFamily: F.regular, marginTop: 6, lineHeight: 19 }}>{it.summary}</Text> : null}
       </LinearGradient>
@@ -258,7 +263,7 @@ function ItineraryPreview({ it }: { it: Itinerary }) {
 
       {it.tips?.length ? (
         <View style={{ marginTop: 18, backgroundColor: C.sageLt, borderRadius: R.xl, padding: 16 }}>
-          <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.sage, marginBottom: 6 }}>Good to know</Text>
+          <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.sage, marginBottom: 6 }}>{t('ai.goodToKnow')}</Text>
           {it.tips.map((t, i) => (
             <Text key={i} style={{ fontSize: 13, color: C.sage, fontFamily: F.regular, lineHeight: 19 }}>· {t}</Text>
           ))}

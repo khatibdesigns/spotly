@@ -7,9 +7,11 @@ import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Btn } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import { useI18n } from '../lib/i18n';
 
 export function AuthScreen({ onBack, initialMode = 'signup' }: { onBack?: () => void; initialMode?: 'signin' | 'signup' }) {
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const { signIn, signUp, signInWithApple, signInWithGoogle, appleAvailable, googleAvailable, configured } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [name, setName] = useState('');
@@ -24,14 +26,14 @@ export function AuthScreen({ onBack, initialMode = 'signup' }: { onBack?: () => 
     try {
       await fn();
     } catch (e: any) {
-      setErr(prettyError(e?.code || e?.message || 'Something went wrong'));
+      setErr(t(prettyError(e?.code || e?.message || 'auth.errGeneric')));
     } finally {
       setBusy(false);
     }
   };
 
   const submitEmail = () => {
-    if (!email || !pw) return setErr('Enter your email and password.');
+    if (!email || !pw) return setErr(t('auth.enterBoth'));
     run(() => (mode === 'signup' ? signUp(email, pw, name || undefined) : signIn(email, pw)));
   };
 
@@ -49,46 +51,46 @@ export function AuthScreen({ onBack, initialMode = 'signup' }: { onBack?: () => 
             <Icons.Mark size={44} />
           </View>
           <Text style={{ fontFamily: F.serif, fontSize: 32, letterSpacing: -0.8, color: C.ink, textAlign: 'center', marginTop: 14 }}>
-            {mode === 'signup' ? 'Create your family account' : 'Welcome back'}
+            {mode === 'signup' ? t('auth.createTitle') : t('auth.welcomeBack')}
           </Text>
           <Text style={{ fontSize: 14.5, color: C.ink2, fontFamily: F.regular, textAlign: 'center', marginTop: 6, lineHeight: 21 }}>
-            {mode === 'signup' ? 'Save your spots, plans, and memories across devices.' : 'Sign in to pick up where you left off.'}
+            {mode === 'signup' ? t('auth.createSub') : t('auth.signinSub')}
           </Text>
 
           {!configured ? (
             <View style={{ marginTop: 18, padding: 14, borderRadius: R.lg, backgroundColor: C.coralLt }}>
-              <Text style={{ color: C.coralDk, fontFamily: F.semibold, fontSize: 13 }}>Auth isn't configured yet — add your Firebase keys to .env.</Text>
+              <Text style={{ color: C.coralDk, fontFamily: F.semibold, fontSize: 13 }}>{t('auth.notConfigured')}</Text>
             </View>
           ) : null}
 
           <View style={{ marginTop: 26, gap: 12 }}>
             {mode === 'signup' ? (
-              <Field icon={Icons.user} placeholder="Your name (optional)" value={name} onChangeText={setName} autoCapitalize="words" />
+              <Field icon={Icons.user} placeholder={t('auth.name')} value={name} onChangeText={setName} autoCapitalize="words" />
             ) : null}
-            <Field icon={Icons.globe} placeholder="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-            <Field icon={Icons.lock} placeholder="Password" value={pw} onChangeText={setPw} secureTextEntry />
+            <Field icon={Icons.globe} placeholder={t('auth.email')} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+            <Field icon={Icons.lock} placeholder={t('auth.password')} value={pw} onChangeText={setPw} secureTextEntry />
           </View>
 
           {err ? <Text style={{ color: C.coralDk, fontFamily: F.semibold, fontSize: 13, marginTop: 12 }}>{err}</Text> : null}
 
           <Btn kind="primary" size="lg" full style={{ marginTop: 18 }} onPress={submitEmail}>
-            {busy ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'}
+            {busy ? t('auth.pleaseWait') : mode === 'signup' ? t('auth.createAccount') : t('auth.signIn')}
           </Btn>
 
           {(appleAvailable || googleAvailable) ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 18 }}>
               <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
-              <Text style={{ color: C.ink3, fontFamily: F.semibold, fontSize: 12 }}>or continue with</Text>
+              <Text style={{ color: C.ink3, fontFamily: F.semibold, fontSize: 12 }}>{t('auth.orContinue')}</Text>
               <View style={{ flex: 1, height: 1, backgroundColor: C.line }} />
             </View>
           ) : null}
 
           <View style={{ gap: 10 }}>
             {appleAvailable ? (
-              <SocialBtn label="Continue with Apple" dark onPress={() => run(signInWithApple)} glyph={<AppleGlyph />} />
+              <SocialBtn label={t('auth.continueApple')} dark onPress={() => run(signInWithApple)} glyph={<AppleGlyph />} />
             ) : null}
             {googleAvailable ? (
-              <SocialBtn label="Continue with Google" onPress={() => run(signInWithGoogle)} glyph={<GoogleGlyph />} />
+              <SocialBtn label={t('auth.continueGoogle')} onPress={() => run(signInWithGoogle)} glyph={<GoogleGlyph />} />
             ) : null}
           </View>
 
@@ -96,8 +98,8 @@ export function AuthScreen({ onBack, initialMode = 'signup' }: { onBack?: () => 
 
           <Pressable onPress={() => { setErr(null); setMode(mode === 'signup' ? 'signin' : 'signup'); }} style={{ marginTop: 24 }}>
             <Text style={{ textAlign: 'center', color: C.ink2, fontFamily: F.regular, fontSize: 14 }}>
-              {mode === 'signup' ? 'Already have an account? ' : "New to Spotly? "}
-              <Text style={{ color: C.coralDk, fontFamily: F.bold }}>{mode === 'signup' ? 'Sign in' : 'Create one'}</Text>
+              {mode === 'signup' ? t('auth.haveAccountQ') : t('auth.newQ')}
+              <Text style={{ color: C.coralDk, fontFamily: F.bold }}>{mode === 'signup' ? t('auth.signIn') : t('auth.createLink')}</Text>
             </Text>
           </Pressable>
         </ScrollView>
@@ -150,15 +152,16 @@ function GoogleGlyph() {
   );
 }
 
+// Map a Firebase auth error code to an i18n key (resolved by the caller).
 function prettyError(code: string): string {
   const map: Record<string, string> = {
-    'auth/invalid-email': 'That email looks invalid.',
-    'auth/email-already-in-use': 'That email already has an account — try signing in.',
-    'auth/weak-password': 'Password should be at least 6 characters.',
-    'auth/invalid-credential': 'Email or password is incorrect.',
-    'auth/wrong-password': 'Email or password is incorrect.',
-    'auth/user-not-found': 'No account found for that email.',
-    'auth/network-request-failed': 'Network error — check your connection.',
+    'auth/invalid-email': 'auth.errInvalidEmail',
+    'auth/email-already-in-use': 'auth.errInUse',
+    'auth/weak-password': 'auth.errWeak',
+    'auth/invalid-credential': 'auth.errBadCred',
+    'auth/wrong-password': 'auth.errBadCred',
+    'auth/user-not-found': 'auth.errNoUser',
+    'auth/network-request-failed': 'auth.errNetwork',
   };
-  return map[code] || code.replace('auth/', '').replace(/-/g, ' ');
+  return map[code] || 'auth.errGeneric';
 }

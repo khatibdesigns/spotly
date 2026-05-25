@@ -8,6 +8,7 @@ import { Icons } from '../components/icons';
 import { Btn, CircBtn } from '../components/ui';
 import { useStore } from '../lib/store';
 import { usePurchases } from '../lib/purchases';
+import { useI18n } from '../lib/i18n';
 
 function PlanCard({ t, p, sub, badge, sel, onPress }: { t: string; p: string; sub: string; badge?: string; sel?: boolean; onPress?: () => void }) {
   return (
@@ -28,6 +29,7 @@ export function PaywallScreen() {
   const insets = useSafeAreaInsets();
   const { pop } = useStore();
   const { packages, purchase, restore, isPlus } = usePurchases();
+  const { t } = useI18n();
   const [sel, setSel] = useState<'annual' | 'monthly'>('annual');
   const [busy, setBusy] = useState(false);
 
@@ -38,30 +40,30 @@ export function PaywallScreen() {
   const annualPrice = annual?.product?.priceString || '€39.99';
 
   const feats = [
-    { ic: Icons.album, t: 'Unlimited photo storage', d: 'Save every memory in original quality.' },
-    { ic: Icons.sparkle, t: 'Personalized weekly picks', d: 'Tuned to your kids, weather, and season.' },
-    { ic: Icons.pin, t: 'Full memory map & passport stats', d: 'Countries, cities, streaks.' },
-    { ic: Icons.calendar, t: 'Multiple named plans', d: 'Build the spring break and the Saturday — both.' },
-    { ic: Icons.globe, t: 'City guides & themed collections', d: 'Editor-curated lists for every trip.' },
+    { ic: Icons.album, t: t('pw.f1t'), d: t('pw.f1d') },
+    { ic: Icons.sparkle, t: t('pw.f2t'), d: t('pw.f2d') },
+    { ic: Icons.pin, t: t('pw.f3t'), d: t('pw.f3d') },
+    { ic: Icons.calendar, t: t('pw.f4t'), d: t('pw.f4d') },
+    { ic: Icons.globe, t: t('pw.f5t'), d: t('pw.f5d') },
   ];
 
   const onBuy = async () => {
     if (isPlus) { pop(); return; }
-    if (!selPkg) { Alert.alert('Spotly Plus is almost ready', 'Subscriptions are being finalized in the store — check back soon.'); return; }
+    if (!selPkg) { Alert.alert(t('pw.almostReady'), t('pw.almostReadyMsg')); return; }
     setBusy(true);
     try {
       await purchase(selPkg);
-      Alert.alert('Welcome to Spotly Plus! 🎉', 'Your subscription is active.', [{ text: 'Done', onPress: pop }]);
+      Alert.alert(t('pw.welcome'), t('pw.welcomeMsg'), [{ text: t('common.done'), onPress: pop }]);
     } catch (e: any) {
-      if (!e?.userCancelled) Alert.alert('Purchase failed', e?.message || 'Please try again.');
+      if (!e?.userCancelled) Alert.alert(t('pw.purchaseFailed'), e?.message || 'Please try again.');
     } finally {
       setBusy(false);
     }
   };
 
   const onRestore = async () => {
-    try { await restore(); Alert.alert('Restored', 'Your purchases have been restored.'); }
-    catch (e: any) { Alert.alert('Nothing to restore', e?.message || ''); }
+    try { await restore(); Alert.alert(t('pw.restored'), t('pw.restoredMsg')); }
+    catch (e: any) { Alert.alert(t('pw.nothingRestore'), e?.message || ''); }
   };
 
   return (
@@ -71,7 +73,7 @@ export function PaywallScreen() {
       <View style={{ position: 'absolute', top: insets.top + 6, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between', zIndex: 5 }}>
         <CircBtn onPress={pop}>{Icons.close({ size: 18, color: C.ink })}</CircBtn>
         <Pressable onPress={onRestore} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: R.pill, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center' }}>
-          <Text style={{ color: '#fff', fontSize: 12, fontFamily: F.bold }}>Restore purchases</Text>
+          <Text style={{ color: '#fff', fontSize: 12, fontFamily: F.bold }}>{t('pw.restore')}</Text>
         </Pressable>
       </View>
 
@@ -80,9 +82,9 @@ export function PaywallScreen() {
           <View style={{ width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: C.premium }}>
             {Icons.sparkle({ size: 28, color: '#fff' })}
           </View>
-          <Text style={{ fontFamily: F.serif, fontSize: 36, lineHeight: 36, letterSpacing: -1, color: '#fff', marginTop: 18 }}>Spotly Plus</Text>
+          <Text style={{ fontFamily: F.serif, fontSize: 36, lineHeight: 36, letterSpacing: -1, color: '#fff', marginTop: 18 }}>{t('profile.plusTitle')}</Text>
           <Text style={{ marginTop: 8, color: 'rgba(255,255,255,0.8)', fontSize: 14, fontFamily: F.regular, maxWidth: 280, textAlign: 'center', lineHeight: 20 }}>
-            {isPlus ? "You're a Plus member — thank you!" : 'The whole family, every weekend, every memory — without limits.'}
+            {isPlus ? t('pw.subActive') : t('pw.subInactive')}
           </Text>
         </View>
 
@@ -103,21 +105,21 @@ export function PaywallScreen() {
 
           {!isPlus ? (
             <View style={{ marginTop: 22, flexDirection: 'row', gap: 10 }}>
-              <PlanCard t="Monthly" p={monthlyPrice} sub="per month" sel={sel === 'monthly'} onPress={() => setSel('monthly')} />
-              <PlanCard t="Yearly" p={annualPrice} sub="7-day free trial" badge="BEST" sel={sel === 'annual'} onPress={() => setSel('annual')} />
+              <PlanCard t={t('pw.monthly')} p={monthlyPrice} sub={t('pw.perMonth')} sel={sel === 'monthly'} onPress={() => setSel('monthly')} />
+              <PlanCard t={t('pw.yearly')} p={annualPrice} sub={t('pw.freeTrial')} badge={t('pw.best')} sel={sel === 'annual'} onPress={() => setSel('annual')} />
             </View>
           ) : null}
 
           <Text style={{ marginTop: 14, textAlign: 'center', fontSize: 11, color: C.ink3, fontFamily: F.regular, lineHeight: 16 }}>
-            Auto-renews until cancelled. Cancel anytime in your App Store settings. Booking and printed albums are available on every plan.{'\n'}
-            <Text onPress={() => {}}>Terms</Text> · <Text>Privacy</Text>
+            {t('pw.legal')}{'\n'}
+            <Text onPress={() => {}}>{t('pw.terms')}</Text> · <Text>{t('pw.privacy')}</Text>
           </Text>
         </View>
       </ScrollView>
 
       <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 14 }}>
         <Btn kind="premium" size="lg" full onPress={onBuy}>
-          {busy ? 'Please wait…' : isPlus ? 'You’re on Plus — Done' : sel === 'annual' ? 'Start 7-day free trial' : 'Subscribe monthly'}
+          {busy ? t('auth.pleaseWait') : isPlus ? t('pw.onPlusDone') : sel === 'annual' ? t('pw.startTrial') : t('pw.subscribeMonthly')}
         </Btn>
         {busy ? <ActivityIndicator color="#fff" style={{ marginTop: 10 }} /> : null}
       </View>

@@ -7,6 +7,7 @@ import { Icons } from '../components/icons';
 import { Btn, Switch } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { useProfile, Kid, EMPTY_STATS } from '../lib/profile';
+import { useI18n } from '../lib/i18n';
 
 const KID_COLORS = [C.sky, C.plum, C.sun, C.sage, C.coral];
 let _kidSeq = 0;
@@ -26,6 +27,7 @@ export function SetupScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { saveProfile } = useProfile();
+  const { t } = useI18n();
   const [step, setStep] = useState<0 | 1>(0);
   const [busy, setBusy] = useState(false);
 
@@ -71,14 +73,14 @@ export function SetupScreen() {
 
         {step === 0 ? (
           <>
-            <Text style={{ fontFamily: F.serif, fontSize: 32, lineHeight: 34, marginTop: 20, letterSpacing: -0.8, color: C.ink }}>Tell us about your family</Text>
-            <Text style={{ marginTop: 8, fontSize: 14.5, color: C.ink2, fontFamily: F.regular, lineHeight: 21 }}>Ages help us recommend the right places. Names are optional.</Text>
+            <Text style={{ fontFamily: F.serif, fontSize: 32, lineHeight: 34, marginTop: 20, letterSpacing: -0.8, color: C.ink }}>{t('setup.tellUs')}</Text>
+            <Text style={{ marginTop: 8, fontSize: 14.5, color: C.ink2, fontFamily: F.regular, lineHeight: 21 }}>{t('setup.tellUsSub')}</Text>
 
-            <Field label="Family name" placeholder="e.g. The Khalils" value={familyName} onChangeText={setFamilyName} autoCapitalize="words" />
-            <Field label="Your name" placeholder="e.g. Maya" value={parentName} onChangeText={setParentName} autoCapitalize="words" />
-            <Field label="Home city" placeholder="e.g. Lyon, FR" value={homeCity} onChangeText={setHomeCity} autoCapitalize="words" />
+            <Field label={t('setup.familyName')} placeholder={t('setup.familyHint')} value={familyName} onChangeText={setFamilyName} autoCapitalize="words" />
+            <Field label={t('setup.yourName')} placeholder={t('setup.yourNameHint')} value={parentName} onChangeText={setParentName} autoCapitalize="words" />
+            <Field label={t('setup.homeCity')} placeholder={t('setup.homeCityHint')} value={homeCity} onChangeText={setHomeCity} autoCapitalize="words" />
 
-            <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 24, marginBottom: 10 }}>Children</Text>
+            <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 24, marginBottom: 10 }}>{t('setup.children')}</Text>
             <View style={{ gap: 12 }}>
               {kids.map((k, i) => (
                 <View key={k.id} style={[{ backgroundColor: C.surface, borderRadius: R.xl, padding: 14, gap: 12 }, SH.card]}>
@@ -88,7 +90,7 @@ export function SetupScreen() {
                     </View>
                     <TextInput
                       style={{ flex: 1, fontFamily: F.bold, fontSize: 16, color: C.ink }}
-                      placeholder="Child's name (optional)"
+                      placeholder={t('setup.childNameHint')}
                       placeholderTextColor={C.ink3}
                       value={k.name}
                       onChangeText={(t) => setKid(k.id, { name: t })}
@@ -97,7 +99,7 @@ export function SetupScreen() {
                     <Pressable onPress={() => removeKid(k.id)}>{Icons.close({ size: 18, color: C.ink3 })}</Pressable>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                    <Text style={{ fontFamily: F.semibold, fontSize: 13, color: C.ink3 }}>Age</Text>
+                    <Text style={{ fontFamily: F.semibold, fontSize: 13, color: C.ink3 }}>{t('setup.age')}</Text>
                     <Pressable onPress={() => setKid(k.id, { age: Math.max(0, k.age - 1) })} style={stepBtn}>
                       <Text style={{ color: C.ink2, fontSize: 18 }}>–</Text>
                     </Pressable>
@@ -112,20 +114,20 @@ export function SetupScreen() {
                 <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.coralLt, alignItems: 'center', justifyContent: 'center' }}>
                   {Icons.plus({ size: 22, color: C.coralDk })}
                 </View>
-                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.ink }}>Add a child</Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.ink }}>{t('setup.addChild')}</Text>
               </Pressable>
             </View>
 
             <View style={{ marginTop: 20, padding: 16, borderRadius: R.lg, backgroundColor: C.coralLt, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               {Icons.pin({ size: 22, color: C.coralDk, filled: true })}
-              <Text style={{ flex: 1, fontSize: 13.5, color: C.coralDk, fontFamily: F.semibold }}>Use location for nearby ideas</Text>
+              <Text style={{ flex: 1, fontSize: 13.5, color: C.coralDk, fontFamily: F.semibold }}>{t('setup.useLocation')}</Text>
               <Pressable onPress={() => setLocationEnabled((v) => !v)}><Switch on={locationEnabled} /></Pressable>
             </View>
           </>
         ) : (
           <>
-            <Text style={{ fontFamily: F.serif, fontSize: 32, lineHeight: 34, marginTop: 20, letterSpacing: -0.8, color: C.ink }}>Pick a few interests.</Text>
-            <Text style={{ marginTop: 8, fontSize: 14.5, color: C.ink2, fontFamily: F.regular, lineHeight: 21 }}>We’ll tune your weekly picks. Change anytime.</Text>
+            <Text style={{ fontFamily: F.serif, fontSize: 32, lineHeight: 34, marginTop: 20, letterSpacing: -0.8, color: C.ink }}>{t('setup.pickInterests')}</Text>
+            <Text style={{ marginTop: 8, fontSize: 14.5, color: C.ink2, fontFamily: F.regular, lineHeight: 21 }}>{t('setup.pickSub')}</Text>
             <View style={{ marginTop: 24, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10 }}>
               {INTERESTS.map((it, i) => {
                 const on = interests.includes(it.t);
@@ -137,7 +139,7 @@ export function SetupScreen() {
                       </View>
                     ) : null}
                     {it.ic({ size: 26, color: it.c })}
-                    <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.ink }}>{it.t}</Text>
+                    <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.ink }}>{t(`int.${it.t}`)}</Text>
                   </Pressable>
                 );
               })}
@@ -148,9 +150,9 @@ export function SetupScreen() {
 
       <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 20 }}>
         {step === 0 ? (
-          <Btn kind="primary" size="lg" full onPress={() => setStep(1)}>Continue</Btn>
+          <Btn kind="primary" size="lg" full onPress={() => setStep(1)}>{t('common.continue')}</Btn>
         ) : (
-          <Btn kind="primary" size="lg" full onPress={finish}>{busy ? 'Setting up…' : 'Show me places'}</Btn>
+          <Btn kind="primary" size="lg" full onPress={finish}>{busy ? t('setup.settingUp') : t('setup.showPlaces')}</Btn>
         )}
       </View>
     </View>
