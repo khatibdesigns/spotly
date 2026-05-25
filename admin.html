@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Spotly Admin — Places</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  label.field { display: block; font-size: 12px; font-weight: 700; color: var(--ink2); margin-bottom: 4px; }
+  input, select, textarea { width: 100%; font-family: inherit; font-size: 15px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); }
+  .amenities { display: flex; flex-wrap: wrap; gap: 8px; }
+  .amenities label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink2); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; margin-top: 8px; background: #fff; }
+  .row img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: var(--surface2); }
+  .danger { color: #c0392b; font-weight: 700; cursor: pointer; background: none; border: none; }
+  .hide { display: none !important; }
+  .note { font-size: 13px; color: var(--ink3); }
+  .err { color: #c0392b; font-weight: 600; font-size: 14px; }
+</style>
+</head>
+<body>
+<header class="site">
+  <a class="brand" href="/"><span class="dot"></span> Spotly <span style="font-size:13px;color:var(--ink3);font-weight:600;margin-left:6px">Admin</span></a>
+  <nav class="site"><a href="#" id="signout" class="hide">Sign out</a></nav>
+</header>
+
+<main class="wrap">
+  <!-- Login -->
+  <section id="login">
+    <h1>Admin sign in</h1>
+    <p class="note">Sign in with your Spotly admin account to add and manage curated places.</p>
+    <div class="card" style="max-width:420px">
+      <label class="field">Email</label>
+      <input id="email" type="email" autocomplete="username" />
+      <label class="field" style="margin-top:12px">Password</label>
+      <input id="password" type="password" autocomplete="current-password" />
+      <p id="loginErr" class="err"></p>
+      <button class="btn" id="loginBtn" style="margin-top:14px;border:none;cursor:pointer">Sign in</button>
+    </div>
+  </section>
+
+  <!-- Admin -->
+  <section id="admin" class="hide">
+    <h1>Curated places</h1>
+    <p class="note">These show up in the Spotly app, merged with live Google Places results. Signed in as <b id="who"></b>.</p>
+
+    <div class="card">
+      <h2 style="margin-top:0">Add a place</h2>
+      <div class="form-grid">
+        <div class="full"><label class="field">Name *</label><input id="f_name" placeholder="e.g. The Scientific Center" /></div>
+        <div><label class="field">Category *</label><input id="f_category" placeholder="e.g. Aquarium · Indoor" /></div>
+        <div><label class="field">City</label><input id="f_city" placeholder="e.g. Kuwait City" /></div>
+        <div><label class="field">Latitude *</label><input id="f_lat" type="number" step="any" placeholder="29.3759" /></div>
+        <div><label class="field">Longitude *</label><input id="f_lng" type="number" step="any" placeholder="47.9774" /></div>
+        <div><label class="field">Price</label>
+          <select id="f_price"><option value="">—</option><option>Free</option><option>$</option><option>$$</option><option>$$$</option></select>
+        </div>
+        <div><label class="field">Ages</label><input id="f_ages" placeholder="e.g. 0–12" /></div>
+        <div class="full"><label class="field">Photo URL</label><input id="f_photo" placeholder="https://…/photo.jpg" /></div>
+        <div class="full"><label class="field">Address</label><input id="f_address" placeholder="Street, area" /></div>
+        <div class="full">
+          <label class="field">Amenities</label>
+          <div class="amenities" id="amenities"></div>
+        </div>
+        <div class="full"><label style="font-weight:600;color:var(--ink2)"><input type="checkbox" id="f_bookable" style="width:auto" /> Bookable (shows a Reserve button)</label></div>
+      </div>
+      <p id="addErr" class="err"></p>
+      <button class="btn sage" id="addBtn" style="margin-top:6px;border:none;cursor:pointer">Add place</button>
+    </div>
+
+    <h2>Existing places (<span id="count">0</span>)</h2>
+    <div id="list"></div>
+  </section>
+</main>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js';
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, query, orderBy } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js';
+
+// Public Firebase web config (web API keys are not secret).
+const firebaseConfig = {
+  apiKey: "AIzaSyANYIyuxNtP-of3AhrdXF0MS8BM73Ja6tM",
+  authDomain: "spotly-6ca9a.firebaseapp.com",
+  projectId: "spotly-6ca9a",
+  storageBucket: "spotly-6ca9a.firebasestorage.app",
+  messagingSenderId: "1096688153950",
+  appId: "1:1096688153950:web:d6efe67040fee83dd84bcf",
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const AMENITIES = ['playArea','foodOnSite','parking','animals','indoor','outdoor','water','arts','restroom','changing','shade','museum'];
+const amenitiesEl = document.getElementById('amenities');
+amenitiesEl.innerHTML = AMENITIES.map(a => `<label><input type="checkbox" value="${a}" style="width:auto"> ${a}</label>`).join('');
+
+const $ = (id) => document.getElementById(id);
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    $('login').classList.add('hide');
+    $('admin').classList.remove('hide');
+    $('signout').classList.remove('hide');
+    $('who').textContent = user.email || user.uid;
+    loadPlaces();
+  } else {
+    $('login').classList.remove('hide');
+    $('admin').classList.add('hide');
+    $('signout').classList.add('hide');
+  }
+});
+
+$('loginBtn').onclick = async () => {
+  $('loginErr').textContent = '';
+  try {
+    await signInWithEmailAndPassword(auth, $('email').value.trim(), $('password').value);
+  } catch (e) {
+    $('loginErr').textContent = e.message.replace('Firebase: ', '');
+  }
+};
+$('signout').onclick = (e) => { e.preventDefault(); signOut(auth); };
+
+async function loadPlaces() {
+  const list = $('list');
+  list.innerHTML = '<p class="note">Loading…</p>';
+  try {
+    const snap = await getDocs(query(collection(db, 'places'), orderBy('createdAt', 'desc')));
+    $('count').textContent = snap.size;
+    if (snap.empty) { list.innerHTML = '<p class="note">No curated places yet.</p>'; return; }
+    list.innerHTML = '';
+    snap.forEach((d) => {
+      const v = d.data();
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `
+        <img src="${v.photoUrl || ''}" onerror="this.style.visibility='hidden'"/>
+        <div style="flex:1">
+          <div style="font-weight:700">${v.name || '(no name)'}</div>
+          <div class="note">${v.category || ''} · ${v.city || ''} ${v.price ? '· ' + v.price : ''}</div>
+        </div>
+        <button class="danger" data-id="${d.id}">Delete</button>`;
+      row.querySelector('.danger').onclick = async () => {
+        if (!confirm('Delete this place?')) return;
+        await deleteDoc(doc(db, 'places', d.id));
+        loadPlaces();
+      };
+      list.appendChild(row);
+    });
+  } catch (e) {
+    list.innerHTML = `<p class="err">${e.message}</p>`;
+  }
+}
+
+$('addBtn').onclick = async () => {
+  $('addErr').textContent = '';
+  const name = $('f_name').value.trim();
+  const lat = parseFloat($('f_lat').value);
+  const lng = parseFloat($('f_lng').value);
+  if (!name || isNaN(lat) || isNaN(lng)) { $('addErr').textContent = 'Name, latitude and longitude are required.'; return; }
+  const amenities = [...amenitiesEl.querySelectorAll('input:checked')].map(i => i.value);
+  try {
+    await addDoc(collection(db, 'places'), {
+      name,
+      category: $('f_category').value.trim(),
+      city: $('f_city').value.trim(),
+      lat, lng,
+      price: $('f_price').value || null,
+      ages: $('f_ages').value.trim() || null,
+      photoUrl: $('f_photo').value.trim() || null,
+      address: $('f_address').value.trim() || null,
+      amenities,
+      bookable: $('f_bookable').checked,
+      tone: 'sun',
+      createdAt: serverTimestamp(),
+    });
+    // reset
+    ['f_name','f_category','f_city','f_lat','f_lng','f_ages','f_photo','f_address'].forEach(id => $(id).value = '');
+    $('f_bookable').checked = false;
+    amenitiesEl.querySelectorAll('input:checked').forEach(i => i.checked = false);
+    loadPlaces();
+  } catch (e) {
+    $('addErr').textContent = e.message.replace('Firebase: ', '');
+  }
+};
+</script>
+</body>
+</html>
