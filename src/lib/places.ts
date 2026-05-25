@@ -11,9 +11,13 @@ export const KUWAIT_CITY = { latitude: 29.3759, longitude: 47.9774 };
 
 export type SpotSource = 'google' | 'curated';
 
+// What kind of place this is — drives the Discover sections/filters.
+export type SpotKind = 'activity' | 'dining' | 'shop';
+
 export type Spot = {
   id: string;
   source: SpotSource;
+  kind: SpotKind;
   name: string;
   category: string;
   lat: number;
@@ -70,6 +74,8 @@ const PRICE: Record<string, string> = {
 
 // Kid-friendly place types (valid Google Places "Table A" included types).
 const KID_TYPES = ['park', 'zoo', 'aquarium', 'amusement_park', 'amusement_center', 'museum', 'tourist_attraction'];
+// Family dining (valid Table A types).
+const DINING_TYPES = ['restaurant', 'cafe', 'bakery', 'ice_cream_shop'];
 
 const TYPE_AMENITY: Record<string, string> = {
   park: 'outdoor',
@@ -81,6 +87,8 @@ const TYPE_AMENITY: Record<string, string> = {
   tourist_attraction: 'outdoor',
   restaurant: 'foodOnSite',
   cafe: 'foodOnSite',
+  bakery: 'foodOnSite',
+  ice_cream_shop: 'foodOnSite',
   art_gallery: 'arts',
   water_park: 'water',
 };
@@ -93,6 +101,10 @@ const TYPE_TONE: Record<string, string> = {
   museum: 'warm',
   tourist_attraction: 'sage',
   water_park: 'sky',
+  restaurant: 'coral',
+  cafe: 'warm',
+  bakery: 'sun',
+  ice_cream_shop: 'sky',
 };
 
 function prettyType(t?: string): string {
@@ -118,50 +130,74 @@ export function photoUrl(name: string, w = 800): string {
   return `https://places.googleapis.com/v1/${name}/media?maxWidthPx=${w}&key=${KEY}`;
 }
 
-async function searchNearby(loc: UserLoc): Promise<Spot[]> {
+const FIELD_MASK =
+  'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.types,places.primaryTypeDisplayName,places.photos,places.currentOpeningHours.openNow';
+
+function mapPlace(p: any, loc: UserLoc, kind: SpotKind, shopAmenity = false): Spot {
+  const lat = p.location?.latitude;
+  const lng = p.location?.longitude;
+  const types: string[] = p.types || [];
+  const amenities = amenitiesFromTypes(types);
+  if (shopAmenity && !amenities.includes('shop')) amenities.unshift('shop');
+  return {
+    id: p.id,
+    source: 'google',
+    kind,
+    name: p.displayName?.text || 'Unnamed place',
+    category: p.primaryTypeDisplayName?.text || prettyType(types[0]),
+    lat,
+    lng,
+    rating: p.rating,
+    reviews: p.userRatingCount,
+    price: p.priceLevel ? PRICE[p.priceLevel] : undefined,
+    amenities: amenities.slice(0, 4),
+    photoUrl: p.photos?.[0]?.name ? photoUrl(p.photos[0].name) : undefined,
+    distanceKm: lat != null ? distKm(loc.latitude, loc.longitude, lat, lng) : undefined,
+    openNow: p.currentOpeningHours?.openNow,
+    address: p.formattedAddress,
+    tone: kind === 'shop' ? 'plum' : toneFromTypes(types),
+  };
+}
+
+// Nearby search by included types (activities, dining…).
+async function searchNearby(loc: UserLoc, includedTypes: string[], kind: SpotKind, max = 20): Promise<Spot[]> {
   if (!KEY) return [];
   try {
     const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': KEY,
-        'X-Goog-FieldMask':
-          'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.types,places.primaryTypeDisplayName,places.photos,places.currentOpeningHours.openNow',
-      },
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK },
       body: JSON.stringify({
-        includedTypes: KID_TYPES,
-        maxResultCount: 20,
+        includedTypes,
+        maxResultCount: max,
         rankPreference: 'POPULARITY',
-        locationRestriction: {
-          circle: { center: { latitude: loc.latitude, longitude: loc.longitude }, radius: 15000 },
-        },
+        locationRestriction: { circle: { center: { latitude: loc.latitude, longitude: loc.longitude }, radius: 15000 } },
       }),
     });
     const data = await res.json();
     if (!data?.places) return [];
-    return data.places.map((p: any): Spot => {
-      const lat = p.location?.latitude;
-      const lng = p.location?.longitude;
-      const types: string[] = p.types || [];
-      return {
-        id: p.id,
-        source: 'google',
-        name: p.displayName?.text || 'Unnamed place',
-        category: p.primaryTypeDisplayName?.text || prettyType(types[0]),
-        lat,
-        lng,
-        rating: p.rating,
-        reviews: p.userRatingCount,
-        price: p.priceLevel ? PRICE[p.priceLevel] : undefined,
-        amenities: amenitiesFromTypes(types),
-        photoUrl: p.photos?.[0]?.name ? photoUrl(p.photos[0].name) : undefined,
-        distanceKm: lat != null ? distKm(loc.latitude, loc.longitude, lat, lng) : undefined,
-        openNow: p.currentOpeningHours?.openNow,
-        address: p.formattedAddress,
-        tone: toneFromTypes(types),
-      };
+    return data.places.map((p: any) => mapPlace(p, loc, kind));
+  } catch {
+    return [];
+  }
+}
+
+// Kids/baby shops via text search (toy_store/baby_store aren't reliable in the
+// new API, so we query by intent and bias to the user's location).
+async function searchShops(loc: UserLoc): Promise<Spot[]> {
+  if (!KEY) return [];
+  try {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK },
+      body: JSON.stringify({
+        textQuery: 'kids toy and baby store',
+        maxResultCount: 15,
+        locationBias: { circle: { center: { latitude: loc.latitude, longitude: loc.longitude }, radius: 15000 } },
+      }),
     });
+    const data = await res.json();
+    if (!data?.places) return [];
+    return data.places.map((p: any) => mapPlace(p, loc, 'shop', true));
   } catch {
     return [];
   }
@@ -178,6 +214,7 @@ async function fetchCurated(loc: UserLoc): Promise<Spot[]> {
       return {
         id: d.id,
         source: 'curated',
+        kind: (v.kind as SpotKind) || 'activity',
         name: v.name || 'Untitled',
         category: v.category || 'Curated',
         lat,
@@ -231,11 +268,24 @@ export async function findPlace(query: string, near?: string): Promise<FoundPlac
   }
 }
 
-// Curated spots first (hand-picked), then Google results, sorted by distance.
+// Curated spots first (hand-picked), then Google activities + dining + shops,
+// de-duped by name and sorted by distance.
 export async function getSpots(loc: UserLoc): Promise<Spot[]> {
-  const [google, curated] = await Promise.all([searchNearby(loc), fetchCurated(loc)]);
+  const [activities, dining, shops, curated] = await Promise.all([
+    searchNearby(loc, KID_TYPES, 'activity', 20),
+    searchNearby(loc, DINING_TYPES, 'dining', 15),
+    searchShops(loc),
+    fetchCurated(loc),
+  ]);
   const seen = new Set(curated.map((c) => c.name.toLowerCase()));
-  const merged = [...curated, ...google.filter((g) => !seen.has(g.name.toLowerCase()))];
+  const google: Spot[] = [];
+  for (const g of [...activities, ...dining, ...shops]) {
+    const k = g.name.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    google.push(g);
+  }
+  const merged = [...curated, ...google];
   merged.sort((a, b) => (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999));
   return merged;
 }

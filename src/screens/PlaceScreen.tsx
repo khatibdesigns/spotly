@@ -26,6 +26,8 @@ const AMENITY_META: Record<string, { ic: (p: any) => React.ReactNode; c: string;
   changing: { ic: Icons.changing, c: C.ink2, label: 'Changing' },
   shade: { ic: Icons.shade, c: C.sage, label: 'Shade' },
   museum: { ic: Icons.museum, c: C.ink2, label: 'Museum' },
+  shop: { ic: Icons.shop, c: C.plum, label: 'Kids shop' },
+  stroller: { ic: Icons.stroller, c: C.ink2, label: 'Stroller ok' },
 };
 
 export function PlaceScreen() {

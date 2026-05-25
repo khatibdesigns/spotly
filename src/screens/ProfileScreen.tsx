@@ -124,9 +124,23 @@ export function ProfileScreen() {
         <SectionLabel>Family</SectionLabel>
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
           <Row icon={<Avatar letter={initial(profile?.parentName, 'Y')} color={C.coral} />} title={profile?.parentName || 'You'} sub="Parent · you" last={kids.length === 0} />
-          {kids.map((k, i) => (
-            <Row key={k.id} icon={<Avatar letter={initial(k.name, '?')} color={KID_COLORS[i % KID_COLORS.length]} />} title={k.name || `Child ${i + 1}`} sub={`Age ${k.age}`} last={i === kids.length - 1} />
-          ))}
+          {kids.map((k, i) => {
+            const fav = (k.favFoods || []).length;
+            const avoid = (k.avoidFoods || []).length;
+            const foodSub = fav || avoid
+              ? [fav ? `loves ${fav}` : '', avoid ? `avoids ${avoid}` : ''].filter(Boolean).join(' · ')
+              : 'Add food preferences';
+            return (
+              <Row
+                key={k.id}
+                icon={<Avatar letter={initial(k.name, '?')} color={KID_COLORS[i % KID_COLORS.length]} />}
+                title={k.name || `Child ${i + 1}`}
+                sub={`Age ${k.age} · ${foodSub}`}
+                last={i === kids.length - 1}
+                onPress={() => push('kidFood', { kidId: k.id })}
+              />
+            );
+          })}
         </View>
 
         {/* Passport */}

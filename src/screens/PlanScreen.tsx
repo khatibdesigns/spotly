@@ -30,6 +30,7 @@ function stopToSpot(s: Stop): Spot {
   return {
     id: s.placeId || s.name,
     source: 'curated',
+    kind: 'activity',
     name: s.name,
     category: s.category || '',
     lat: s.lat ?? (undefined as any),

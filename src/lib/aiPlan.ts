@@ -51,24 +51,30 @@ export type PlanInput = {
   budget?: string;
   kids?: { name?: string; age: number }[];
   notes?: string;
+  favFoods?: string[]; // foods the kids love — bias restaurant picks toward these
+  avoidFoods?: string[]; // foods to avoid (allergies / not allowed) — never suggest
 };
 
 export class AiPlanError extends Error {}
 
 function buildPrompt(input: PlanInput): string {
   const kids = input.kids?.length ? input.kids.map((k) => `${k.name || 'child'} (${k.age})`).join(', ') : 'young kids';
+  const likes = (input.favFoods || []).filter(Boolean);
+  const avoid = (input.avoidFoods || []).filter(Boolean);
   return [
     `You are Spotly's family trip planner. Plan a kid-friendly itinerary.`,
     `Destination: ${input.destination}.`,
     `Duration: ${input.days} day(s).`,
     `Children: ${kids}.`,
     input.budget ? `Budget: ${input.budget}.` : '',
+    likes.length ? `The kids love these foods: ${likes.join(', ')}. Favor restaurants/cafés that serve them.` : '',
+    avoid.length ? `IMPORTANT — never suggest places centered on these foods (allergies / not allowed): ${avoid.join(', ')}.` : '',
     input.notes ? `Notes from the family: ${input.notes}.` : '',
     ``,
     `Return STRICT JSON ONLY — no prose, no markdown fences — matching exactly:`,
     `{"title":"string","destination":"string","summary":"one warm sentence","days":[{"day":1,"label":"Day 1 — theme","stops":[{"name":"REAL place name","category":"e.g. Park / Museum / Café","time":"e.g. 10:00","note":"why it's great for these ages + a quick tip","estCost":"approx per family"}]}],"tips":["short practical tip"]}`,
     ``,
-    `Rules: use REAL, well-known, currently-operating kid-friendly places in ${input.destination}. 3-4 stops per day, age-appropriate for ${kids}, sequenced sensibly (morning→evening), mindful of the budget. Keep notes under 20 words. Output JSON only.`,
+    `Rules: use REAL, well-known, currently-operating kid-friendly places in ${input.destination}. 3-4 stops per day, age-appropriate for ${kids}, sequenced sensibly (morning→evening), mindful of the budget. Include at least one meal stop per day that fits the family's food preferences above. Keep notes under 20 words. Output JSON only.`,
   ]
     .filter(Boolean)
     .join('\n');

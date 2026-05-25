@@ -308,6 +308,15 @@ export const free = ico(
   </>
 );
 export const shade = ico(<Path d="M12 3l9 6H3l9-6zM12 9v12M12 21l-3-2M12 21l3-2" />);
+// Shopping bag — kids/baby shops.
+export const shop = ico(
+  <>
+    <Path d="M5 8h14l-1 12H6L5 8z" />
+    <Path d="M9 8V6a3 3 0 016 0v2" />
+  </>
+);
+// Fork & knife — dining / restaurants.
+export const dining = ico(<Path d="M6 3v7a2 2 0 002 2v9M8 3v7M17 3c-1.5 0-2.5 1.5-2.5 3.5S15.5 12 17 12v9" />);
 
 // Age badges — colored bubble with the range label.
 const ageBadge =
@@ -380,6 +389,8 @@ export const Icons = {
   museum,
   free,
   shade,
+  shop,
+  dining,
   age03,
   age47,
   age812,

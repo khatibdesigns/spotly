@@ -14,7 +14,8 @@ export type RouteName =
   | 'albumCheckout'
   | 'paywall'
   | 'aiPlan'
-  | 'saved';
+  | 'saved'
+  | 'kidFood';
 
 export type Route = { name: RouteName; params?: any };
 

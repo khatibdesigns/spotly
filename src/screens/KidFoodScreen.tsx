@@ -1,0 +1,113 @@
+// Spotly — per-child food preferences. Favourite foods bias restaurant
+// recommendations + the AI planner; "avoid" foods (allergies / not allowed) are
+// never suggested. Saved onto the child in families/{uid}.kids.
+import React, { useMemo, useState } from 'react';
+import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { C, F, R, SH } from '../lib/theme';
+import { Icons } from '../components/icons';
+import { Chip, Btn, CircBtn } from '../components/ui';
+import { useStore } from '../lib/store';
+import { useProfile, Kid } from '../lib/profile';
+
+const LIKE_PRESETS = ['Pizza', 'Pasta', 'Burgers', 'Chicken', 'Rice', 'Noodles', 'Sushi', 'Sandwiches', 'Fruit', 'Pancakes', 'Ice cream', 'Cheese'];
+const AVOID_PRESETS = ['Nuts', 'Peanuts', 'Dairy', 'Gluten', 'Eggs', 'Shellfish', 'Pork', 'Soy', 'Spicy', 'Honey'];
+
+function uniqMerge(presets: string[], picked: string[]): string[] {
+  const seen = new Set(presets.map((p) => p.toLowerCase()));
+  const extra = picked.filter((p) => !seen.has(p.toLowerCase()));
+  return [...presets, ...extra];
+}
+
+export function KidFoodScreen() {
+  const insets = useSafeAreaInsets();
+  const { pop, stack } = useStore();
+  const { profile, saveProfile } = useProfile();
+
+  const kidId: string | undefined = stack[stack.length - 1]?.params?.kidId;
+  const kid: Kid | undefined = (profile?.kids || []).find((k) => k.id === kidId);
+
+  const [favs, setFavs] = useState<string[]>(kid?.favFoods || []);
+  const [avoid, setAvoid] = useState<string[]>(kid?.avoidFoods || []);
+  const [draftFav, setDraftFav] = useState('');
+  const [draftAvoid, setDraftAvoid] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const favChips = useMemo(() => uniqMerge(LIKE_PRESETS, favs), [favs]);
+  const avoidChips = useMemo(() => uniqMerge(AVOID_PRESETS, avoid), [avoid]);
+
+  const has = (arr: string[], v: string) => arr.some((x) => x.toLowerCase() === v.toLowerCase());
+  const toggle = (arr: string[], set: (x: string[]) => void, v: string) =>
+    set(has(arr, v) ? arr.filter((x) => x.toLowerCase() !== v.toLowerCase()) : [...arr, v]);
+  const addCustom = (draft: string, arr: string[], set: (x: string[]) => void, clear: () => void) => {
+    const v = draft.trim();
+    if (!v) return;
+    if (!has(arr, v)) set([...arr, v]);
+    clear();
+  };
+
+  const save = async () => {
+    if (!profile || !kid) { pop(); return; }
+    setSaving(true);
+    try {
+      const kids = (profile.kids || []).map((k) =>
+        k.id === kid.id ? { ...k, favFoods: favs, avoidFoods: avoid } : k
+      );
+      await saveProfile({ kids });
+      pop();
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message || 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <CircBtn onPress={pop}>{Icons.arrowL({ size: 18, color: C.ink })}</CircBtn>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, letterSpacing: -0.5 }}>{kid?.name?.trim() || 'Food preferences'}</Text>
+            <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular }}>What to serve, what to skip</Text>
+          </View>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
+          {/* Loves */}
+          <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.sage, letterSpacing: 1, textTransform: 'uppercase', marginTop: 10, marginBottom: 12 }}>Loves to eat</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {favChips.map((f) => (
+              <Chip key={f} active={has(favs, f)} onPress={() => toggle(favs, setFavs, f)}>{f}</Chip>
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            <View style={{ flex: 1, backgroundColor: C.surface, borderRadius: R.lg, paddingHorizontal: 14, height: 46, justifyContent: 'center', borderWidth: 1, borderColor: C.line }}>
+              <TextInput value={draftFav} onChangeText={setDraftFav} placeholder="Add a favourite…" placeholderTextColor={C.ink3} style={{ fontFamily: F.medium, fontSize: 15, color: C.ink }} returnKeyType="done" onSubmitEditing={() => addCustom(draftFav, favs, setFavs, () => setDraftFav(''))} />
+            </View>
+            <Btn kind="sage" size="sm" onPress={() => addCustom(draftFav, favs, setFavs, () => setDraftFav(''))}>Add</Btn>
+          </View>
+
+          {/* Avoid */}
+          <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.coralDk, letterSpacing: 1, textTransform: 'uppercase', marginTop: 28, marginBottom: 6 }}>Can’t have · avoid</Text>
+          <Text style={{ fontSize: 12.5, color: C.ink3, fontFamily: F.regular, marginBottom: 12 }}>Allergies or foods not allowed. We’ll never recommend places built around these.</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {avoidChips.map((f) => (
+              <Chip key={f} active={has(avoid, f)} onPress={() => toggle(avoid, setAvoid, f)}>{f}</Chip>
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            <View style={{ flex: 1, backgroundColor: C.surface, borderRadius: R.lg, paddingHorizontal: 14, height: 46, justifyContent: 'center', borderWidth: 1, borderColor: C.line }}>
+              <TextInput value={draftAvoid} onChangeText={setDraftAvoid} placeholder="Add an allergy / restriction…" placeholderTextColor={C.ink3} style={{ fontFamily: F.medium, fontSize: 15, color: C.ink }} returnKeyType="done" onSubmitEditing={() => addCustom(draftAvoid, avoid, setAvoid, () => setDraftAvoid(''))} />
+            </View>
+            <Btn kind="ghost" size="sm" onPress={() => addCustom(draftAvoid, avoid, setAvoid, () => setDraftAvoid(''))}>Add</Btn>
+          </View>
+        </ScrollView>
+
+        <View style={[{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 12 }, SH.pop]}>
+          <Btn kind="primary" size="lg" full onPress={save}>{saving ? 'Saving…' : 'Save preferences'}</Btn>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}

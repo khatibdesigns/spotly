@@ -5,7 +5,13 @@ import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useAuth } from './auth';
 
-export type Kid = { id: string; name: string; age: number };
+export type Kid = {
+  id: string;
+  name: string;
+  age: number;
+  favFoods?: string[]; // foods this child loves
+  avoidFoods?: string[]; // foods to avoid (allergies / not allowed)
+};
 
 export type Profile = {
   familyName: string;
@@ -84,6 +90,29 @@ export function firstName(p: Profile | null, fallback = 'there'): string {
   const n = p?.parentName?.trim();
   if (!n) return fallback;
   return n.split(/\s+/)[0];
+}
+
+// Aggregate every child's food likes + foods to avoid across the family,
+// de-duplicated (case-insensitive). Drives restaurant recommendations and the
+// AI planner prompt.
+export function familyFood(p: Profile | null): { likes: string[]; avoid: string[] } {
+  const dedup = (xs: string[]) => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const x of xs) {
+      const t = x.trim();
+      const k = t.toLowerCase();
+      if (t && !seen.has(k)) { seen.add(k); out.push(t); }
+    }
+    return out;
+  };
+  const likes: string[] = [];
+  const avoid: string[] = [];
+  for (const k of p?.kids || []) {
+    (k.favFoods || []).forEach((f) => likes.push(f));
+    (k.avoidFoods || []).forEach((f) => avoid.push(f));
+  }
+  return { likes: dedup(likes), avoid: dedup(avoid) };
 }
 
 // "Léa & Sami" from the kids list.

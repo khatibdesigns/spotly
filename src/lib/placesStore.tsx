@@ -3,7 +3,14 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { getUserLocation, getSpots, KUWAIT_CITY, Spot, UserLoc } from './places';
 
-// Filter predicates — a spot must satisfy ALL active filters (AND).
+// Kind filters (activity / dining / shop) — OR among themselves.
+const KIND_OF: Record<string, Spot['kind']> = {
+  activity: 'activity',
+  dining: 'dining',
+  shop: 'shop',
+};
+
+// Amenity/price/openNow predicates — a spot must satisfy ALL active ones (AND).
 const PRED: Record<string, (s: Spot) => boolean> = {
   playArea: (s) => s.amenities.includes('playArea'),
   indoor: (s) => s.amenities.includes('indoor'),
@@ -68,7 +75,12 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
   const filtered = useMemo(() => {
     if (filters.size === 0) return spots;
     const active = [...filters];
-    return spots.filter((s) => active.every((f) => (PRED[f] ? PRED[f](s) : true)));
+    const kinds = active.filter((f) => KIND_OF[f]).map((f) => KIND_OF[f]);
+    const preds = active.filter((f) => PRED[f]);
+    return spots.filter((s) => {
+      if (kinds.length && !kinds.includes(s.kind)) return false; // OR across kinds
+      return preds.every((f) => PRED[f](s)); // AND across amenity/price filters
+    });
   }, [spots, filters]);
 
   return (

@@ -27,6 +27,7 @@ import { AlbumEditorScreen, AlbumCheckoutScreen } from './screens/AlbumScreens';
 import { PaywallScreen } from './screens/PaywallScreen';
 import { AiPlanScreen } from './screens/AiPlanScreen';
 import { SavedScreen } from './screens/SavedScreen';
+import { KidFoodScreen } from './screens/KidFoodScreen';
 
 const OVERLAYS: Record<RouteName, React.ComponentType> = {
   place: PlaceScreen,
@@ -38,6 +39,7 @@ const OVERLAYS: Record<RouteName, React.ComponentType> = {
   paywall: PaywallScreen,
   aiPlan: AiPlanScreen,
   saved: SavedScreen,
+  kidFood: KidFoodScreen,
 };
 
 function AnimatedOverlay({ children }: { children: React.ReactNode }) {

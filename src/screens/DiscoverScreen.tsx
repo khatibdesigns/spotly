@@ -16,6 +16,7 @@ const AMENITY_ICON: Record<string, (p: any) => React.ReactNode> = {
   playArea: Icons.playArea, foodOnSite: Icons.foodOnSite, parking: Icons.parking, animals: Icons.animals,
   indoor: Icons.indoor, outdoor: Icons.outdoor, water: Icons.water, arts: Icons.arts,
   restroom: Icons.restroom, changing: Icons.changing, shade: Icons.shade, museum: Icons.museum,
+  shop: Icons.shop, stroller: Icons.stroller,
 };
 
 function Eyebrow({ children, color = C.coral }: { children: React.ReactNode; color?: string }) {
@@ -61,6 +62,12 @@ function CatTile({ ic, color, label, active, onPress }: { ic: (p: any) => React.
   );
 }
 
+// Top-level "what are you looking for" kinds (OR-filtered).
+const KINDS = [
+  { id: 'activity', label: 'Activities' },
+  { id: 'dining', label: 'Dining' },
+  { id: 'shop', label: 'Kids & baby shops' },
+];
 const FILTER_CHIPS = [
   { id: 'playArea', label: 'Has play area' },
   { id: 'openNow', label: 'Open now' },
@@ -70,7 +77,8 @@ const FILTER_CHIPS = [
 const CATEGORIES = [
   { id: 'outdoor', ic: Icons.outdoor, color: C.sage, label: 'Parks' },
   { id: 'playArea', ic: Icons.playArea, color: C.coral, label: 'Indoor play' },
-  { id: 'foodOnSite', ic: Icons.foodOnSite, color: C.coral, label: 'Cafés' },
+  { id: 'dining', ic: Icons.dining, color: C.coralDk, label: 'Dining' },
+  { id: 'shop', ic: Icons.shop, color: C.plum, label: 'Kids shops' },
   { id: 'museum', ic: Icons.museum, color: C.ink2, label: 'Museums' },
   { id: 'animals', ic: Icons.animals, color: C.sun, label: 'Zoos' },
   { id: 'water', ic: Icons.water, color: C.sky, label: 'Water' },
@@ -172,6 +180,13 @@ export function DiscoverScreen() {
               <Pressable onPress={reload}><Text style={{ color: C.coralDk, fontFamily: F.bold, fontSize: 12.5 }}>Enable</Text></Pressable>
             </View>
           ) : null}
+
+          {/* What are you looking for — kind selector */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 10 }}>
+            {KINDS.map((k) => (
+              <Chip key={k.id} active={filters.has(k.id)} onPress={() => toggleFilter(k.id)}>{k.label}</Chip>
+            ))}
+          </ScrollView>
 
           {/* This week */}
           <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>

@@ -8,7 +8,7 @@ import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Btn, SpotImage, CircBtn } from '../components/ui';
 import { useStore } from '../lib/store';
-import { useProfile } from '../lib/profile';
+import { useProfile, familyFood } from '../lib/profile';
 import { usePlans } from '../lib/plans';
 import { usePlanner } from '../lib/planner';
 import { Itinerary } from '../lib/aiPlan';
@@ -92,7 +92,15 @@ export function AiPlanScreen() {
 
   const onGenerate = () => {
     if (!text.trim()) return;
-    generate({ destination: parseDest(text), days: parseDays(text), kids: profile?.kids, notes: text.trim() });
+    const food = familyFood(profile);
+    generate({
+      destination: parseDest(text),
+      days: parseDays(text),
+      kids: profile?.kids,
+      notes: text.trim(),
+      favFoods: food.likes,
+      avoidFoods: food.avoid,
+    });
   };
 
   const save = async () => {

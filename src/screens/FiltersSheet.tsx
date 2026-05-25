@@ -17,6 +17,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+const KINDS = [
+  { id: 'activity', label: 'Activities', ic: Icons.compass },
+  { id: 'dining', label: 'Dining', ic: Icons.dining },
+  { id: 'shop', label: 'Kids & baby shops', ic: Icons.shop },
+];
 const AMENITIES = [
   { id: 'playArea', label: 'Play area', ic: Icons.playArea },
   { id: 'indoor', label: 'Indoor', ic: Icons.indoor },
@@ -46,6 +51,15 @@ export function FiltersSheet() {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+          <Section title="Looking for">
+            {KINDS.map((k) => {
+              const on = filters.has(k.id);
+              return (
+                <Chip key={k.id} active={on} onPress={() => toggleFilter(k.id)} icon={k.ic({ size: 14, color: on ? '#fff' : C.ink })}>{k.label}</Chip>
+              );
+            })}
+          </Section>
+
           <Section title="Amenities">
             {AMENITIES.map((a) => {
               const on = filters.has(a.id);
