@@ -1,5 +1,5 @@
 // Spotly — Discover. Real nearby places (Google Places + curated) with photos.
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +12,7 @@ import { usePlaces } from '../lib/placesStore';
 import { useSaves } from '../lib/saves';
 import { useI18n } from '../lib/i18n';
 import { Spot, formatDistance } from '../lib/places';
+import { getWeather, Weather } from '../lib/weather';
 
 const AMENITY_ICON: Record<string, (p: any) => React.ReactNode> = {
   playArea: Icons.playArea, foodOnSite: Icons.foodOnSite, parking: Icons.parking, animals: Icons.animals,
@@ -142,7 +143,11 @@ export function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const { push } = useStore();
   const { profile } = useProfile();
-  const { spots, filtered, loading, locationGranted, reload, setSelected, filters, toggleFilter, clearFilters } = usePlaces();
+  const { spots, filtered, loading, locationGranted, reload, setSelected, filters, toggleFilter, clearFilters, loc } = usePlaces();
+  const [weather, setWeather] = useState<Weather | null>(null);
+  useEffect(() => {
+    if (loc?.latitude != null) getWeather(loc.latitude, loc.longitude).then(setWeather).catch(() => {});
+  }, [loc?.latitude, loc?.longitude]);
   const { t } = useI18n();
   const [showLocBanner, setShowLocBanner] = useState(true);
   const [q, setQ] = useState('');
@@ -190,6 +195,12 @@ export function DiscoverScreen() {
             <Text style={{ fontSize: 20, fontFamily: F.extrabold, color: C.ink, marginTop: 1 }}>{firstName(profile)}</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {weather ? (
+              <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: R.pill, backgroundColor: C.surface }, SH.pill]}>
+                <Text style={{ fontSize: 14 }}>{weather.emoji}</Text>
+                <Text style={{ fontSize: 12.5, fontFamily: F.bold, color: C.ink }}>{weather.tempC}°</Text>
+              </View>
+            ) : null}
             <Pressable onPress={reload} style={[{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill, backgroundColor: C.surface }, SH.pill]}>
               {Icons.pin({ size: 13, color: C.coral, filled: true })}
               <Text style={{ fontSize: 12, fontFamily: F.bold, color: C.ink }}>{locationGranted ? t('discover.nearYou') : profile?.homeCity || 'Kuwait'}</Text>
