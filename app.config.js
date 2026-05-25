@@ -17,7 +17,7 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.khd.spotly',
-      buildNumber: '8',
+      buildNumber: '9',
       usesAppleSignIn: true,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
@@ -35,7 +35,7 @@ export default {
     },
     android: {
       package: 'com.khd.spotly',
-      versionCode: 8,
+      versionCode: 9,
       // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
       usesCleartextTraffic: true,
       config: {
