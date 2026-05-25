@@ -76,6 +76,12 @@
 
     <h2>Existing places (<span id="count">0</span>)</h2>
     <div id="list"></div>
+
+    <h2>Booking requests (<span id="bcount">0</span>)</h2>
+    <div id="blist"></div>
+
+    <h2>Album orders (<span id="ocount">0</span>)</h2>
+    <div id="olist"></div>
   </section>
 </main>
 
@@ -110,6 +116,8 @@ onAuthStateChanged(auth, (user) => {
     $('signout').classList.remove('hide');
     $('who').textContent = user.email || user.uid;
     loadPlaces();
+    loadBookings();
+    loadOrders();
   } else {
     $('login').classList.remove('hide');
     $('admin').classList.add('hide');
@@ -156,6 +164,55 @@ async function loadPlaces() {
   } catch (e) {
     list.innerHTML = `<p class="err">${e.message}</p>`;
   }
+}
+
+function fmtDate(ts) {
+  try { return ts?.toDate ? ts.toDate().toLocaleString() : ''; } catch { return ''; }
+}
+
+async function loadBookings() {
+  const el = $('blist');
+  el.innerHTML = '<p class="note">Loading…</p>';
+  try {
+    const snap = await getDocs(query(collection(db, 'bookings'), orderBy('createdAt', 'desc')));
+    $('bcount').textContent = snap.size;
+    if (snap.empty) { el.innerHTML = '<p class="note">No booking requests yet.</p>'; return; }
+    el.innerHTML = '';
+    snap.forEach((d) => {
+      const v = d.data();
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `<div style="flex:1">
+        <div style="font-weight:700">${v.placeName || ''} <span class="note">· ${v.status || ''}</span></div>
+        <div class="note">${v.date || ''} · ${v.time || ''} · ${v.adults || 0} adults, ${v.kids || 0} kids${v.familyName ? ' · ' + v.familyName : ''}</div>
+        ${v.note ? `<div class="note">“${v.note}”</div>` : ''}
+        <div class="note">${fmtDate(v.createdAt)}</div>
+      </div>`;
+      el.appendChild(row);
+    });
+  } catch (e) { el.innerHTML = `<p class="err">${e.message}</p>`; }
+}
+
+async function loadOrders() {
+  const el = $('olist');
+  el.innerHTML = '<p class="note">Loading…</p>';
+  try {
+    const snap = await getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc')));
+    $('ocount').textContent = snap.size;
+    if (snap.empty) { el.innerHTML = '<p class="note">No album orders yet.</p>'; return; }
+    el.innerHTML = '';
+    snap.forEach((d) => {
+      const v = d.data();
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `<div style="flex:1">
+        <div style="font-weight:700">${v.title || 'Album'} <span class="note">· ${v.status || ''}</span></div>
+        <div class="note">${v.size || ''} · ${v.cover || ''} cover · ${v.total || ''}</div>
+        <div class="note">${fmtDate(v.createdAt)}</div>
+      </div>`;
+      el.appendChild(row);
+    });
+  } catch (e) { el.innerHTML = `<p class="err">${e.message}</p>`; }
 }
 
 $('addBtn').onclick = async () => {
