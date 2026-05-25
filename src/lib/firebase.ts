@@ -1,7 +1,7 @@
 // Spotly — Firebase init. Reads EXPO_PUBLIC_FIREBASE_* from .env.
 // The app still loads if config is missing; auth/cloud features simply stay off.
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { initializeAuth, getAuth, Auth } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -32,7 +32,13 @@ if (isConfigured) {
   } catch {
     auth = getAuth(app);
   }
-  firestore = getFirestore(app);
+  // ignoreUndefinedProperties: writes silently drop `undefined` fields instead
+  // of throwing (e.g. a booking for a place with no owner/photo, an empty note).
+  try {
+    firestore = initializeFirestore(app, { ignoreUndefinedProperties: true });
+  } catch {
+    firestore = getFirestore(app);
+  }
   storage = getStorage(app);
 }
 
