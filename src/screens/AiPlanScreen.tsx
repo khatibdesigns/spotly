@@ -1,7 +1,7 @@
 // Spotly — AI itinerary planner. Generation runs globally (PlannerProvider) so
 // you can leave this screen; a sound notification fires when it's ready.
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Modal, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, F, R, SH } from '../lib/theme';
@@ -12,7 +12,8 @@ import { useProfile, familyFood } from '../lib/profile';
 import { usePlans } from '../lib/plans';
 import { usePlanner } from '../lib/planner';
 import { useI18n } from '../lib/i18n';
-import { Itinerary, dayDateLabel } from '../lib/aiPlan';
+import { Itinerary, ItStop, dayDateLabel } from '../lib/aiPlan';
+import { searchPlaces, PlaceSearchResult, getUserLocation } from '../lib/places';
 
 const SUGGESTION_KEYS = ['ai.s1', 'ai.s2', 'ai.s3', 'ai.s4'];
 
@@ -50,6 +51,17 @@ export function AiPlanScreen() {
     else if (status !== 'ready') setEdited(null);
   }, [status, result]);
 
+  // Add-a-place search (Google Places) for a specific day.
+  const [addingDay, setAddingDay] = useState<number | null>(null);
+  const [addQuery, setAddQuery] = useState('');
+  const [addResults, setAddResults] = useState<PlaceSearchResult[]>([]);
+  const [addSearching, setAddSearching] = useState(false);
+  const [near, setNear] = useState<{ latitude: number; longitude: number } | undefined>(undefined);
+
+  useEffect(() => {
+    getUserLocation().then((l) => { if (l.granted) setNear({ latitude: l.latitude, longitude: l.longitude }); }).catch(() => {});
+  }, []);
+
   const removeStop = (dayIdx: number, stopIdx: number) => {
     setEdited((it) => {
       if (!it) return it;
@@ -58,15 +70,28 @@ export function AiPlanScreen() {
       return copy;
     });
   };
-  const addStop = (dayIdx: number, name: string) => {
-    const n = name.trim();
-    if (!n) return;
+  const addStop = (dayIdx: number, stop: ItStop) => {
     setEdited((it) => {
       if (!it) return it;
       const copy: Itinerary = JSON.parse(JSON.stringify(it));
-      copy.days[dayIdx].stops.push({ name: n, tone: 'sage' });
+      copy.days[dayIdx].stops.push(stop);
       return copy;
     });
+  };
+
+  const openAdder = (dayIdx: number) => { setAddingDay(dayIdx); setAddQuery(''); setAddResults([]); };
+  const runAddSearch = async () => {
+    if (!addQuery.trim()) return;
+    setAddSearching(true);
+    try { setAddResults(await searchPlaces(addQuery, near)); }
+    finally { setAddSearching(false); }
+  };
+  const pickAddResult = (r: PlaceSearchResult) => {
+    if (addingDay == null) return;
+    addStop(addingDay, { name: r.name, category: r.category, photoUrl: r.photoUrl, lat: r.lat, lng: r.lng, tone: 'sage' });
+    setAddingDay(null);
+    setAddQuery('');
+    setAddResults([]);
   };
 
   const elapsed = startedAt ? Math.floor((now - startedAt) / 1000) : 0;
@@ -183,7 +208,7 @@ export function AiPlanScreen() {
           {status === 'generating' ? (
             <Generating mmss={mmss} progressMsg={progressMsg} />
           ) : status === 'ready' && (edited || result) ? (
-            <ItineraryPreview it={(edited || result)!} onRemoveStop={removeStop} onAddStop={addStop} />
+            <ItineraryPreview it={(edited || result)!} onRemoveStop={removeStop} onOpenAdder={openAdder} />
           ) : status === 'error' ? (
             <ErrorState message={error} />
           ) : (
@@ -209,6 +234,40 @@ export function AiPlanScreen() {
           </View>
         )}
       </View>
+
+      {/* Add-a-place search (Google Places) */}
+      <Modal visible={addingDay != null} transparent animationType="slide" onRequestClose={() => setAddingDay(null)}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.45)', justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 16, paddingBottom: insets.bottom + 20, maxHeight: '80%' }}>
+            <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 14 }} />
+            <Text style={{ fontFamily: F.serif, fontSize: 22, letterSpacing: -0.5, color: C.ink, marginBottom: 12 }}>{t('ai.addStop')}</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface, borderRadius: R.lg, paddingHorizontal: 14, height: 48, borderWidth: 1, borderColor: C.line }}>
+                {Icons.search({ size: 18, color: C.ink3 })}
+                <TextInput style={{ flex: 1, fontFamily: F.medium, fontSize: 15, color: C.ink }} placeholder={t('mset.searchHint')} placeholderTextColor={C.ink3} value={addQuery} onChangeText={setAddQuery} autoCorrect={false} returnKeyType="search" onSubmitEditing={runAddSearch} autoFocus />
+              </View>
+              <Btn kind="dark" onPress={runAddSearch}>{t('mset.searchBtn')}</Btn>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ marginTop: 12 }} contentContainerStyle={{ gap: 8, paddingBottom: 8 }}>
+              {addSearching ? (
+                <ActivityIndicator color={C.coral} style={{ marginTop: 16 }} />
+              ) : addResults.length ? (
+                addResults.map((r) => (
+                  <Pressable key={r.placeId} onPress={() => pickAddResult(r)} style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 12, flexDirection: 'row', gap: 12, alignItems: 'center' }, SH.card]}>
+                    {r.photoUrl ? <Image source={{ uri: r.photoUrl }} style={{ width: 48, height: 48, borderRadius: 10 }} /> : <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' }}>{Icons.pin({ size: 18, color: C.ink3 })}</View>}
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 14.5, color: C.ink }}>{r.name}</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{r.address || r.category}</Text>
+                    </View>
+                    {Icons.plus({ size: 18, color: C.coralDk })}
+                  </Pressable>
+                ))
+              ) : null}
+            </ScrollView>
+            <Btn kind="ghost" full style={{ marginTop: 4 }} onPress={() => setAddingDay(null)}>{t('common.cancel')}</Btn>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -281,20 +340,7 @@ function ErrorState({ message }: { message: string | null }) {
   );
 }
 
-function DayAdder({ onAdd }: { onAdd: (name: string) => void }) {
-  const { t } = useI18n();
-  const [v, setV] = useState('');
-  return (
-    <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
-      <View style={{ flex: 1, backgroundColor: C.surface, borderRadius: R.lg, paddingHorizontal: 12, height: 42, justifyContent: 'center', borderWidth: 1, borderColor: C.line, borderStyle: 'dashed' }}>
-        <TextInput value={v} onChangeText={setV} placeholder={t('ai.addStop')} placeholderTextColor={C.ink3} style={{ fontFamily: F.medium, fontSize: 14, color: C.ink }} returnKeyType="done" onSubmitEditing={() => { onAdd(v); setV(''); }} />
-      </View>
-      <Btn kind="ghost" size="sm" onPress={() => { onAdd(v); setV(''); }}>{t('common.add')}</Btn>
-    </View>
-  );
-}
-
-function ItineraryPreview({ it, onRemoveStop, onAddStop }: { it: Itinerary; onRemoveStop: (d: number, s: number) => void; onAddStop: (d: number, name: string) => void }) {
+function ItineraryPreview({ it, onRemoveStop, onOpenAdder }: { it: Itinerary; onRemoveStop: (d: number, s: number) => void; onOpenAdder: (d: number) => void }) {
   const { t } = useI18n();
   return (
     <View style={{ marginTop: 16 }}>
@@ -317,20 +363,23 @@ function ItineraryPreview({ it, onRemoveStop, onAddStop }: { it: Itinerary; onRe
               <View key={i} style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 12, flexDirection: 'row', gap: 12, alignItems: 'center' }, SH.card]}>
                 <SpotImage photoUrl={s.photoUrl || undefined} tone={s.tone || 'sun'} height={56} radius={12} style={{ width: 56 }} />
                 <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                    {s.time ? <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.coralDk }}>{s.time}</Text> : null}
-                    <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.ink }}>{s.name}</Text>
-                    {s.estCost ? <Text style={{ fontSize: 11, color: C.ink3, fontFamily: F.semibold }}>{s.estCost}</Text> : null}
+                  {s.time ? <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.coralDk, marginBottom: 1 }}>{s.time}</Text> : null}
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                    <Text numberOfLines={2} style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.ink, lineHeight: 18 }}>{s.name}</Text>
+                    {s.estCost ? <Text style={{ fontSize: 11, color: C.ink3, fontFamily: F.semibold, marginTop: 1 }}>{s.estCost}</Text> : null}
                   </View>
-                  {s.category ? <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{s.category}</Text> : null}
-                  {s.note ? <Text style={{ fontSize: 12.5, color: C.ink2, fontFamily: F.regular, marginTop: 3, lineHeight: 17 }}>{s.note}</Text> : null}
+                  {s.category ? <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{s.category}</Text> : null}
+                  {s.note ? <Text numberOfLines={2} style={{ fontSize: 12.5, color: C.ink2, fontFamily: F.regular, marginTop: 3, lineHeight: 17 }}>{s.note}</Text> : null}
                 </View>
                 <Pressable onPress={() => onRemoveStop(di, i)} hitSlop={6} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.coralLt, alignItems: 'center', justifyContent: 'center' }}>
                   {Icons.close({ size: 14, color: C.coralDk })}
                 </Pressable>
               </View>
             ))}
-            <DayAdder onAdd={(name) => onAddStop(di, name)} />
+            <Pressable onPress={() => onOpenAdder(di)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 11, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, borderStyle: 'dashed' }}>
+              {Icons.plus({ size: 16, color: C.coralDk })}
+              <Text style={{ fontFamily: F.bold, fontSize: 13.5, color: C.coralDk }}>{t('ai.addStop')}</Text>
+            </Pressable>
           </View>
         </View>
         );
