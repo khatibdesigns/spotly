@@ -1,0 +1,159 @@
+// Spotly — family memories. Photos in Firebase Storage, metadata in Firestore
+// (families/{uid}/memories). Drives the Gallery, the Map "places we've been",
+// and the passport stats.
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
+import { collection, onSnapshot, addDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { firestore, storage } from './firebase';
+import { useAuth } from './auth';
+
+export type Memory = {
+  id: string;
+  placeId?: string;
+  placeName: string;
+  category?: string;
+  city?: string;
+  country?: string;
+  note?: string;
+  photoUrl: string;
+  lat?: number;
+  lng?: number;
+  tone?: string;
+  createdAt?: any;
+};
+
+export type VisitedPlace = {
+  key: string;
+  name: string;
+  city?: string;
+  lat?: number;
+  lng?: number;
+  tone?: string;
+  photoUrl?: string;
+  visits: number;
+};
+
+export type AddMemoryInput = {
+  photoUri: string;
+  placeName: string;
+  note?: string;
+  city?: string;
+  country?: string;
+  placeId?: string;
+  category?: string;
+  lat?: number;
+  lng?: number;
+  tone?: string;
+};
+
+type MemoriesState = {
+  memories: Memory[];
+  loading: boolean;
+  uploading: boolean;
+  addMemory: (input: AddMemoryInput) => Promise<void>;
+  visited: VisitedPlace[];
+  stats: { spots: number; countries: number; weekends: number };
+};
+
+const Ctx = createContext<MemoriesState | null>(null);
+
+function isoWeek(d: Date): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((+date - +yearStart) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-${week}`;
+}
+
+export function MemoriesProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (!user || !firestore) {
+      setMemories([]);
+      setLoading(false);
+      return;
+    }
+    const col = collection(firestore, 'families', user.uid, 'memories');
+    const unsub = onSnapshot(
+      query(col, orderBy('createdAt', 'desc')),
+      (snap) => {
+        setMemories(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
+    return unsub;
+  }, [user]);
+
+  const addMemory = useCallback(
+    async (input: AddMemoryInput) => {
+      if (!user || !firestore || !storage) throw new Error('Not signed in');
+      setUploading(true);
+      try {
+        // RN-reliable local-file → Blob (fetch().blob() is flaky in Hermes).
+        const blob: Blob = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.onload = () => resolve(xhr.response);
+          xhr.onerror = () => reject(new Error('Could not read the selected photo.'));
+          xhr.responseType = 'blob';
+          xhr.open('GET', input.photoUri, true);
+          xhr.send(null);
+        });
+        const path = `families/${user.uid}/memories/${Date.now()}.jpg`;
+        const r = ref(storage, path);
+        await uploadBytes(r, blob, { contentType: 'image/jpeg' });
+        try { (blob as any).close?.(); } catch {}
+        const photoUrl = await getDownloadURL(r);
+        await addDoc(collection(firestore, 'families', user.uid, 'memories'), {
+          placeId: input.placeId || null,
+          placeName: input.placeName,
+          category: input.category || null,
+          city: input.city || null,
+          country: input.country || null,
+          note: input.note || null,
+          lat: input.lat ?? null,
+          lng: input.lng ?? null,
+          tone: input.tone || 'sun',
+          photoUrl,
+          createdAt: serverTimestamp(),
+        });
+      } finally {
+        setUploading(false);
+      }
+    },
+    [user]
+  );
+
+  const visited = useMemo<VisitedPlace[]>(() => {
+    const map = new Map<string, VisitedPlace>();
+    for (const m of memories) {
+      const key = (m.placeId || m.placeName || '').toLowerCase();
+      if (!key) continue;
+      const existing = map.get(key);
+      if (existing) existing.visits += 1;
+      else map.set(key, { key, name: m.placeName, city: m.city, lat: m.lat, lng: m.lng, tone: m.tone, photoUrl: m.photoUrl, visits: 1 });
+    }
+    return [...map.values()];
+  }, [memories]);
+
+  const stats = useMemo(() => {
+    const countries = new Set(memories.map((m) => m.country).filter(Boolean));
+    const weeks = new Set(memories.filter((m) => m.createdAt?.toDate).map((m) => isoWeek(m.createdAt.toDate())));
+    return { spots: visited.length, countries: countries.size, weekends: weeks.size };
+  }, [memories, visited]);
+
+  return (
+    <Ctx.Provider value={{ memories, loading, uploading, addMemory, visited, stats }}>{children}</Ctx.Provider>
+  );
+}
+
+export function useMemories(): MemoriesState {
+  const v = useContext(Ctx);
+  if (!v) throw new Error('useMemories must be used within MemoriesProvider');
+  return v;
+}

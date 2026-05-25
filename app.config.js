@@ -1,0 +1,86 @@
+// Dynamic Expo config so the Google iOS URL scheme can be injected from .env.
+// Replaces app.json. Google sign-in stays inert until a real REVERSED_CLIENT_ID
+// is set in EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME (and the Google client IDs in .env).
+const googleIosUrlScheme =
+  process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME || 'com.googleusercontent.apps.PLACEHOLDER';
+
+export default {
+  expo: {
+    name: 'Spotly',
+    slug: 'spotly',
+    version: '1.0.0',
+    orientation: 'portrait',
+    icon: './assets/icon.png',
+    scheme: 'spotly',
+    userInterfaceStyle: 'light',
+    backgroundColor: '#fcfaf6',
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: 'com.khd.spotly',
+      buildNumber: '8',
+      usesAppleSignIn: true,
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
+        // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
+        // Same exception the Caption app uses. Move to HTTPS before launch.
+        NSAppTransportSecurity: {
+          NSExceptionDomains: {
+            '16.16.79.251': {
+              NSExceptionAllowsInsecureHTTPLoads: true,
+              NSIncludesSubdomains: false,
+            },
+          },
+        },
+      },
+    },
+    android: {
+      package: 'com.khd.spotly',
+      versionCode: 8,
+      // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
+      usesCleartextTraffic: true,
+      config: {
+        googleMaps: { apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY },
+      },
+      adaptiveIcon: {
+        backgroundColor: '#fa7959',
+        foregroundImage: './assets/android-icon-foreground.png',
+        monochromeImage: './assets/android-icon-monochrome.png',
+      },
+      predictiveBackGestureEnabled: false,
+    },
+    web: {
+      favicon: './assets/favicon.png',
+    },
+    plugins: [
+      'expo-font',
+      'expo-apple-authentication',
+      ['@react-native-google-signin/google-signin', { iosUrlScheme: googleIosUrlScheme }],
+      [
+        'expo-location',
+        {
+          locationWhenInUsePermission: 'Spotly uses your location to show kid-friendly places near you.',
+        },
+      ],
+      [
+        'expo-image-picker',
+        {
+          photosPermission: 'Spotly needs access to your photos so you can add family memories.',
+        },
+      ],
+      [
+        'expo-calendar',
+        {
+          calendarPermission: 'Spotly adds your plans and bookings to your calendar.',
+        },
+      ],
+      [
+        'expo-build-properties',
+        {
+          // Allow cleartext HTTP in release builds (EC2 Claude proxy / AI planner).
+          android: { usesCleartextTraffic: true },
+        },
+      ],
+      'expo-notifications',
+    ],
+  },
+};

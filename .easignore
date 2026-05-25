@@ -1,0 +1,23 @@
+# EAS upload excludes. When present, EAS uses this INSTEAD of .gitignore.
+# Note: .env is intentionally NOT listed here, so the EXPO_PUBLIC_* config
+# (Firebase + Google keys) is available at build time. The .p8 App Store
+# Connect key is excluded — it's only needed locally for `eas submit`.
+
+node_modules/
+.git/
+.expo/
+
+# Native dirs — EAS regenerates these from app.config.js (clean managed build)
+/ios
+/android
+
+# Secrets / unused native Firebase config (we use the JS SDK via .env)
+*.p8
+GoogleService-Info.plist
+google-services.json
+
+# Misc
+*.log
+.DS_Store
+/firestore.rules
+/storage.rules
