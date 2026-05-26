@@ -365,8 +365,11 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
 
   const consumed = new Set<string>(); // place_ids merged into a Google result
   const seenNames = new Set(curated.map((c) => c.name.toLowerCase()));
+  const seenIds = new Set<string>(); // guard: a place can appear in >1 search list
   const google: Spot[] = [];
   for (const g of [...activities, ...dining, ...shops]) {
+    if (seenIds.has(g.id)) continue; // same place returned by multiple type searches
+    seenIds.add(g.id);
     const claim = claimByPlaceId.get(g.id);
     if (claim) {
       // Keep the claim's identity (id/source/owner/vouchers) but show the live
