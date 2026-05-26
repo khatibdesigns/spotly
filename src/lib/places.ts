@@ -38,6 +38,7 @@ export type Spot = {
   ownerUid?: string; // merchant who owns this place (curated/claimed only)
   currencyCode?: string; // ISO code the place sells vouchers in (e.g. 'KWD')
   vouchers?: Voucher[]; // prepaid vouchers/offers the place sells
+  googlePlaceId?: string; // Google place_id this curated/claim record links to
 };
 
 export type UserLoc = { latitude: number; longitude: number; granted: boolean };
@@ -250,6 +251,7 @@ async function fetchCurated(loc: UserLoc): Promise<Spot[]> {
           vouchers: Array.isArray(v.vouchers)
             ? (v.vouchers as Voucher[]).filter((x) => x && x.active !== false && Number(x.price) > 0)
             : undefined,
+          googlePlaceId: v.googlePlaceId || undefined,
         };
       });
   } catch {
@@ -353,15 +355,48 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
     searchShops(loc),
     fetchCurated(loc),
   ]);
-  const seen = new Set(curated.map((c) => c.name.toLowerCase()));
+  // A curated doc may be a "claim record" linked to a Google place_id (the
+  // merchant claimed their real listing). Match Google results to those claims
+  // by place_id and overlay the merchant's commercial fields (vouchers,
+  // currency, promotion, owner) onto the LIVE Google data — we never persist a
+  // full copy of Google's place (ToS + staleness); only the place_id is stored.
+  const claimByPlaceId = new Map<string, Spot>();
+  for (const c of curated) if (c.googlePlaceId) claimByPlaceId.set(c.googlePlaceId, c);
+
+  const consumed = new Set<string>(); // place_ids merged into a Google result
+  const seenNames = new Set(curated.map((c) => c.name.toLowerCase()));
   const google: Spot[] = [];
   for (const g of [...activities, ...dining, ...shops]) {
+    const claim = claimByPlaceId.get(g.id);
+    if (claim) {
+      // Keep the claim's identity (id/source/owner/vouchers) but show the live
+      // Google display fields where present.
+      google.push({
+        ...claim,
+        name: g.name || claim.name,
+        category: g.category || claim.category,
+        photoUrl: g.photoUrl || claim.photoUrl,
+        rating: g.rating ?? claim.rating,
+        reviews: g.reviews ?? claim.reviews,
+        openNow: g.openNow ?? claim.openNow,
+        address: g.address || claim.address,
+        lat: g.lat ?? claim.lat,
+        lng: g.lng ?? claim.lng,
+        distanceKm: g.distanceKm ?? claim.distanceKm,
+      });
+      consumed.add(g.id);
+      continue;
+    }
+    // Otherwise drop Google duplicates of manually-curated places (by name).
     const k = g.name.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
+    if (seenNames.has(k)) continue;
+    seenNames.add(k);
     google.push(g);
   }
-  const merged = [...curated, ...google];
+  // Curated docs not merged into a Google result (manual entries, or claims
+  // Google didn't return nearby) stay as their own rows using their snapshot.
+  const standaloneCurated = curated.filter((c) => !(c.googlePlaceId && consumed.has(c.googlePlaceId)));
+  const merged = [...standaloneCurated, ...google];
   // Promoted places float to the top; otherwise nearest first.
   merged.sort((a, b) => {
     if (!!a.promoted !== !!b.promoted) return a.promoted ? -1 : 1;
