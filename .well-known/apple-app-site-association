@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "49UBS76LB7.com.khd.spotly",
+        "paths": [ "/join", "/join/*" ]
+      }
+    ]
+  }
+}

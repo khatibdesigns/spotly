@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Join your family on Spotly</title>
+<meta name="description" content="You've been invited to share plans, memories and bookings on Spotly." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet" />
+<style>
+:root{--coral:#fa7959;--coral-dk:#c94c2d;--sage:#398b77;--ink:#1f1915;--ink2:#47413c;--ink3:#85807a;--line:#e9e4dd;--bg:#fcfaf6;--surface:#fff;}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{min-height:100vh;background:var(--bg);color:var(--ink);font-family:"Plus Jakarta Sans",-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:36px 30px;max-width:420px;width:100%;text-align:center;box-shadow:0 24px 60px rgba(31,25,21,.08)}
+.brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:24px;letter-spacing:-.6px;color:var(--ink);margin-bottom:18px}
+.brand .dot{width:15px;height:15px;border-radius:50% 50% 50% 0;background:var(--coral);transform:rotate(-45deg);box-shadow:0 4px 10px rgba(250,121,89,.4)}
+h1{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:28px;line-height:1.15;letter-spacing:-.6px;margin:6px 0 8px}
+p{color:var(--ink2);font-size:15px;line-height:1.6;margin:0 0 18px}
+.btn{display:block;width:100%;background:var(--coral);color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:15px 22px;border-radius:999px;border:none;cursor:pointer;margin:10px 0}
+.btn.ghost{background:transparent;color:var(--ink2);border:1px solid var(--line)}
+.code{display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;font-size:20px;letter-spacing:3px;background:#fff3ee;color:var(--coral-dk);border:1px dashed #f3b8a4;border-radius:12px;padding:10px 16px;margin:4px 0 14px}
+.muted{color:var(--ink3);font-size:13px;margin-top:14px}
+.stores{display:flex;gap:10px;justify-content:center;margin-top:8px}
+.stores a{font-size:13px;font-weight:600;color:var(--coral-dk)}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand"><span class="dot"></span> Spotly</div>
+    <h1>Join your family</h1>
+    <p>You've been invited to share plans, memories and bookings with your family on Spotly.</p>
+    <div id="codeBox" style="display:none">
+      <p style="margin-bottom:6px">Your invite code</p>
+      <span class="code" id="codeText">--------</span>
+    </div>
+    <a class="btn" id="openBtn" href="#">Open in Spotly</a>
+    <p class="muted" id="hint">Don't have the app yet? Install Spotly, then tap this link again — or open the app, go to Profile → “Join a family”, and enter the code above.</p>
+    <div class="stores">
+      <a href="https://apps.apple.com/app/spotly" id="iosLink">App Store</a>
+      <span style="color:var(--ink3)">·</span>
+      <a href="/" id="androidLink">Get Android</a>
+    </div>
+  </div>
+<script>
+  (function () {
+    var params = new URLSearchParams(location.search);
+    var code = (params.get('code') || '').trim().toUpperCase();
+    var deep = 'spotly://join' + (code ? ('?code=' + encodeURIComponent(code)) : '');
+    if (code) {
+      document.getElementById('codeBox').style.display = 'block';
+      document.getElementById('codeText').textContent = code;
+    }
+    var btn = document.getElementById('openBtn');
+    btn.setAttribute('href', deep);
+    // Try to open the app automatically on first load (mobile).
+    var ua = navigator.userAgent || '';
+    var isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+    if (isMobile) {
+      setTimeout(function () { window.location.href = deep; }, 300);
+    }
+  })();
+</script>
+</body>
+</html>
