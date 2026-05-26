@@ -19,7 +19,8 @@ export type RouteName =
   | 'pass'
   | 'cart'
   | 'voucherPass'
-  | 'merchantVouchers';
+  | 'merchantVouchers'
+  | 'purchases';
 
 export type Route = { name: RouteName; params?: any };
 

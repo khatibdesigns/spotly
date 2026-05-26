@@ -14,7 +14,6 @@ import { useI18n } from '../lib/i18n';
 import { useMemories } from '../lib/memories';
 import { useBookings } from '../lib/bookings';
 import { useVouchers } from '../lib/vouchers';
-import { formatMoney } from '../lib/currency';
 import { useSaves } from '../lib/saves';
 import { usePurchases } from '../lib/purchases';
 
@@ -223,6 +222,7 @@ export function ProfileScreen() {
         {/* Activity */}
         <SectionLabel>{t('profile.activity')}</SectionLabel>
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
+          <Row icon={<IconBox ic={Icons.bag} c={C.coral} />} title={t('profile.myPurchases')} det={String(voucherOrders.length)} onPress={() => push('purchases')} />
           <Row icon={<IconBox ic={Icons.bookmark} c={C.coral} />} title={t('profile.savedSpots')} det={String(saved.length)} onPress={() => push('saved')} />
           <Row icon={<IconBox ic={Icons.clock} c={C.sage} />} title={t('profile.placesVisited')} det={String(visited.length)} onPress={() => setTab('gallery')} />
           <Row icon={<IconBox ic={Icons.album} c={C.plum} />} title={t('profile.memories')} det={String(memories.length)} onPress={() => setTab('gallery')} />
@@ -248,26 +248,6 @@ export function ProfileScreen() {
             ))
           )}
         </View>
-
-        {/* Voucher cards with their QR passes */}
-        {voucherOrders.length > 0 ? (
-          <>
-            <SectionLabel>{t('profile.yourVouchers')}</SectionLabel>
-            <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
-              {voucherOrders.map((o, i) => (
-                <Row
-                  key={o.id}
-                  icon={<IconBox ic={Icons.bag} c={C.coral} />}
-                  title={o.label || o.placeName}
-                  sub={`${o.placeName} · ${formatMoney(o.value, o.currencyCode)} · ${o.status}`}
-                  det={t('profile.viewPass')}
-                  onPress={() => push('voucherPass', { orderId: o.id })}
-                  last={i === voucherOrders.length - 1}
-                />
-              ))}
-            </View>
-          </>
-        ) : null}
 
         {/* Settings */}
         <SectionLabel>{t('profile.settings')}</SectionLabel>
