@@ -47,34 +47,35 @@ function PlaceCard({ place, count, views, clicks, onPromote, onManageOffers }: {
           {promotedActive ? <Text style={{ fontSize: 10, fontFamily: F.extrabold, color: '#fff', backgroundColor: C.premium, paddingHorizontal: 8, paddingVertical: 4, borderRadius: R.pill, overflow: 'hidden', letterSpacing: 0.4 }}>{t('mh.promotedTag')}</Text> : null}
         </View>
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 18 }}>
+      {/* Stats — their own wrapping row so nothing overflows the card */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, columnGap: 22, rowGap: 10 }}>
         {[[views, t('mh.statViews')], [clicks, t('mh.statClicks')], [count, t('mh.statBookings')]].map(([n, l], i) => (
           <View key={i}>
             <Text style={{ fontFamily: F.extrabold, fontSize: 18, color: C.ink }}>{n}</Text>
             <Text style={{ fontSize: 10, color: C.ink3, fontFamily: F.bold, textTransform: 'uppercase', letterSpacing: 0.3 }}>{l}</Text>
           </View>
         ))}
-        <View style={{ flex: 1 }} />
-        {place.status === 'approved' && !promotedActive ? (
-          place.promotionRequested ? (
-            <Text style={{ fontSize: 12, color: C.premium, fontFamily: F.bold }}>{t('mh.promoteRequested')}</Text>
-          ) : (
-            <Btn kind="premium" size="sm" icon={Icons.sparkle({ size: 13, color: '#fff' })} onPress={onPromote}>{t('mh.promote')}</Btn>
-          )
-        ) : null}
       </View>
+      {/* Actions row: manage offers + promote (only when approved) */}
       {place.status === 'approved' ? (
-        <Pressable onPress={onManageOffers} style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 12 }}>
-          {Icons.bag({ size: 16, color: C.coralDk })}
-          <Text style={{ fontSize: 13, fontFamily: F.bold, color: C.ink }}>{t('mh.manageOffers')}</Text>
-          {voucherCount > 0 ? (
-            <View style={{ backgroundColor: C.coralLt, borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 11, fontFamily: F.extrabold, color: C.coralDk }}>{voucherCount}</Text>
-            </View>
+        <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Pressable onPress={onManageOffers} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+            {Icons.bag({ size: 16, color: C.coralDk })}
+            <Text style={{ fontSize: 13, fontFamily: F.bold, color: C.ink }}>{t('mh.manageOffers')}</Text>
+            {voucherCount > 0 ? (
+              <View style={{ backgroundColor: C.coralLt, borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 11, fontFamily: F.extrabold, color: C.coralDk }}>{voucherCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+          {!promotedActive ? (
+            place.promotionRequested ? (
+              <Text style={{ fontSize: 12, color: C.premium, fontFamily: F.bold }}>{t('mh.promoteRequested')}</Text>
+            ) : (
+              <Btn kind="premium" size="sm" icon={Icons.sparkle({ size: 13, color: '#fff' })} onPress={onPromote}>{t('mh.promote')}</Btn>
+            )
           ) : null}
-          <View style={{ flex: 1 }} />
-          {Icons.chevR({ size: 16, color: C.ink3 })}
-        </Pressable>
+        </View>
       ) : null}
     </View>
   );
