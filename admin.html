@@ -369,12 +369,21 @@ async function loadDashboard() {
 
 // ---------- Places ----------
 function verifyLinks(p){
-  if (!p.ownerUid) return '';
+  const phone = p.ownerPhone || p.pendingOwnerPhone;
+  const civil = p.ownerCivilIdUrl || p.pendingOwnerCivilIdUrl;
+  const docs = p.ownerDocs && p.ownerDocs.length ? p.ownerDocs : (p.pendingOwnerDocs||[]);
   const bits = [];
-  if (p.ownerPhone) bits.push(`<span>📞 ${esc(p.ownerPhone)}</span>`);
-  if (p.ownerCivilIdUrl) bits.push(`<a href="${esc(p.ownerCivilIdUrl)}" target="_blank">Civil ID</a>`);
-  (p.ownerDocs||[]).forEach((d,i)=> bits.push(`<a href="${esc(d.url)}" target="_blank">${esc(d.name||('Doc '+(i+1)))}</a>`));
+  if (phone) bits.push(`<span>📞 ${esc(phone)}</span>`);
+  if (civil) bits.push(`<a href="${esc(civil)}" target="_blank">Civil ID</a>`);
+  docs.forEach((d,i)=> bits.push(`<a href="${esc(d.url)}" target="_blank">${esc(d.name||('Doc '+(i+1)))}</a>`));
   return bits.length ? `<div style="margin-top:6px;font-size:11px;display:flex;gap:10px;flex-wrap:wrap;color:var(--ink3)">${bits.join('')}</div>` : '';
+}
+// Pending ownership claim → admin approves (sets ownerUid, clears pending).
+function claimCell(p){
+  if (!p.pendingOwnerUid || p.ownerUid) return '';
+  if (me.isAdmin) return `<div style="margin-top:6px"><span style="color:#5b5be0;font-size:11px;font-weight:700">Ownership claim pending</span> <button class="btn sage sm" data-approveown="${p.id}">✓ Approve ownership</button>${verifyLinks(p)}</div>`;
+  if (p.pendingOwnerUid === me.uid) return `<div style="margin-top:6px"><span style="color:#5b5be0;font-size:11px;font-weight:700">Your claim — awaiting approval</span></div>`;
+  return '';
 }
 function placeStatusCell(p){
   const st = p.status || 'approved';
@@ -396,7 +405,7 @@ function placePromoteCell(p){
 }
 async function loadPlaces() {
   let places = await fetchAll('places');
-  if (isMerchantOnly()) places = places.filter((p) => p.ownerUid === me.uid);
+  if (isMerchantOnly()) places = places.filter((p) => p.ownerUid === me.uid || p.pendingOwnerUid === me.uid);
   cache.places = places;
   // Sort: pending first (need action), then promoted, then the rest.
   places.sort((a,b)=>{ const r=(x)=> x.status==='pending'?0:(x.promoted?1:2); return r(a)-r(b); });
@@ -407,12 +416,13 @@ async function loadPlaces() {
       p.photoUrl?`<img src="${esc(p.photoUrl)}" onerror="this.style.visibility='hidden'"/>`:'',
       `<b>${esc(p.name)}</b>${(me.isAdmin&&p.ownerUid)?' <span style="color:var(--ink3);font-size:11px">· merchant</span>':''}`,
       esc(p.category||''),
-      placeStatusCell(p),
+      placeStatusCell(p) + claimCell(p),
       placePromoteCell(p),
       `<button class="btn ghost sm" data-offers="${p.id}">🎟 Offers${(p.vouchers&&p.vouchers.length)?` (${p.vouchers.length})`:''}</button>${me.isAdmin?` <button class="danger" data-del-place="${p.id}">Delete</button>`:''}`
     ])
   ) : `<div class="muted-note">${empty}</div>`;
   $('placesTable').querySelectorAll('[data-offers]').forEach((b)=> b.onclick = ()=> openVouchersModal(b.dataset.offers));
+  $('placesTable').querySelectorAll('[data-approveown]').forEach((b)=> b.onclick = async ()=>{ const p=(cache.places||[]).find(x=>x.id===b.dataset.approveown); await updateDoc(doc(db,'places',b.dataset.approveown),{ ownerUid: p.pendingOwnerUid, pendingOwnerUid: null, status:'approved' }); loadPlaces(); });
   $('placesTable').querySelectorAll('[data-del-place]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Delete this place?')){ await deleteDoc(doc(db,'places',b.dataset.delPlace)); loadPlaces(); } });
   $('placesTable').querySelectorAll('[data-approve]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'places',b.dataset.approve),{status:'approved'}); loadPlaces(); });
   $('placesTable').querySelectorAll('[data-reject]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Reject this place?')){ await updateDoc(doc(db,'places',b.dataset.reject),{status:'rejected'}); loadPlaces(); } });
@@ -472,18 +482,22 @@ function openClaimModal() {
         const d = JSON.parse(b.dataset.claim);
         b.disabled = true; b.textContent='…';
         try {
-          // One canonical doc per place_id (doc id = place_id). Adopt an existing
-          // one instead of forking a duplicate.
+          // One canonical doc per place_id (doc id = place_id). Merchants submit a
+          // PENDING ownership claim (admin approves); admins curate it directly.
           const ref = doc(db, 'places', d.id);
           const snap = await getDoc(ref);
           if (snap.exists()) {
             const ex = snap.data();
-            if (ex.ownerUid && ex.ownerUid !== me.uid && !me.isAdmin) throw new Error('That place is already claimed by another business.');
-            if (!ex.ownerUid && !me.isAdmin) await updateDoc(ref, { ownerUid: me.uid }); // merchant adopts unowned
+            if (me.isAdmin) { $('modalRoot').innerHTML=''; await loadPlaces(); openVouchersModal(d.id); return; }
+            if (ex.ownerUid && ex.ownerUid !== me.uid) throw new Error('That place is already claimed by another business.');
+            if (ex.pendingOwnerUid && ex.pendingOwnerUid !== me.uid) throw new Error('A claim for this place is already under review.');
+            if (!ex.ownerUid) await updateDoc(ref, { pendingOwnerUid: me.uid }); // request claim
           } else {
             await setDoc(ref, {
               name: d.name, category: d.cat||'', lat: d.lat??null, lng: d.lng??null,
-              googlePlaceId: d.id, ownerUid: me.isAdmin ? null : me.uid,
+              googlePlaceId: d.id,
+              ownerUid: me.isAdmin ? null : null,
+              pendingOwnerUid: me.isAdmin ? null : me.uid,
               status: me.isAdmin ? 'approved' : 'pending',
               promoted: false, promotionRequested: false,
               bookable: false, tone: 'sun', currency: 'KWD', vouchers: [],
@@ -491,7 +505,8 @@ function openClaimModal() {
             });
           }
           $('modalRoot').innerHTML=''; await loadPlaces();
-          openVouchersModal(d.id); // jump straight to adding offers
+          if (me.isAdmin) openVouchersModal(d.id); // admin can edit offers now
+          else alert('Claim submitted — an admin will approve your ownership, then you can manage offers.');
         } catch(e){ $('cl_err').textContent = e.message.replace('Firebase: ',''); b.disabled=false; b.textContent='Claim'; }
       });
     } catch(e){ $('cl_results').innerHTML=''; $('cl_err').textContent = e.message; }
