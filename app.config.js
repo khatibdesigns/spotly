@@ -17,8 +17,11 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.khd.spotly',
-      buildNumber: '21',
+      buildNumber: '22',
       usesAppleSignIn: true,
+      // Universal Links — tapping https://meetspotly.com/join?code=… opens the
+      // app (family invites). Requires the AASA file hosted at that domain.
+      associatedDomains: ['applinks:meetspotly.com'],
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
@@ -35,9 +38,19 @@ export default {
     },
     android: {
       package: 'com.khd.spotly',
-      versionCode: 21,
+      versionCode: 22,
       // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
       usesCleartextTraffic: true,
+      // App Links — tapping https://meetspotly.com/join?code=… opens the app
+      // (family invites). autoVerify uses the hosted assetlinks.json.
+      intentFilters: [
+        {
+          action: 'VIEW',
+          autoVerify: true,
+          data: [{ scheme: 'https', host: 'meetspotly.com', pathPrefix: '/join' }],
+          category: ['BROWSABLE', 'DEFAULT'],
+        },
+      ],
       config: {
         googleMaps: { apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY },
       },

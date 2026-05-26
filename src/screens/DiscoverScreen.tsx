@@ -7,7 +7,8 @@ import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Chip, Btn, SpotImage, Stars } from '../components/ui';
 import { useStore } from '../lib/store';
-import { useProfile, firstName, kidNames, familyFood } from '../lib/profile';
+import { useProfile, myFirstName, kidNames, familyFood } from '../lib/profile';
+import { useAuth } from '../lib/auth';
 import { usePlaces } from '../lib/placesStore';
 import { useSaves } from '../lib/saves';
 import { useI18n } from '../lib/i18n';
@@ -149,6 +150,7 @@ export function DiscoverScreen() {
     if (loc?.latitude != null) getWeather(loc.latitude, loc.longitude).then(setWeather).catch(() => {});
   }, [loc?.latitude, loc?.longitude]);
   const { t } = useI18n();
+  const { user } = useAuth();
   const [showLocBanner, setShowLocBanner] = useState(true);
   const [q, setQ] = useState('');
   const scrollRef = useRef<ScrollView>(null);
@@ -192,7 +194,7 @@ export function DiscoverScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View>
             <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.semibold }}>{greeting}</Text>
-            <Text style={{ fontSize: 20, fontFamily: F.extrabold, color: C.ink, marginTop: 1 }}>{firstName(profile)}</Text>
+            <Text style={{ fontSize: 20, fontFamily: F.extrabold, color: C.ink, marginTop: 1 }}>{myFirstName(profile, user?.uid, user?.displayName)}</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {weather ? (

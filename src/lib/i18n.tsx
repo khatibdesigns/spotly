@@ -128,6 +128,7 @@ const EN: Record<string, string> = {
   // profile
   'profile.family': 'Family',
   'profile.parentYou': 'Parent · you',
+  'profile.parent': 'Parent',
   'family.invite': 'Invite a partner',
   'family.inviteSub': 'Share plans, memories & bookings',
   'family.join': 'Join a family',
@@ -141,7 +142,7 @@ const EN: Record<string, string> = {
   'family.joinedMsg': 'You’re now in the family — plans, memories and bookings are shared.',
   'family.couldNotJoin': 'Couldn’t join',
   'family.inviteTitle': 'Invite sent',
-  'family.shareMsg': 'Join our family on Spotly! Open the app → Profile → “Join a family” and enter this code: {code}',
+  'family.shareMsg': 'Join our family on Spotly! Tap to join: {url}\n\n(Or open the app → Profile → “Join a family” and enter code {code}.)',
   'family.leaveTitle': 'Leave this family?',
   'family.leaveMsg': 'You’ll go back to your own family and stop seeing shared plans & memories.',
   'profile.ageFmt': 'Age {age}',
@@ -543,6 +544,7 @@ const AR: Record<string, string> = {
   // profile
   'profile.family': 'العائلة',
   'profile.parentYou': 'الوالد · أنت',
+  'profile.parent': 'والد',
   'family.invite': 'ادعُ شريكًا',
   'family.inviteSub': 'شاركوا الخطط والذكريات والحجوزات',
   'family.join': 'انضم إلى عائلة',
@@ -556,7 +558,7 @@ const AR: Record<string, string> = {
   'family.joinedMsg': 'أنت الآن ضمن العائلة — الخطط والذكريات والحجوزات مشتركة.',
   'family.couldNotJoin': 'تعذّر الانضمام',
   'family.inviteTitle': 'تم إرسال الدعوة',
-  'family.shareMsg': 'انضم إلى عائلتنا على سبوتلي! افتح التطبيق ← الحساب ← «انضم إلى عائلة» وأدخل هذا الرمز: {code}',
+  'family.shareMsg': 'انضم إلى عائلتنا على سبوتلي! اضغط للانضمام: {url}\n\n(أو افتح التطبيق ← الحساب ← «انضم إلى عائلة» وأدخل الرمز {code}.)',
   'family.leaveTitle': 'مغادرة هذه العائلة؟',
   'family.leaveMsg': 'ستعود إلى عائلتك الخاصة وتتوقف عن رؤية الخطط والذكريات المشتركة.',
   'profile.ageFmt': 'العمر {age}',

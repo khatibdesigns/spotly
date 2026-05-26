@@ -9,7 +9,7 @@ import { CircBtn, SectionLabel, Btn } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { useProfile } from '../lib/profile';
-import { useFamily } from '../lib/family';
+import { useFamily, buildInviteUrl } from '../lib/family';
 import { useI18n } from '../lib/i18n';
 import { useMemories } from '../lib/memories';
 import { useBookings } from '../lib/bookings';
@@ -80,7 +80,8 @@ export function ProfileScreen() {
   const onInvite = async () => {
     try {
       const code = await inviteToFamily();
-      await Share.share({ message: t('family.shareMsg', { code }) }).catch(() => {});
+      const url = buildInviteUrl(code);
+      await Share.share({ message: t('family.shareMsg', { code, url }), url }).catch(() => {});
     } catch (e: any) {
       Alert.alert(t('family.couldNotJoin'), e?.message || '');
     }
@@ -164,10 +165,21 @@ export function ProfileScreen() {
           </LinearGradient>
         </Pressable>
 
-        {/* Family members */}
+        {/* Family members — every adult + the kids */}
         <SectionLabel>{t('profile.family')}</SectionLabel>
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
-          <Row icon={<Avatar letter={initial(profile?.parentName, 'Y')} color={C.coral} />} title={profile?.parentName || 'You'} sub={t('profile.parentYou')} last={kids.length === 0} />
+          {(profile?.members && profile.members.length
+            ? profile.members
+            : [{ uid: user?.uid || 'me', name: profile?.parentName || 'You' }]
+          ).map((m, i, arr) => (
+            <Row
+              key={m.uid}
+              icon={<Avatar letter={initial(m.name, '?')} color={i === 0 ? C.coral : C.sky} />}
+              title={m.name || 'Parent'}
+              sub={m.uid === user?.uid ? t('profile.parentYou') : t('profile.parent')}
+              last={arr.length - 1 === i && kids.length === 0}
+            />
+          ))}
           {kids.map((k, i) => {
             const fav = (k.favFoods || []).length;
             const avoid = (k.avoidFoods || []).length;

@@ -1,7 +1,7 @@
 // Spotly — family profile, stored at families/{uid} in Firestore and kept live.
 // Replaces all the static "Maya / The Khalils / Léa & Sami" placeholder data.
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useAuth } from './auth';
 import { useFamily } from './family';
@@ -14,11 +14,16 @@ export type Kid = {
   avoidFoods?: string[]; // foods to avoid (allergies / not allowed)
 };
 
+// An adult member of the family (the parents). Each signed-in adult who is in
+// the family appears here, so a joined partner shows as themselves — not as you.
+export type FamilyMember = { uid: string; name: string };
+
 export type Profile = {
   familyName: string;
   parentName: string;
   homeCity: string;
   kids: Kid[];
+  members?: FamilyMember[]; // adults in the family (you + anyone who joined)
   interests: string[];
   locationEnabled: boolean;
   plus: boolean;
@@ -64,6 +69,22 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, [user, familyId]);
 
+  // Make sure the signed-in adult is listed as a family member (with THEIR own
+  // name, not the founder's). Runs for the founder and for anyone who joins, so
+  // the family shows every adult + the kids. Writes once when missing.
+  useEffect(() => {
+    if (!user || !firestore || !familyId || !profile) return;
+    const members = profile.members || [];
+    if (members.some((m) => m.uid === user.uid)) return;
+    const name =
+      (user.displayName && user.displayName.trim()) ||
+      (user.uid === familyId ? (profile.parentName || '').trim() : '') ||
+      'Parent';
+    updateDoc(doc(firestore, 'families', familyId), {
+      members: arrayUnion({ uid: user.uid, name }),
+    }).catch(() => {});
+  }, [user, familyId, profile]);
+
   const saveProfile = useCallback(
     async (data: Partial<Profile>) => {
       if (!user || !firestore || !familyId) throw new Error('Not signed in');
@@ -94,6 +115,14 @@ export function firstName(p: Profile | null, fallback = 'there'): string {
   const n = p?.parentName?.trim();
   if (!n) return fallback;
   return n.split(/\s+/)[0];
+}
+
+// The CURRENT signed-in adult's first name (from the members list), so a joined
+// partner is greeted as themselves rather than the family's founder.
+export function myFirstName(p: Profile | null, uid?: string, displayName?: string | null, fallback = 'there'): string {
+  const m = (p?.members || []).find((x) => x.uid === uid);
+  const n = (m?.name || displayName || p?.parentName || '').trim();
+  return n ? n.split(/\s+/)[0] : fallback;
 }
 
 // Aggregate every child's food likes + foods to avoid across the family,
