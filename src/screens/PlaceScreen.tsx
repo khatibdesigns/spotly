@@ -1,6 +1,6 @@
 // Spotly — Place detail for a real selected place (Google/curated).
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, Alert, Linking, Share, Platform, Pressable, PanResponder, LayoutAnimation, UIManager } from 'react-native';
+import { View, Text, ScrollView, Alert, Linking, Share, Platform, Pressable, LayoutAnimation, UIManager } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker } from 'react-native-maps';
@@ -83,15 +83,12 @@ export function PlaceScreen() {
     setTimeout(() => setJustAdded((id) => (id === v.id ? null : id)), 1400);
   };
 
-  // Swipe down on the grabber handle to dismiss the page (like a sheet).
-  const dragPan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx),
-      onPanResponderRelease: (_e, g) => {
-        if (g.dy > 44 || g.vy > 0.6) pop();
-      },
-    })
-  ).current;
+  // Pull down from the top to dismiss (like a sheet). A PanResponder on the
+  // grabber loses the gesture to the ScrollView, so we detect an over-scroll
+  // past the top instead: drag down at the top → release → go back.
+  const onScrollEndDrag = (e: any) => {
+    if (e.nativeEvent.contentOffset.y < -55) pop();
+  };
 
   // Count a profile view for the merchant's analytics (curated/claimed places).
   useEffect(() => {
@@ -129,7 +126,14 @@ export function PlaceScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        onScrollEndDrag={onScrollEndDrag}
+        scrollEventThrottle={16}
+        alwaysBounceVertical
+      >
         {/* Hero */}
         <View style={{ height: 360 }}>
           <SpotImage photoUrl={spot?.photoUrl} tone={spot?.tone || 'sun'} height={360} radius={0} label={spot?.name} />
@@ -138,8 +142,8 @@ export function PlaceScreen() {
 
         {/* Content card */}
         <View style={{ marginTop: -32, backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 22, paddingTop: 18, paddingBottom: 8 }}>
-          {/* Grabber — swipe down here to dismiss */}
-          <View {...dragPan.panHandlers} style={{ alignSelf: 'stretch', alignItems: 'center', paddingVertical: 6, marginTop: -6, marginBottom: 12 }}>
+          {/* Grabber — pull the page down from here to dismiss */}
+          <View style={{ alignSelf: 'stretch', alignItems: 'center', paddingVertical: 6, marginTop: -6, marginBottom: 12 }}>
             <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line }} />
           </View>
 
