@@ -132,7 +132,7 @@
 
       <!-- PLACES -->
       <section id="view-places" class="hide">
-        <div class="toolbar"><div class="spacer"></div><button class="btn sage" id="addPlaceBtn">+ Add place</button></div>
+        <div class="toolbar"><div class="spacer"></div><button class="btn" id="claimPlaceBtn">🔎 Claim a Google place</button><button class="btn sage" id="addPlaceBtn" data-admin="1">+ Add place</button></div>
         <div class="panel" style="padding:6px 6px 0"><div id="placesTable"></div></div>
       </section>
 
@@ -212,6 +212,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Google Places API (New) key for the "Claim a Google place" search. This runs
+// in the browser, so it MUST be an HTTP-referrer-restricted key allowing
+// meetspotly.com (and have "Places API (New)" enabled). It is safe to expose a
+// referrer-restricted key — like the Firebase apiKey above. Create one in
+// Google Cloud → Credentials, restrict it to https://meetspotly.com/*, then
+// paste it here. The app's iOS/Android key will NOT work from the web.
+const PLACES_KEY = 'PASTE_WEB_REFERRER_PLACES_KEY';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => (s == null ? '' : String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])));
 const fmtDate = (ts) => { try { return ts?.toDate ? ts.toDate().toLocaleDateString() : ''; } catch { return ''; } };
@@ -412,6 +420,78 @@ async function loadPlaces() {
   $('placesTable').querySelectorAll('[data-reqpromo]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'places',b.dataset.reqpromo),{ promotionRequested:true }); loadPlaces(); });
 }
 $('addPlaceBtn').onclick = () => openPlaceModal();
+
+// ── Claim a Google place ──────────────────────────────────────────
+// Search Google Places (New) and create a lightweight CLAIM record keyed by the
+// Google place_id. We persist only the place_id (+ a minimal display snapshot)
+// — the app overlays the merchant's vouchers onto the LIVE Google listing by
+// matching place_id, so we never mirror Google's data.
+async function searchGooglePlaces(textQuery) {
+  if (!PLACES_KEY || PLACES_KEY.startsWith('PASTE_')) throw new Error('No Places key configured. Add a web-referrer Places key to admin.html (see PLACES_KEY comment).');
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': PLACES_KEY, 'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.primaryTypeDisplayName' },
+    body: JSON.stringify({ textQuery, maxResultCount: 8 }),
+  });
+  const j = await res.json();
+  if (j.error) throw new Error(j.error.message || 'Places search failed');
+  return j.places || [];
+}
+$('claimPlaceBtn').onclick = () => openClaimModal();
+function openClaimModal() {
+  $('modalRoot').innerHTML = `
+  <div class="modal-bg"><div class="modal">
+    <h2>Claim a Google place</h2>
+    <p class="muted-note" style="margin:0 0 12px">Search for the real listing. We link it by Google place ID so your offers show on the live place — no duplicate, no stale copy.</p>
+    <div style="display:flex;gap:8px">
+      <input id="cl_q" placeholder="e.g. The Scientific Center Kuwait" style="flex:1"/>
+      <button class="btn" id="cl_search">Search</button>
+    </div>
+    <div id="cl_results" style="margin-top:12px"></div>
+    <p id="cl_err" class="err"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn ghost" id="cl_cancel">Close</button>
+    </div>
+  </div></div>`;
+  $('cl_cancel').onclick = () => $('modalRoot').innerHTML='';
+  const run = async () => {
+    const q = $('cl_q').value.trim(); if (!q) return;
+    $('cl_err').textContent=''; $('cl_results').innerHTML='Searching…';
+    try {
+      const places = await searchGooglePlaces(q);
+      if (!places.length) { $('cl_results').innerHTML='<div class="muted-note">No matches.</div>'; return; }
+      $('cl_results').innerHTML = places.map((p)=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)">
+          <div style="flex:1">
+            <div style="font-weight:700">${esc(p.displayName?.text||'—')}</div>
+            <div style="color:var(--ink3);font-size:12px">${esc(p.primaryTypeDisplayName?.text||'')} · ${esc(p.formattedAddress||'')}</div>
+          </div>
+          <button class="btn sage sm" data-claim='${esc(JSON.stringify({id:p.id,name:p.displayName?.text||'',cat:p.primaryTypeDisplayName?.text||'',lat:p.location?.latitude,lng:p.location?.longitude}))}'>Claim</button>
+        </div>`).join('');
+      $('cl_results').querySelectorAll('[data-claim]').forEach((b)=> b.onclick = async ()=>{
+        const d = JSON.parse(b.dataset.claim);
+        b.disabled = true; b.textContent='…';
+        try {
+          // Don't double-claim the same place_id.
+          const dupe = (cache.places||[]).find(x=>x.googlePlaceId===d.id);
+          if (dupe) { $('modalRoot').innerHTML=''; loadPlaces(); openVouchersModal(dupe.id); return; }
+          const ref = await addDoc(collection(db,'places'), {
+            name: d.name, category: d.cat||'', lat: d.lat??null, lng: d.lng??null,
+            googlePlaceId: d.id, ownerUid: me.uid,
+            status: me.isAdmin ? 'approved' : 'pending',
+            promoted: false, promotionRequested: false,
+            bookable: false, tone: 'sun', currency: 'KWD', vouchers: [],
+            createdAt: serverTimestamp(),
+          });
+          $('modalRoot').innerHTML=''; await loadPlaces();
+          openVouchersModal(ref.id); // jump straight to adding offers
+        } catch(e){ $('cl_err').textContent = e.message.replace('Firebase: ',''); b.disabled=false; b.textContent='Claim'; }
+      });
+    } catch(e){ $('cl_results').innerHTML=''; $('cl_err').textContent = e.message; }
+  };
+  $('cl_search').onclick = run;
+  $('cl_q').addEventListener('keydown', (e)=>{ if(e.key==='Enter') run(); });
+}
 function openPlaceModal() {
   $('modalRoot').innerHTML = `
   <div class="modal-bg"><div class="modal">
