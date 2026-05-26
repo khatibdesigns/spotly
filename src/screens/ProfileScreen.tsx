@@ -13,6 +13,8 @@ import { useFamily, buildInviteUrl } from '../lib/family';
 import { useI18n } from '../lib/i18n';
 import { useMemories } from '../lib/memories';
 import { useBookings } from '../lib/bookings';
+import { useVouchers } from '../lib/vouchers';
+import { formatMoney } from '../lib/currency';
 import { useSaves } from '../lib/saves';
 import { usePurchases } from '../lib/purchases';
 
@@ -124,6 +126,7 @@ export function ProfileScreen() {
   };
   const openURL = (u: string) => Linking.openURL(u).catch(() => {});
   const { bookings } = useBookings();
+  const { orders: voucherOrders } = useVouchers();
   const { saved } = useSaves();
   const { isPlus } = usePurchases();
 
@@ -245,6 +248,26 @@ export function ProfileScreen() {
             ))
           )}
         </View>
+
+        {/* Voucher cards with their QR passes */}
+        {voucherOrders.length > 0 ? (
+          <>
+            <SectionLabel>{t('profile.yourVouchers')}</SectionLabel>
+            <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
+              {voucherOrders.map((o, i) => (
+                <Row
+                  key={o.id}
+                  icon={<IconBox ic={Icons.bag} c={C.coral} />}
+                  title={o.label || o.placeName}
+                  sub={`${o.placeName} · ${formatMoney(o.value, o.currencyCode)} · ${o.status}`}
+                  det={t('profile.viewPass')}
+                  onPress={() => push('voucherPass', { orderId: o.id })}
+                  last={i === voucherOrders.length - 1}
+                />
+              ))}
+            </View>
+          </>
+        ) : null}
 
         {/* Settings */}
         <SectionLabel>{t('profile.settings')}</SectionLabel>

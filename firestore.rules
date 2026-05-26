@@ -103,6 +103,22 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Voucher orders: a customer buys a voucher (creates/reads their own + the
+    // family's). The merchant who owns the place reads + updates (mark redeemed).
+    // Admins read all. Mirrors the bookings rules.
+    match /voucherOrders/{id} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow read: if request.auth != null && (
+        resource.data.uid == request.auth.uid
+        || resource.data.get('familyId', '') == myFamilyId()
+        || resource.data.get('placeOwnerUid', '') == request.auth.uid
+        || isAdmin()
+      );
+      allow update: if isAdmin()
+        || (request.auth != null && resource.data.get('placeOwnerUid', '') == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
     // Marketing campaigns: any signed-in user can read (app may surface them);
     // only admins write.
     match /campaigns/{id} {

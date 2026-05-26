@@ -1,6 +1,6 @@
 // Spotly — Place detail for a real selected place (Google/curated).
-import React, { useEffect } from 'react';
-import { View, Text, ScrollView, Alert, Linking, Share, Platform } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, ScrollView, Alert, Linking, Share, Platform, Pressable, PanResponder, LayoutAnimation, UIManager } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker } from 'react-native-maps';
@@ -15,6 +15,12 @@ import { useProfile, familyFood } from '../lib/profile';
 import { useI18n } from '../lib/i18n';
 import { formatDistance } from '../lib/places';
 import { bumpPlaceStat } from '../lib/stats';
+import { useVouchers } from '../lib/vouchers';
+import { currencyFor, formatMoney, Voucher } from '../lib/currency';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const AMENITY_META: Record<string, { ic: (p: any) => React.ReactNode; c: string; label: string }> = {
   playArea: { ic: Icons.playArea, c: C.coral, label: 'Play area' },
@@ -41,11 +47,51 @@ export function PlaceScreen() {
   const { isSaved, toggleSave } = useSaves();
   const { profile } = useProfile();
   const { t } = useI18n();
+  const { addToCart, cartCount } = useVouchers();
 
   const spot = selected;
   const saved = spot ? isSaved(spot.id) : false;
   const avoid = familyFood(profile).avoid;
   const showAllergy = spot?.kind === 'dining' && avoid.length > 0;
+
+  const vouchers = spot?.vouchers || [];
+  const hasOffers = vouchers.length > 0;
+  const cur = currencyFor(spot?.currencyCode);
+  const [offersOpen, setOffersOpen] = useState(false);
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const offersY = useRef(0);
+
+  const toggleOffers = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
+    const next = !offersOpen;
+    setOffersOpen(next);
+    if (next) setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(offersY.current - 80, 0), animated: true }), 120);
+  };
+
+  const onAddVoucher = (v: Voucher) => {
+    if (!spot) return;
+    addToCart({
+      placeId: spot.id,
+      placeOwnerUid: spot.ownerUid,
+      placeName: spot.name,
+      photoUrl: spot.photoUrl,
+      currencyCode: cur.code,
+      voucher: v,
+    });
+    setJustAdded(v.id);
+    setTimeout(() => setJustAdded((id) => (id === v.id ? null : id)), 1400);
+  };
+
+  // Swipe down on the grabber handle to dismiss the page (like a sheet).
+  const dragPan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy > 44 || g.vy > 0.6) pop();
+      },
+    })
+  ).current;
 
   // Count a profile view for the merchant's analytics (curated/claimed places).
   useEffect(() => {
@@ -83,7 +129,7 @@ export function PlaceScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Hero */}
         <View style={{ height: 360 }}>
           <SpotImage photoUrl={spot?.photoUrl} tone={spot?.tone || 'sun'} height={360} radius={0} label={spot?.name} />
@@ -92,7 +138,10 @@ export function PlaceScreen() {
 
         {/* Content card */}
         <View style={{ marginTop: -32, backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 22, paddingTop: 18, paddingBottom: 8 }}>
-          <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 18 }} />
+          {/* Grabber — swipe down here to dismiss */}
+          <View {...dragPan.panHandlers} style={{ alignSelf: 'stretch', alignItems: 'center', paddingVertical: 6, marginTop: -6, marginBottom: 12 }}>
+            <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line }} />
+          </View>
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
             <View style={{ flex: 1 }}>
@@ -149,6 +198,48 @@ export function PlaceScreen() {
             </>
           ) : null}
 
+          {/* Offers — prepaid vouchers the place sells. Slides open from the CTA. */}
+          {hasOffers ? (
+            <View onLayout={(e) => (offersY.current = e.nativeEvent.layout.y)}>
+              <Pressable onPress={toggleOffers} style={{ marginTop: 24, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontFamily: F.serif, fontSize: 19, color: C.ink, letterSpacing: -0.4 }}>{t('place.offers')}</Text>
+                <View style={{ backgroundColor: C.coralLt, borderRadius: R.pill, paddingHorizontal: 9, paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 11, fontFamily: F.extrabold, color: C.coralDk }}>{vouchers.length}</Text>
+                </View>
+                <View style={{ flex: 1 }} />
+                <Text style={{ fontSize: 13, fontFamily: F.bold, color: C.coralDk }}>{offersOpen ? t('place.hideOffers') : t('place.viewOffers')}</Text>
+                <Text style={{ fontSize: 13, color: C.coralDk, fontFamily: F.bold }}>{offersOpen ? '▴' : '▾'}</Text>
+              </Pressable>
+              {offersOpen ? (
+                <View style={{ gap: 10, marginTop: 14 }}>
+                  {vouchers.map((v) => {
+                    const added = justAdded === v.id;
+                    const bonus = v.value > v.price ? v.value - v.price : 0;
+                    return (
+                      <View key={v.id} style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.surface, borderRadius: R.lg, padding: 14 }, SH.card]}>
+                        <View style={{ width: 46, height: 46, borderRadius: 12, backgroundColor: C.coralLt, alignItems: 'center', justifyContent: 'center' }}>
+                          {Icons.sparkle({ size: 20, color: C.coralDk })}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: F.extrabold, fontSize: 15, color: C.ink }}>{v.label || t('place.voucher')}</Text>
+                          <Text style={{ fontSize: 12.5, color: C.ink2, fontFamily: F.regular, marginTop: 2 }}>
+                            {t('place.payGet', { pay: formatMoney(v.price, cur), get: formatMoney(v.value, cur) })}
+                          </Text>
+                          {bonus > 0 ? (
+                            <Text style={{ fontSize: 11.5, color: C.sage, fontFamily: F.bold, marginTop: 2 }}>+{formatMoney(bonus, cur)} {t('place.bonus')}</Text>
+                          ) : null}
+                        </View>
+                        <Btn kind={added ? 'ghost' : 'primary'} size="sm" onPress={() => onAddVoucher(v)}>
+                          {added ? t('place.added') : t('place.addToCart')}
+                        </Btn>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Map */}
           {region ? (
             <View style={[{ marginTop: 18, borderRadius: R.xl, overflow: 'hidden', height: 170 }, SH.card]}>
@@ -176,10 +267,26 @@ export function PlaceScreen() {
         </View>
       </View>
 
+      {/* Cart pill — appears once vouchers are in the cart */}
+      {cartCount > 0 ? (
+        <Pressable
+          onPress={() => push('cart')}
+          style={[{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 92, height: 48, backgroundColor: C.ink, borderRadius: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10 }, SH.pop]}
+        >
+          {Icons.bag({ size: 16, color: '#fff' })}
+          <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 14, flex: 1 }}>{t('cart.view', { n: cartCount })}</Text>
+          <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 16 }}>→</Text>
+        </Pressable>
+      ) : null}
+
       {/* Sticky CTA */}
       <View style={[{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 12, height: 72, backgroundColor: C.surface, borderRadius: 24, flexDirection: 'row', alignItems: 'center', padding: 10, gap: 10 }, SH.pop]}>
         <Btn kind="ghost" style={{ flex: 1, height: 52 }} icon={Icons.calendar({ size: 15, color: C.ink })} onPress={addToPlan}>{t('place.addToPlan')}</Btn>
-        <Btn kind="primary" style={{ flex: 1.3, height: 52 }} onPress={() => push('booking')}>{t('place.requestBook')}</Btn>
+        {hasOffers ? (
+          <Btn kind="primary" style={{ flex: 1.3, height: 52 }} onPress={toggleOffers}>{offersOpen ? t('place.hideOffers') : t('place.viewOffers')}</Btn>
+        ) : (
+          <Btn kind="primary" style={{ flex: 1.3, height: 52 }} onPress={() => push('booking')}>{t('place.requestBook')}</Btn>
+        )}
       </View>
     </View>
   );

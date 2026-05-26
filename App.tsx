@@ -34,6 +34,7 @@ import { PurchasesProvider } from './src/lib/purchases';
 import { I18nProvider } from './src/lib/i18n';
 import { MerchantProvider } from './src/lib/merchant';
 import { FamilyProvider } from './src/lib/family';
+import { VouchersProvider } from './src/lib/vouchers';
 import { Shell } from './src/Shell';
 
 // Allow RTL so Arabic can flip layout direction (forceRTL persists natively).
@@ -63,10 +64,12 @@ export default function App() {
             <PurchasesProvider>
               <ProfileProvider>
                 <MerchantProvider>
-                  <StoreProvider>
-                    <Shell />
-                    <StatusBar style="dark" />
-                  </StoreProvider>
+                  <VouchersProvider>
+                    <StoreProvider>
+                      <Shell />
+                      <StatusBar style="dark" />
+                    </StoreProvider>
+                  </VouchersProvider>
                 </MerchantProvider>
               </ProfileProvider>
             </PurchasesProvider>

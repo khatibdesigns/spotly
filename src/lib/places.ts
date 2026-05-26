@@ -3,6 +3,7 @@
 import * as Location from 'expo-location';
 import { collection, getDocs } from 'firebase/firestore';
 import { firestore } from './firebase';
+import { Voucher } from './currency';
 
 const KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -35,6 +36,8 @@ export type Spot = {
   tone: string; // fallback placeholder tone when no photo
   promoted?: boolean; // merchant-paid placement → shown first + badged
   ownerUid?: string; // merchant who owns this place (curated/claimed only)
+  currencyCode?: string; // ISO code the place sells vouchers in (e.g. 'KWD')
+  vouchers?: Voucher[]; // prepaid vouchers/offers the place sells
 };
 
 export type UserLoc = { latitude: number; longitude: number; granted: boolean };
@@ -243,6 +246,10 @@ async function fetchCurated(loc: UserLoc): Promise<Spot[]> {
           tone: v.tone || 'sun',
           promoted,
           ownerUid: v.ownerUid || undefined,
+          currencyCode: v.currency || undefined,
+          vouchers: Array.isArray(v.vouchers)
+            ? (v.vouchers as Voucher[]).filter((x) => x && x.active !== false && Number(x.price) > 0)
+            : undefined,
         };
       });
   } catch {

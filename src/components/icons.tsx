@@ -224,6 +224,18 @@ export const lock = ico(
 );
 export const chevR = ico(<Path d="M9 6l6 6-6 6" />);
 export const chevD = ico(<Path d="M6 9l6 6 6-6" />);
+export const chevU = ico(<Path d="M6 15l6-6 6 6" />);
+export const bag = ico(
+  <>
+    <Path d="M6 8h12l-1 12H7L6 8z" />
+    <Path d="M9 8V6.5a3 3 0 016 0V8" />
+  </>
+);
+export const trash = ico(
+  <>
+    <Path d="M4 7h16M9 7V5a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0115 5v2M6 7l1 13h10l1-13" />
+  </>
+);
 
 // ── Amenity icons ─────────────────────────────────────────────
 export const playArea = ico(
@@ -365,6 +377,9 @@ export const Icons = {
   more,
   chevR,
   chevD,
+  chevU,
+  bag,
+  trash,
   camera,
   sparkle,
   clock,

@@ -10,6 +10,7 @@ import { firestore } from './firebase';
 import { useAuth } from './auth';
 import { SpotKind } from './places';
 import { getPlaceStat, PlaceStat } from './stats';
+import { Voucher } from './currency';
 
 export type Merchant = { businessName: string; createdAt?: any };
 
@@ -25,6 +26,23 @@ export type MerchantPlace = {
   promoted?: boolean;
   promotionRequested?: boolean;
   promotedUntil?: any;
+  currency?: string; // ISO code the place sells vouchers in
+  vouchers?: Voucher[]; // prepaid offers sold on the place page
+};
+
+// A purchased voucher (one redeemable card) for a place this merchant owns.
+export type MerchantVoucherSale = {
+  id: string;
+  uid?: string;
+  placeId?: string;
+  placeName: string;
+  currencyCode: string;
+  price: number;
+  value: number;
+  label?: string;
+  code?: string;
+  status: string; // paid | redeemed
+  createdAt?: any;
 };
 
 export type MerchantBooking = {
@@ -66,12 +84,16 @@ type MerchantState = {
   loading: boolean;
   places: MerchantPlace[];
   bookings: MerchantBooking[];
+  voucherSales: MerchantVoucherSale[];
   stats: Record<string, PlaceStat>; // placeId → { views, clicks }
   createMerchant: (businessName: string, place: NewPlaceInput, verification?: MerchantVerification) => Promise<void>;
   addPlace: (place: NewPlaceInput) => Promise<void>;
   requestPromotion: (placeId: string) => Promise<void>;
   markRedeemed: (bookingId: string) => Promise<void>;
   confirmBooking: (bookingId: string) => Promise<void>;
+  // Save the currency + voucher list for a place this merchant owns.
+  setPlaceVouchers: (placeId: string, currency: string, vouchers: Voucher[]) => Promise<void>;
+  markVoucherRedeemed: (orderId: string) => Promise<void>;
 };
 
 const Ctx = createContext<MerchantState | null>(null);
@@ -82,6 +104,7 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [places, setPlaces] = useState<MerchantPlace[]>([]);
   const [bookings, setBookings] = useState<MerchantBooking[]>([]);
+  const [voucherSales, setVoucherSales] = useState<MerchantVoucherSale[]>([]);
   const [stats, setStats] = useState<Record<string, PlaceStat>>({});
 
   // merchants/{uid}
@@ -130,6 +153,25 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
         setBookings(rows);
       },
       (e) => console.warn('merchant bookings query', e?.message)
+    );
+    return unsub;
+  }, [user, merchant]);
+
+  // Voucher sales for my places (voucherOrders where placeOwnerUid == me).
+  useEffect(() => {
+    if (!user || !firestore || !merchant) {
+      setVoucherSales([]);
+      return;
+    }
+    const q = query(collection(firestore, 'voucherOrders'), where('placeOwnerUid', '==', user.uid));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as MerchantVoucherSale[];
+        rows.sort((a, b) => ((b.createdAt as any)?.toMillis?.() || 0) - ((a.createdAt as any)?.toMillis?.() || 0));
+        setVoucherSales(rows);
+      },
+      (e) => console.warn('merchant voucherOrders query', e?.message)
     );
     return unsub;
   }, [user, merchant]);
@@ -209,8 +251,26 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
     await updateDoc(doc(firestore, 'bookings', bookingId), { status: 'confirmed' });
   }, []);
 
+  const setPlaceVouchers = useCallback(async (placeId: string, currency: string, vouchers: Voucher[]) => {
+    if (!firestore) return;
+    // Strip undefined optional fields so Firestore stays clean.
+    const clean = vouchers.map((v) => ({
+      id: v.id,
+      price: Number(v.price) || 0,
+      value: Number(v.value) || 0,
+      label: v.label?.trim() || '',
+      active: v.active !== false,
+    }));
+    await updateDoc(doc(firestore, 'places', placeId), { currency, vouchers: clean });
+  }, []);
+
+  const markVoucherRedeemed = useCallback(async (orderId: string) => {
+    if (!firestore) return;
+    await updateDoc(doc(firestore, 'voucherOrders', orderId), { status: 'redeemed', redeemedAt: serverTimestamp() });
+  }, []);
+
   return (
-    <Ctx.Provider value={{ merchant, isMerchant: !!merchant, loading, places, bookings, stats, createMerchant, addPlace, requestPromotion, markRedeemed, confirmBooking }}>
+    <Ctx.Provider value={{ merchant, isMerchant: !!merchant, loading, places, bookings, voucherSales, stats, createMerchant, addPlace, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed }}>
       {children}
     </Ctx.Provider>
   );

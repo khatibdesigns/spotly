@@ -16,7 +16,10 @@ export type RouteName =
   | 'aiPlan'
   | 'saved'
   | 'kidFood'
-  | 'pass';
+  | 'pass'
+  | 'cart'
+  | 'voucherPass'
+  | 'merchantVouchers';
 
 export type Route = { name: RouteName; params?: any };
 

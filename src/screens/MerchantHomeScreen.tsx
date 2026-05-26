@@ -9,8 +9,10 @@ import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Btn, SpotImage } from '../components/ui';
 import { useAuth } from '../lib/auth';
-import { useMerchant, MerchantPlace, MerchantBooking } from '../lib/merchant';
+import { useMerchant, MerchantPlace, MerchantBooking, MerchantVoucherSale } from '../lib/merchant';
 import { useI18n } from '../lib/i18n';
+import { useStore } from '../lib/store';
+import { formatMoney } from '../lib/currency';
 
 function statusMeta(s: string, t: (k: string) => string) {
   if (s === 'approved') return { label: t('mh.approved'), c: C.sage, bg: C.sageLt };
@@ -27,10 +29,11 @@ function StatTile({ n, label, color }: { n: number; label: string; color: string
   );
 }
 
-function PlaceCard({ place, count, views, clicks, onPromote }: { place: MerchantPlace; count: number; views: number; clicks: number; onPromote: () => void }) {
+function PlaceCard({ place, count, views, clicks, onPromote, onManageOffers }: { place: MerchantPlace; count: number; views: number; clicks: number; onPromote: () => void; onManageOffers: () => void }) {
   const { t } = useI18n();
   const st = statusMeta(place.status, t);
   const promotedActive = place.promoted;
+  const voucherCount = (place.vouchers || []).length;
   return (
     <View style={[{ backgroundColor: C.surface, borderRadius: R.xl, padding: 14 }, SH.card]}>
       <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
@@ -59,6 +62,55 @@ function PlaceCard({ place, count, views, clicks, onPromote }: { place: Merchant
             <Btn kind="premium" size="sm" icon={Icons.sparkle({ size: 13, color: '#fff' })} onPress={onPromote}>{t('mh.promote')}</Btn>
           )
         ) : null}
+      </View>
+      {place.status === 'approved' ? (
+        <Pressable onPress={onManageOffers} style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 12 }}>
+          {Icons.bag({ size: 16, color: C.coralDk })}
+          <Text style={{ fontSize: 13, fontFamily: F.bold, color: C.ink }}>{t('mh.manageOffers')}</Text>
+          {voucherCount > 0 ? (
+            <View style={{ backgroundColor: C.coralLt, borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 2 }}>
+              <Text style={{ fontSize: 11, fontFamily: F.extrabold, color: C.coralDk }}>{voucherCount}</Text>
+            </View>
+          ) : null}
+          <View style={{ flex: 1 }} />
+          {Icons.chevR({ size: 16, color: C.ink3 })}
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function VoucherSaleCard({ s, onRedeem }: { s: MerchantVoucherSale; onRedeem: () => void }) {
+  const { t } = useI18n();
+  const redeemed = s.status === 'redeemed';
+  return (
+    <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 14 }, SH.card]}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: F.bold, fontSize: 14.5, color: C.ink }}>{s.label || s.placeName}</Text>
+          <Text style={{ fontSize: 12.5, color: C.ink2, fontFamily: F.regular, marginTop: 2 }}>
+            {formatMoney(s.price, s.currencyCode)} → {formatMoney(s.value, s.currencyCode)} {t('place.balance')}
+          </Text>
+        </View>
+        {s.code ? (
+          <View style={{ alignItems: 'center', backgroundColor: C.surface2, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+            <Text style={{ fontSize: 9, color: C.ink3, fontFamily: F.bold, letterSpacing: 0.5 }}>{t('qr.code')}</Text>
+            <Text style={{ fontSize: 13, color: C.ink, fontFamily: F.mono }}>{s.code}</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
+        {redeemed ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {Icons.check({ size: 15, color: C.sage, strokeWidth: 3 })}
+            <Text style={{ color: C.sage, fontFamily: F.bold, fontSize: 13 }}>{t('mh.redeemed')}</Text>
+          </View>
+        ) : (
+          <>
+            <View style={{ flex: 1 }} />
+            <Btn kind="dark" size="sm" onPress={onRedeem}>{t('mh.redeem')}</Btn>
+          </>
+        )}
       </View>
     </View>
   );
@@ -105,16 +157,23 @@ function BookingCard({ b, onConfirm, onRedeem }: { b: MerchantBooking; onConfirm
 export function MerchantHomeScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
-  const { merchant, places, bookings, stats, requestPromotion, markRedeemed, confirmBooking } = useMerchant();
+  const { merchant, places, bookings, voucherSales, stats, requestPromotion, markRedeemed, confirmBooking, markVoucherRedeemed } = useMerchant();
   const { t, lang, setLang } = useI18n();
+  const { push } = useStore();
 
   const totals = {
     views: places.reduce((a, p) => a + (stats[p.id]?.views || 0), 0),
     clicks: places.reduce((a, p) => a + (stats[p.id]?.clicks || 0), 0),
     bookings: bookings.length,
     redeemed: bookings.filter((b) => b.status === 'redeemed').length,
-    clients: new Set(bookings.map((b) => b.uid).filter(Boolean)).size,
+    clients: new Set([...bookings.map((b) => b.uid), ...voucherSales.map((s) => s.uid)].filter(Boolean)).size,
+    sold: voucherSales.length,
   };
+  // Voucher revenue, grouped by currency (merchants may price in more than one).
+  const revenue: Record<string, number> = {};
+  for (const s of voucherSales) revenue[s.currencyCode] = (revenue[s.currencyCode] || 0) + (s.price || 0);
+  const revenueLabel = Object.entries(revenue).map(([c, a]) => formatMoney(a, c)).join(' · ');
+  const newVoucherCount = voucherSales.filter((s) => s.status === 'paid').length;
 
   const promote = (place: MerchantPlace) => {
     Alert.alert(t('mh.promoteTitle'), t('mh.promoteMsg'), [
@@ -152,9 +211,15 @@ export function MerchantHomeScreen() {
             <StatTile n={totals.views} label={t('mh.statViews')} color={C.sky} />
             <StatTile n={totals.clicks} label={t('mh.statClicks')} color={C.sun} />
             <StatTile n={totals.bookings} label={t('mh.statBookings')} color={C.coral} />
-            <StatTile n={totals.redeemed} label={t('mh.statRedeemed')} color={C.sage} />
+            <StatTile n={totals.sold} label={t('mh.statVouchers')} color={C.sun} />
             <StatTile n={totals.clients} label={t('mh.statClients')} color={C.plum} />
           </View>
+          {revenueLabel ? (
+            <View style={{ marginTop: 12, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14 }}>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10.5, fontFamily: F.bold, textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('mh.voucherRevenue')}</Text>
+              <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 22, marginTop: 3 }}>{revenueLabel}</Text>
+            </View>
+          ) : null}
         </LinearGradient>
 
         {/* Places */}
@@ -166,7 +231,7 @@ export function MerchantHomeScreen() {
             {places.length === 0 ? (
               <Text style={{ color: C.ink3, fontFamily: F.regular, fontSize: 14 }}>{t('mh.noPlaces')}</Text>
             ) : (
-              places.map((p) => <PlaceCard key={p.id} place={p} count={countFor(p.id)} views={stats[p.id]?.views || 0} clicks={stats[p.id]?.clicks || 0} onPromote={() => promote(p)} />)
+              places.map((p) => <PlaceCard key={p.id} place={p} count={countFor(p.id)} views={stats[p.id]?.views || 0} clicks={stats[p.id]?.clicks || 0} onPromote={() => promote(p)} onManageOffers={() => push('merchantVouchers', { placeId: p.id })} />)
             )}
           </View>
         </View>
@@ -186,6 +251,25 @@ export function MerchantHomeScreen() {
               <Text style={{ color: C.ink3, fontFamily: F.regular, fontSize: 14 }}>{t('mh.noBookings')}</Text>
             ) : (
               bookings.map((b) => <BookingCard key={b.id} b={b} onConfirm={() => confirmBooking(b.id)} onRedeem={() => markRedeemed(b.id)} />)
+            )}
+          </View>
+        </View>
+
+        {/* Voucher sales */}
+        <View style={{ paddingHorizontal: 20, marginTop: 26 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontFamily: F.serif, fontSize: 20, color: C.ink, letterSpacing: -0.4 }}>{t('mh.voucherSales')}</Text>
+            {newVoucherCount > 0 ? (
+              <View style={{ backgroundColor: C.coral, borderRadius: 999, minWidth: 22, height: 22, paddingHorizontal: 7, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 12 }}>{newVoucherCount}</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={{ gap: 10, marginTop: 12 }}>
+            {voucherSales.length === 0 ? (
+              <Text style={{ color: C.ink3, fontFamily: F.regular, fontSize: 14 }}>{t('mh.noVoucherSales')}</Text>
+            ) : (
+              voucherSales.map((s) => <VoucherSaleCard key={s.id} s={s} onRedeem={() => markVoucherRedeemed(s.id)} />)
             )}
           </View>
         </View>
