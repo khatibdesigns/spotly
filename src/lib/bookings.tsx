@@ -5,6 +5,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { collection, onSnapshot, addDoc, query, where, serverTimestamp } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useAuth } from './auth';
+import { useFamily } from './family';
 import { sendBookingEmail } from './email';
 
 export type BookingInput = {
@@ -40,17 +41,18 @@ const Ctx = createContext<BookingsState | null>(null);
 
 export function BookingsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { familyId } = useFamily();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [last, setLast] = useState<Booking | null>(null);
 
   useEffect(() => {
-    if (!user || !firestore) {
+    if (!user || !firestore || !familyId) {
       setBookings([]);
       return;
     }
-    // No orderBy here: equality + orderBy on a different field needs a composite
-    // index. We sort by createdAt client-side instead so it always works.
-    const q = query(collection(firestore, 'bookings'), where('uid', '==', user.uid));
+    // Bookings shared across the family (query by familyId). No orderBy →
+    // sort client-side (equality + orderBy on another field needs an index).
+    const q = query(collection(firestore, 'bookings'), where('familyId', '==', familyId));
     const unsub = onSnapshot(
       q,
       (snap) => {
@@ -61,13 +63,13 @@ export function BookingsProvider({ children }: { children: React.ReactNode }) {
       (e) => console.warn('bookings query', e?.message)
     );
     return unsub;
-  }, [user]);
+  }, [user, familyId]);
 
   const addBooking = useCallback(
     async (input: BookingInput) => {
-      if (!user || !firestore) throw new Error('Not signed in');
+      if (!user || !firestore || !familyId) throw new Error('Not signed in');
       const code = makeCode();
-      const payload = { ...input, uid: user.uid, status: 'requested', code, createdAt: serverTimestamp() };
+      const payload = { ...input, uid: user.uid, familyId, status: 'requested', code, createdAt: serverTimestamp() };
       const ref = await addDoc(collection(firestore, 'bookings'), payload);
       setLast({ id: ref.id, status: 'requested', code, ...input });
       // Branded confirmation email (sends once the EC2 /email endpoint is live).

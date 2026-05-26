@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useAuth } from './auth';
+import { useFamily } from './family';
 
 export type Kid = {
   id: string;
@@ -38,17 +39,20 @@ const Ctx = createContext<ProfileState | null>(null);
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { familyId } = useFamily();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Read the SHARED family doc (families/{familyId}); familyId defaults to the
+  // user's own uid unless they've joined another family.
   useEffect(() => {
-    if (!user || !firestore) {
+    if (!user || !firestore || !familyId) {
       setProfile(null);
-      setLoading(false);
+      setLoading(!!user); // keep loading until familyId resolves
       return;
     }
     setLoading(true);
-    const ref = doc(firestore, 'families', user.uid);
+    const ref = doc(firestore, 'families', familyId);
     const unsub = onSnapshot(
       ref,
       (snap) => {
@@ -58,15 +62,15 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       () => setLoading(false)
     );
     return unsub;
-  }, [user]);
+  }, [user, familyId]);
 
   const saveProfile = useCallback(
     async (data: Partial<Profile>) => {
-      if (!user || !firestore) throw new Error('Not signed in');
-      const ref = doc(firestore, 'families', user.uid);
+      if (!user || !firestore || !familyId) throw new Error('Not signed in');
+      const ref = doc(firestore, 'families', familyId);
       await setDoc(ref, { ...data, createdAt: profile?.createdAt ?? Date.now() }, { merge: true });
     },
-    [user, profile]
+    [user, familyId, profile]
   );
 
   const value: ProfileState = {

@@ -1,14 +1,15 @@
 // Spotly — Profile, backed by the live family profile + auth.
-import React from 'react';
-import { View, Text, ScrollView, Pressable, Linking, Alert, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, Pressable, Linking, Alert, Platform, Share, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
-import { CircBtn, SectionLabel } from '../components/ui';
+import { CircBtn, SectionLabel, Btn } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { useProfile } from '../lib/profile';
+import { useFamily } from '../lib/family';
 import { useI18n } from '../lib/i18n';
 import { useMemories } from '../lib/memories';
 import { useBookings } from '../lib/bookings';
@@ -71,6 +72,39 @@ export function ProfileScreen() {
   const { profile, saveProfile } = useProfile();
   const { stats, memories, visited } = useMemories();
   const { t, lang, setLang } = useI18n();
+  const { isOwnFamily, inviteToFamily, joinFamily, leaveFamily } = useFamily();
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
+
+  const onInvite = async () => {
+    try {
+      const code = await inviteToFamily();
+      await Share.share({ message: t('family.shareMsg', { code }) }).catch(() => {});
+    } catch (e: any) {
+      Alert.alert(t('family.couldNotJoin'), e?.message || '');
+    }
+  };
+  const onJoin = async () => {
+    if (!joinCode.trim()) return;
+    setJoining(true);
+    try {
+      await joinFamily(joinCode);
+      setJoinOpen(false);
+      setJoinCode('');
+      Alert.alert(t('family.joined'), t('family.joinedMsg'));
+    } catch (e: any) {
+      Alert.alert(t('family.couldNotJoin'), e?.message || 'Please try again.');
+    } finally {
+      setJoining(false);
+    }
+  };
+  const onLeave = () => {
+    Alert.alert(t('family.leaveTitle'), t('family.leaveMsg'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('family.leave'), style: 'destructive', onPress: () => leaveFamily() },
+    ]);
+  };
 
   const pickLanguage = () => {
     Alert.alert(t('profile.langTitle'), t('profile.langChoose'), [
@@ -153,6 +187,16 @@ export function ProfileScreen() {
           })}
         </View>
 
+        {/* Invite / join family */}
+        <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden', marginTop: 10 }, SH.card]}>
+          <Row icon={<IconBox ic={Icons.user} c={C.coral} />} title={t('family.invite')} sub={t('family.inviteSub')} onPress={onInvite} />
+          {isOwnFamily ? (
+            <Row icon={<IconBox ic={Icons.plus} c={C.sage} />} title={t('family.join')} sub={t('family.joinSub')} onPress={() => setJoinOpen(true)} last />
+          ) : (
+            <Row icon={<IconBox ic={Icons.arrowL} c={C.coralDk} />} title={t('family.leave')} sub={t('family.shared')} onPress={onLeave} danger last />
+          )}
+        </View>
+
         {/* Passport */}
         <SectionLabel>{t('profile.passport')}</SectionLabel>
         <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -204,6 +248,31 @@ export function ProfileScreen() {
           <Row icon={<IconBox ic={Icons.arrowL} c={C.coralDk} />} title={t('profile.signOut')} onPress={() => signOut()} danger last />
         </View>
       </ScrollView>
+
+      {/* Join a family — enter invite code */}
+      <Modal visible={joinOpen} transparent animationType="slide" onRequestClose={() => setJoinOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.45)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: insets.bottom + 22 }}>
+            <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 16 }} />
+            <Text style={{ fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>{t('family.join')}</Text>
+            <Text style={{ fontSize: 13, color: C.ink2, fontFamily: F.regular, marginTop: 4 }}>{t('family.joinSub')}</Text>
+            <TextInput
+              value={joinCode}
+              onChangeText={(v) => setJoinCode(v.toUpperCase())}
+              placeholder={t('family.enterCode')}
+              placeholderTextColor={C.ink3}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              style={{ marginTop: 16, backgroundColor: C.surface, borderRadius: R.lg, paddingHorizontal: 16, height: 54, fontFamily: F.mono, fontSize: 20, letterSpacing: 3, color: C.ink, borderWidth: 1, borderColor: C.line, textAlign: 'center' }}
+            />
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <Btn kind="ghost" style={{ flex: 1 }} onPress={() => setJoinOpen(false)}>{t('common.cancel')}</Btn>
+              <Btn kind="primary" style={{ flex: 1.6 }} onPress={onJoin}>{joining ? t('family.joining') : t('family.joinBtn')}</Btn>
+            </View>
+            {joining ? <ActivityIndicator color={C.coral} style={{ marginTop: 12 }} /> : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

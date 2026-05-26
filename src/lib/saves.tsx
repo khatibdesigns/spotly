@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useAuth } from './auth';
+import { useFamily } from './family';
 import { Spot } from './places';
 
 export type SavedSpot = {
@@ -27,24 +28,25 @@ const Ctx = createContext<SavesState | null>(null);
 
 export function SavesProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { familyId } = useFamily();
   const [saved, setSaved] = useState<SavedSpot[]>([]);
 
   useEffect(() => {
-    if (!user || !firestore) {
+    if (!user || !firestore || !familyId) {
       setSaved([]);
       return;
     }
-    const col = collection(firestore, 'families', user.uid, 'saved');
+    const col = collection(firestore, 'families', familyId, 'saved');
     const unsub = onSnapshot(col, (snap) => setSaved(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))), () => {});
     return unsub;
-  }, [user]);
+  }, [user, familyId]);
 
   const savedIds = new Set(saved.map((s) => s.id));
 
   const toggleSave = useCallback(
     async (spot: Spot) => {
-      if (!user || !firestore) throw new Error('Not signed in');
-      const ref = doc(firestore, 'families', user.uid, 'saved', spot.id);
+      if (!user || !firestore || !familyId) throw new Error('Not signed in');
+      const ref = doc(firestore, 'families', familyId, 'saved', spot.id);
       if (savedIds.has(spot.id)) {
         await deleteDoc(ref);
       } else {
@@ -60,7 +62,7 @@ export function SavesProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    [user, savedIds]
+    [user, familyId, savedIds]
   );
 
   return (

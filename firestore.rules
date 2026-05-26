@@ -8,11 +8,34 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Each family can read/write its own profile AND all of its subcollections
-    // (plans, memories, saved). The {document=**} wildcard is required —
-    // a plain /families/{uid} match would NOT cover subcollections.
-    match /families/{uid}/{document=**} {
+    // The family this user belongs to. Defaults to their own uid (solo family);
+    // if they've joined another family, users/{uid}.familyId points to it.
+    function myFamilyId() {
+      return (request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId
+        : (request.auth != null ? request.auth.uid : '');
+    }
+
+    // users/{uid}: the membership pointer; the owner reads/writes only their own.
+    match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Family invites: creator makes one; anyone signed in who has the code can
+    // read it (the code is the secret) and mark it accepted when joining.
+    match /familyInvites/{code} {
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      allow read, update: if request.auth != null;
+      allow delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
+    }
+
+    // Family data (profile + plans/memories/saved subcollections). Accessible to
+    // the founder (uid == familyId) OR any member whose users doc points here.
+    // {document=**} wildcard required to cover subcollections.
+    match /families/{familyId}/{document=**} {
+      allow read, write: if request.auth != null
+        && (request.auth.uid == familyId || myFamilyId() == familyId);
     }
 
     // A merchant account is marked by a doc at merchants/{their-uid}.
@@ -66,6 +89,7 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
       allow read: if request.auth != null && (
         resource.data.uid == request.auth.uid
+        || resource.data.get('familyId', '') == myFamilyId()
         || resource.data.get('placeOwnerUid', '') == request.auth.uid
         || isAdmin()
       );

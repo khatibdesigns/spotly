@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, arrayUnion, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useAuth } from './auth';
+import { useFamily } from './family';
 import { Spot } from './places';
 import { Itinerary } from './aiPlan';
 
@@ -51,16 +52,17 @@ function spotToStop(s: Spot): Stop {
 
 export function PlansProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { familyId } = useFamily();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !firestore) {
+    if (!user || !firestore || !familyId) {
       setPlans([]);
       setLoading(false);
       return;
     }
-    const col = collection(firestore, 'families', user.uid, 'plans');
+    const col = collection(firestore, 'families', familyId, 'plans');
     const unsub = onSnapshot(
       query(col, orderBy('createdAt', 'desc')),
       (snap) => {
@@ -70,26 +72,26 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
       () => setLoading(false)
     );
     return unsub;
-  }, [user]);
+  }, [user, familyId]);
 
   const addSpotToPlan = useCallback(
     async (spot: Spot) => {
-      if (!user || !firestore) throw new Error('Not signed in');
-      const col = collection(firestore, 'families', user.uid, 'plans');
+      if (!user || !firestore || !familyId) throw new Error('Not signed in');
+      const col = collection(firestore, 'families', familyId, 'plans');
       const upcoming = plans.find((p) => p.status === 'upcoming');
       const stop = spotToStop(spot);
       if (upcoming) {
-        await updateDoc(doc(firestore, 'families', user.uid, 'plans', upcoming.id), { stops: arrayUnion(stop) });
+        await updateDoc(doc(firestore, 'families', familyId, 'plans', upcoming.id), { stops: arrayUnion(stop) });
       } else {
         await addDoc(col, { title: 'This weekend', dateLabel: 'This weekend', status: 'upcoming', stops: [stop], createdAt: serverTimestamp() });
       }
     },
-    [user, plans]
+    [user, familyId, plans]
   );
 
   const saveItinerary = useCallback(
     async (it: Itinerary) => {
-      if (!user || !firestore) throw new Error('Not signed in');
+      if (!user || !firestore || !familyId) throw new Error('Not signed in');
       const stops: Stop[] = [];
       (it.days || []).forEach((d) =>
         (d.stops || []).forEach((s) =>
@@ -108,7 +110,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
           })
         )
       );
-      await addDoc(collection(firestore, 'families', user.uid, 'plans'), {
+      await addDoc(collection(firestore, 'families', familyId, 'plans'), {
         title: it.title,
         dateLabel: it.destination,
         summary: it.summary || null,
@@ -120,42 +122,42 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
         createdAt: serverTimestamp(),
       });
     },
-    [user]
+    [user, familyId]
   );
 
   const markDone = useCallback(
     async (planId: string) => {
-      if (!user || !firestore) return;
-      await updateDoc(doc(firestore, 'families', user.uid, 'plans', planId), { status: 'done' });
+      if (!user || !firestore || !familyId) return;
+      await updateDoc(doc(firestore, 'families', familyId, 'plans', planId), { status: 'done' });
     },
-    [user]
+    [user, familyId]
   );
 
   const deletePlan = useCallback(
     async (planId: string) => {
-      if (!user || !firestore) return;
-      await deleteDoc(doc(firestore, 'families', user.uid, 'plans', planId));
+      if (!user || !firestore || !familyId) return;
+      await deleteDoc(doc(firestore, 'families', familyId, 'plans', planId));
     },
-    [user]
+    [user, familyId]
   );
 
   // Remove a single stop by its position in the plan's flat stops array.
   const removeStop = useCallback(
     async (planId: string, index: number) => {
-      if (!user || !firestore) return;
+      if (!user || !firestore || !familyId) return;
       const plan = plans.find((p) => p.id === planId);
       if (!plan) return;
       const stops = (plan.stops || []).filter((_, i) => i !== index);
-      await updateDoc(doc(firestore, 'families', user.uid, 'plans', planId), { stops });
+      await updateDoc(doc(firestore, 'families', familyId, 'plans', planId), { stops });
     },
-    [user, plans]
+    [user, familyId, plans]
   );
 
   // Swap a stop with its neighbour. For multi-day plans we only reorder within
   // the same day so the day grouping stays intact.
   const moveStop = useCallback(
     async (planId: string, index: number, dir: 'up' | 'down') => {
-      if (!user || !firestore) return;
+      if (!user || !firestore || !familyId) return;
       const plan = plans.find((p) => p.id === planId);
       if (!plan) return;
       const stops = [...(plan.stops || [])];
@@ -163,9 +165,9 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
       if (j < 0 || j >= stops.length) return;
       if ((stops[j].day ?? 0) !== (stops[index].day ?? 0)) return; // don't cross days
       [stops[index], stops[j]] = [stops[j], stops[index]];
-      await updateDoc(doc(firestore, 'families', user.uid, 'plans', planId), { stops });
+      await updateDoc(doc(firestore, 'families', familyId, 'plans', planId), { stops });
     },
-    [user, plans]
+    [user, familyId, plans]
   );
 
   return <Ctx.Provider value={{ plans, loading, addSpotToPlan, saveItinerary, markDone, deletePlan, removeStop, moveStop }}>{children}</Ctx.Provider>;

@@ -6,6 +6,7 @@ import { collection, onSnapshot, addDoc, query, orderBy, serverTimestamp } from 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { firestore, storage } from './firebase';
 import { useAuth } from './auth';
+import { useFamily } from './family';
 
 export type Memory = {
   id: string;
@@ -68,17 +69,18 @@ function isoWeek(d: Date): string {
 
 export function MemoriesProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { familyId } = useFamily();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    if (!user || !firestore) {
+    if (!user || !firestore || !familyId) {
       setMemories([]);
       setLoading(false);
       return;
     }
-    const col = collection(firestore, 'families', user.uid, 'memories');
+    const col = collection(firestore, 'families', familyId, 'memories');
     const unsub = onSnapshot(
       query(col, orderBy('createdAt', 'desc')),
       (snap) => {
@@ -88,11 +90,11 @@ export function MemoriesProvider({ children }: { children: React.ReactNode }) {
       () => setLoading(false)
     );
     return unsub;
-  }, [user]);
+  }, [user, familyId]);
 
   const addMemory = useCallback(
     async (input: AddMemoryInput) => {
-      if (!user || !firestore || !storage) throw new Error('Not signed in');
+      if (!user || !firestore || !storage || !familyId) throw new Error('Not signed in');
       setUploading(true);
       try {
         // RN-reliable local-file → Blob (fetch().blob() is flaky in Hermes).
@@ -104,12 +106,12 @@ export function MemoriesProvider({ children }: { children: React.ReactNode }) {
           xhr.open('GET', input.photoUri, true);
           xhr.send(null);
         });
-        const path = `families/${user.uid}/memories/${Date.now()}.jpg`;
+        const path = `families/${familyId}/memories/${Date.now()}.jpg`;
         const r = ref(storage, path);
         await uploadBytes(r, blob, { contentType: 'image/jpeg' });
         try { (blob as any).close?.(); } catch {}
         const photoUrl = await getDownloadURL(r);
-        await addDoc(collection(firestore, 'families', user.uid, 'memories'), {
+        await addDoc(collection(firestore, 'families', familyId, 'memories'), {
           placeId: input.placeId || null,
           placeName: input.placeName,
           category: input.category || null,
@@ -126,7 +128,7 @@ export function MemoriesProvider({ children }: { children: React.ReactNode }) {
         setUploading(false);
       }
     },
-    [user]
+    [user, familyId]
   );
 
   const visited = useMemo<VisitedPlace[]>(() => {
