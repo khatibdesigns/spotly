@@ -219,7 +219,7 @@ const db = getFirestore(app);
 // referrer-restricted key — like the Firebase apiKey above. Create one in
 // Google Cloud → Credentials, restrict it to https://meetspotly.com/*, then
 // paste it here. The app's iOS/Android key will NOT work from the web.
-const PLACES_KEY = 'PASTE_WEB_REFERRER_PLACES_KEY';
+const PLACES_KEY = 'AIzaSyB0pdrghA-1hLPLw2glUJP6IuhyLnkUESA';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => (s == null ? '' : String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])));
 const fmtDate = (ts) => { try { return ts?.toDate ? ts.toDate().toLocaleDateString() : ''; } catch { return ''; } };
