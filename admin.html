@@ -199,7 +199,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, doc, deleteDoc, updateDoc, query, where, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, setDoc, doc, deleteDoc, updateDoc, query, where, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyANYIyuxNtP-of3AhrdXF0MS8BM73Ja6tM",
@@ -472,19 +472,26 @@ function openClaimModal() {
         const d = JSON.parse(b.dataset.claim);
         b.disabled = true; b.textContent='…';
         try {
-          // Don't double-claim the same place_id.
-          const dupe = (cache.places||[]).find(x=>x.googlePlaceId===d.id);
-          if (dupe) { $('modalRoot').innerHTML=''; loadPlaces(); openVouchersModal(dupe.id); return; }
-          const ref = await addDoc(collection(db,'places'), {
-            name: d.name, category: d.cat||'', lat: d.lat??null, lng: d.lng??null,
-            googlePlaceId: d.id, ownerUid: me.uid,
-            status: me.isAdmin ? 'approved' : 'pending',
-            promoted: false, promotionRequested: false,
-            bookable: false, tone: 'sun', currency: 'KWD', vouchers: [],
-            createdAt: serverTimestamp(),
-          });
+          // One canonical doc per place_id (doc id = place_id). Adopt an existing
+          // one instead of forking a duplicate.
+          const ref = doc(db, 'places', d.id);
+          const snap = await getDoc(ref);
+          if (snap.exists()) {
+            const ex = snap.data();
+            if (ex.ownerUid && ex.ownerUid !== me.uid && !me.isAdmin) throw new Error('That place is already claimed by another business.');
+            if (!ex.ownerUid && !me.isAdmin) await updateDoc(ref, { ownerUid: me.uid }); // merchant adopts unowned
+          } else {
+            await setDoc(ref, {
+              name: d.name, category: d.cat||'', lat: d.lat??null, lng: d.lng??null,
+              googlePlaceId: d.id, ownerUid: me.isAdmin ? null : me.uid,
+              status: me.isAdmin ? 'approved' : 'pending',
+              promoted: false, promotionRequested: false,
+              bookable: false, tone: 'sun', currency: 'KWD', vouchers: [],
+              createdAt: serverTimestamp(),
+            });
+          }
           $('modalRoot').innerHTML=''; await loadPlaces();
-          openVouchersModal(ref.id); // jump straight to adding offers
+          openVouchersModal(d.id); // jump straight to adding offers
         } catch(e){ $('cl_err').textContent = e.message.replace('Firebase: ',''); b.disabled=false; b.textContent='Claim'; }
       });
     } catch(e){ $('cl_results').innerHTML=''; $('cl_err').textContent = e.message; }
