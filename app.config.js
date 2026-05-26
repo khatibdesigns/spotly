@@ -17,7 +17,7 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.khd.spotly',
-      buildNumber: '25',
+      buildNumber: '26',
       usesAppleSignIn: true,
       // Universal Links — tapping https://meetspotly.com/join?code=… opens the
       // app (family invites). Requires the AASA file hosted at that domain.
@@ -38,7 +38,7 @@ export default {
     },
     android: {
       package: 'com.khd.spotly',
-      versionCode: 25,
+      versionCode: 26,
       // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
       usesCleartextTraffic: true,
       // App Links — tapping https://meetspotly.com/join?code=… opens the app

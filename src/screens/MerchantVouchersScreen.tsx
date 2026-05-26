@@ -82,7 +82,7 @@ export function MerchantVouchersScreen() {
         <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.serif, fontSize: 21, color: C.ink, letterSpacing: -0.5 }}>{t('mv.title')}</Text>
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top + 50}>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
           {!place ? (
             <Text style={{ marginTop: 40, color: C.ink3, fontFamily: F.regular }}>—</Text>
           ) : (
@@ -155,13 +155,14 @@ export function MerchantVouchersScreen() {
             </>
           )}
         </ScrollView>
+        {/* Save bar lives inside the keyboard-avoiding view so it floats above
+            the keyboard instead of being hidden behind it. */}
+        {place ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: insets.bottom + 12, borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.bg }}>
+            <Btn kind="primary" full style={{ height: 54 }} onPress={onSave}>{busy ? t('common.saving') : t('mv.save')}</Btn>
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
-
-      {place ? (
-        <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 12 }}>
-          <Btn kind="primary" full style={{ height: 54 }} onPress={onSave}>{busy ? t('common.saving') : t('mv.save')}</Btn>
-        </View>
-      ) : null}
     </View>
   );
 }
