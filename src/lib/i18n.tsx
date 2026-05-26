@@ -466,6 +466,8 @@ const EN: Record<string, string> = {
   'mh.voucherRevenue': 'Voucher revenue',
   'mh.voucherSales': 'Voucher sales',
   'mh.noVoucherSales': 'No voucher sales yet.',
+  'mh.awaitingApproval': 'PENDING',
+  'mh.claimUnderReview': 'Your claim is under review. You can manage offers once it’s approved.',
   // discover promoted badge
   'discover.promoted': 'PROMOTED',
   // QR / booking pass
@@ -935,6 +937,8 @@ const AR: Record<string, string> = {
   'mh.voucherRevenue': 'إيراد القسائم',
   'mh.voucherSales': 'مبيعات القسائم',
   'mh.noVoucherSales': 'لا مبيعات قسائم بعد.',
+  'mh.awaitingApproval': 'قيد المراجعة',
+  'mh.claimUnderReview': 'مطالبتك قيد المراجعة. ستتمكن من إدارة العروض بعد الموافقة.',
   // discover promoted badge
   'discover.promoted': 'مُروَّج',
   // QR / booking pass

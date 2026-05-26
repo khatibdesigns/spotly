@@ -157,7 +157,7 @@ function BookingCard({ b, onConfirm, onRedeem }: { b: MerchantBooking; onConfirm
 export function MerchantHomeScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
-  const { merchant, places, bookings, voucherSales, stats, requestPromotion, markRedeemed, confirmBooking, markVoucherRedeemed } = useMerchant();
+  const { merchant, places, pendingPlaces, bookings, voucherSales, stats, requestPromotion, markRedeemed, confirmBooking, markVoucherRedeemed } = useMerchant();
   const { t, lang, setLang } = useI18n();
   const { push } = useStore();
 
@@ -228,11 +228,28 @@ export function MerchantHomeScreen() {
             <Text style={{ fontFamily: F.serif, fontSize: 20, color: C.ink, letterSpacing: -0.4 }}>{t('mh.places')}</Text>
           </View>
           <View style={{ gap: 12, marginTop: 12 }}>
-            {places.length === 0 ? (
+            {places.length === 0 && pendingPlaces.length === 0 ? (
               <Text style={{ color: C.ink3, fontFamily: F.regular, fontSize: 14 }}>{t('mh.noPlaces')}</Text>
             ) : (
               places.map((p) => <PlaceCard key={p.id} place={p} count={countFor(p.id)} views={stats[p.id]?.views || 0} clicks={stats[p.id]?.clicks || 0} onPromote={() => promote(p)} onManageOffers={() => push('merchantVouchers', { placeId: p.id })} />)
             )}
+            {/* Pending ownership claims — locked until an admin approves. */}
+            {pendingPlaces.map((p) => (
+              <View key={p.id} style={[{ backgroundColor: C.surface, borderRadius: R.xl, padding: 14, opacity: 0.85 }, SH.card]}>
+                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                  <SpotImage photoUrl={p.photoUrl} tone="sun" height={54} radius={12} style={{ width: 54 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={{ fontFamily: F.extrabold, fontSize: 15, color: C.ink }}>{p.name}</Text>
+                    <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{p.category}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.surface2, paddingHorizontal: 9, paddingVertical: 5, borderRadius: R.pill }}>
+                    {Icons.clock({ size: 12, color: C.ink2 })}
+                    <Text style={{ fontSize: 10.5, fontFamily: F.extrabold, color: C.ink2, letterSpacing: 0.3 }}>{t('mh.awaitingApproval')}</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 10 }}>{t('mh.claimUnderReview')}</Text>
+              </View>
+            ))}
           </View>
         </View>
 

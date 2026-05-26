@@ -50,32 +50,38 @@ service cloud.firestore {
     }
 
     // Places: any signed-in user can read. Admins write anything. A merchant may
-    // create a place they own (only as 'pending' + not promoted) and edit its
-    // descriptive fields — but NOT self-approve or self-promote (status,
-    // promoted, promotedUntil are locked to admins).
+    // create a place (as a pending, unowned claim) and edit its descriptive
+    // fields once they OWN it — but NOT self-approve, self-promote, or grant
+    // themselves ownership (ownerUid/status/promoted are admin-controlled).
+    // Ownership flow: merchant sets pendingOwnerUid (claim) → admin sets ownerUid
+    // (approve). Orders route to ownerUid, so they only flow after approval.
     match /places/{id} {
       allow read: if request.auth != null;
       allow create: if isAdmin()
         || (request.auth != null
-            && request.resource.data.ownerUid == request.auth.uid
+            && request.resource.data.get('ownerUid', null) == null
+            && request.resource.data.pendingOwnerUid == request.auth.uid
             && request.resource.data.status == 'pending'
             && request.resource.data.promoted == false);
       allow update: if isAdmin()
-        // The owner edits their own place (can't self-approve or self-promote).
+        // The owner edits their own place (can't self-approve/promote or
+        // reassign ownership).
         || (request.auth != null
             && resource.data.ownerUid == request.auth.uid
             && request.resource.data.ownerUid == request.auth.uid
             && request.resource.data.status == resource.data.status
             && request.resource.data.promoted == resource.data.promoted
             && request.resource.data.get('promotedUntil', null) == resource.data.get('promotedUntil', null))
-        // Claim an UNOWNED place: set ownerUid to self (status/promotion locked),
-        // so a merchant adopts the canonical doc instead of forking a duplicate.
+        // Request a claim: set pendingOwnerUid to self on an unowned place with
+        // no other pending claim. Cannot touch ownerUid/status/promotion — the
+        // admin grants ownership by setting ownerUid.
         || (request.auth != null
             && resource.data.get('ownerUid', null) == null
-            && request.resource.data.ownerUid == request.auth.uid
+            && request.resource.data.get('ownerUid', null) == null
+            && request.resource.data.pendingOwnerUid == request.auth.uid
+            && resource.data.get('pendingOwnerUid', null) in [null, request.auth.uid]
             && request.resource.data.status == resource.data.status
-            && request.resource.data.promoted == resource.data.promoted
-            && request.resource.data.get('promotedUntil', null) == resource.data.get('promotedUntil', null));
+            && request.resource.data.get('promoted', false) == resource.data.get('promoted', false));
       allow delete: if isAdmin();
     }
 

@@ -82,7 +82,8 @@ type MerchantState = {
   merchant: Merchant | null;
   isMerchant: boolean;
   loading: boolean;
-  places: MerchantPlace[];
+  places: MerchantPlace[]; // approved ownership (ownerUid == me)
+  pendingPlaces: MerchantPlace[]; // claimed, awaiting admin approval
   bookings: MerchantBooking[];
   voucherSales: MerchantVoucherSale[];
   stats: Record<string, PlaceStat>; // placeId → { views, clicks }
@@ -103,6 +104,7 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [loading, setLoading] = useState(true);
   const [places, setPlaces] = useState<MerchantPlace[]>([]);
+  const [pendingPlaces, setPendingPlaces] = useState<MerchantPlace[]>([]);
   const [bookings, setBookings] = useState<MerchantBooking[]>([]);
   const [voucherSales, setVoucherSales] = useState<MerchantVoucherSale[]>([]);
   const [stats, setStats] = useState<Record<string, PlaceStat>>({});
@@ -126,7 +128,7 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, [user]);
 
-  // My places (places/{id} where ownerUid == me)
+  // My places (places/{id} where ownerUid == me) — approved ownership.
   useEffect(() => {
     if (!user || !firestore || !merchant) {
       setPlaces([]);
@@ -134,6 +136,17 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
     }
     const q = query(collection(firestore, 'places'), where('ownerUid', '==', user.uid));
     const unsub = onSnapshot(q, (snap) => setPlaces(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))), () => {});
+    return unsub;
+  }, [user, merchant]);
+
+  // Places I've claimed that are awaiting admin approval (pendingOwnerUid == me).
+  useEffect(() => {
+    if (!user || !firestore || !merchant) {
+      setPendingPlaces([]);
+      return;
+    }
+    const q = query(collection(firestore, 'places'), where('pendingOwnerUid', '==', user.uid));
+    const unsub = onSnapshot(q, (snap) => setPendingPlaces(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))), () => {});
     return unsub;
   }, [user, merchant]);
 
@@ -186,35 +199,41 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [places]);
 
-  // Claim a place WITHOUT creating duplicates. If a place doc already exists for
-  // this Google place_id (a seeded/admin doc, or anyone's), adopt it when it's
-  // unowned (else error if owned by someone else). Otherwise create a fresh doc
-  // keyed by the place_id so a later seed/claim can't fork it. Manual places
-  // (no googlePlaceId) fall back to an auto-id doc.
+  // Claim a place as a PENDING ownership request (no duplicates). If a doc
+  // already exists for this Google place_id, attach pendingOwnerUid to it (the
+  // admin approves ownership in the CRM); else create a fresh doc keyed by the
+  // place_id. The merchant only becomes the real owner once an admin approves,
+  // at which point orders for the place route to them automatically.
   const claimOrCreatePlace = useCallback(
-    async (place: NewPlaceInput, extra: Record<string, any> = {}) => {
+    async (place: NewPlaceInput, verification?: MerchantVerification) => {
       if (!user || !firestore) throw new Error('Not signed in');
+      const pending = {
+        pendingOwnerUid: user.uid,
+        pendingOwnerPhone: verification?.phone || null,
+        pendingOwnerDocs: verification?.docs || [],
+        pendingOwnerCivilIdUrl: verification?.civilIdUrl || null,
+      };
       const gid = place.googlePlaceId;
       if (gid) {
         const snap = await getDocs(query(collection(firestore, 'places'), where('googlePlaceId', '==', gid)));
         const existing = snap.docs[0];
         if (existing) {
           const d = existing.data() as any;
-          if (d.ownerUid && d.ownerUid !== user.uid) throw new Error('That place has already been claimed by another business.');
-          // Adopt the existing canonical doc (keeps its status/vouchers); just
-          // attach ownership + any verification fields.
-          await updateDoc(existing.ref, { ownerUid: user.uid, ...extra });
+          if (d.ownerUid === user.uid) return; // already mine
+          if (d.ownerUid) throw new Error('That place has already been claimed by another business.');
+          if (d.pendingOwnerUid && d.pendingOwnerUid !== user.uid) throw new Error('A claim for this place is already under review.');
+          await updateDoc(existing.ref, pending); // request ownership (admin approves)
           return;
         }
         await setDoc(doc(firestore, 'places', gid), {
-          ...place, ownerUid: user.uid, status: 'pending', promoted: false, promotionRequested: false,
-          ...extra, createdAt: serverTimestamp(),
+          ...place, ownerUid: null, status: 'pending', promoted: false, promotionRequested: false,
+          ...pending, createdAt: serverTimestamp(),
         });
         return;
       }
       await addDoc(collection(firestore, 'places'), {
-        ...place, ownerUid: user.uid, status: 'pending', promoted: false, promotionRequested: false,
-        ...extra, createdAt: serverTimestamp(),
+        ...place, ownerUid: null, status: 'pending', promoted: false, promotionRequested: false,
+        ...pending, createdAt: serverTimestamp(),
       });
     },
     [user]
@@ -228,12 +247,7 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
         { businessName: businessName.trim(), verification: verification || null, createdAt: serverTimestamp() },
         { merge: true }
       );
-      await claimOrCreatePlace(place, {
-        // Copied onto the place so the CRM can vet the claim before approving.
-        ownerPhone: verification?.phone || null,
-        ownerDocs: verification?.docs || [],
-        ownerCivilIdUrl: verification?.civilIdUrl || null,
-      });
+      await claimOrCreatePlace(place, verification);
     },
     [user, claimOrCreatePlace]
   );
@@ -285,7 +299,7 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ merchant, isMerchant: !!merchant, loading, places, bookings, voucherSales, stats, createMerchant, addPlace, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed }}>
+    <Ctx.Provider value={{ merchant, isMerchant: !!merchant, loading, places, pendingPlaces, bookings, voucherSales, stats, createMerchant, addPlace, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed }}>
       {children}
     </Ctx.Provider>
   );
