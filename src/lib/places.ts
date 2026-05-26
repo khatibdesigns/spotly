@@ -361,7 +361,13 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
   // currency, promotion, owner) onto the LIVE Google data — we never persist a
   // full copy of Google's place (ToS + staleness); only the place_id is stored.
   const claimByPlaceId = new Map<string, Spot>();
-  for (const c of curated) if (c.googlePlaceId) claimByPlaceId.set(c.googlePlaceId, c);
+  for (const c of curated) {
+    if (!c.googlePlaceId) continue;
+    const prev = claimByPlaceId.get(c.googlePlaceId);
+    // If two docs share a place_id, prefer the owned one (then the richer one).
+    const better = !prev || (!prev.ownerUid && !!c.ownerUid) || ((prev.vouchers?.length || 0) < (c.vouchers?.length || 0));
+    if (better) claimByPlaceId.set(c.googlePlaceId, c);
+  }
 
   const consumed = new Set<string>(); // place_ids merged into a Google result
   const seenNames = new Set(curated.map((c) => c.name.toLowerCase()));
@@ -397,8 +403,19 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
     google.push(g);
   }
   // Curated docs not merged into a Google result (manual entries, or claims
-  // Google didn't return nearby) stay as their own rows using their snapshot.
-  const standaloneCurated = curated.filter((c) => !(c.googlePlaceId && consumed.has(c.googlePlaceId)));
+  // Google didn't return nearby) stay as their own rows — deduped by place_id
+  // (prefer the owned doc) so two docs for one place don't both appear.
+  const standaloneCurated: Spot[] = [];
+  const addedPlaceIds = new Set<string>();
+  for (const c of curated) {
+    if (c.googlePlaceId) {
+      if (consumed.has(c.googlePlaceId) || addedPlaceIds.has(c.googlePlaceId)) continue;
+      addedPlaceIds.add(c.googlePlaceId);
+      standaloneCurated.push(claimByPlaceId.get(c.googlePlaceId) || c);
+    } else {
+      standaloneCurated.push(c);
+    }
+  }
   const merged = [...standaloneCurated, ...google];
   // Promoted places float to the top; otherwise nearest first.
   merged.sort((a, b) => {

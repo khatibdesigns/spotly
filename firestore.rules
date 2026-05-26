@@ -61,8 +61,17 @@ service cloud.firestore {
             && request.resource.data.status == 'pending'
             && request.resource.data.promoted == false);
       allow update: if isAdmin()
+        // The owner edits their own place (can't self-approve or self-promote).
         || (request.auth != null
             && resource.data.ownerUid == request.auth.uid
+            && request.resource.data.ownerUid == request.auth.uid
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.promoted == resource.data.promoted
+            && request.resource.data.get('promotedUntil', null) == resource.data.get('promotedUntil', null))
+        // Claim an UNOWNED place: set ownerUid to self (status/promotion locked),
+        // so a merchant adopts the canonical doc instead of forking a duplicate.
+        || (request.auth != null
+            && resource.data.get('ownerUid', null) == null
             && request.resource.data.ownerUid == request.auth.uid
             && request.resource.data.status == resource.data.status
             && request.resource.data.promoted == resource.data.promoted

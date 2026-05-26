@@ -4,7 +4,7 @@
 // paid promotion (an admin flips it live from the CRM).
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
-  doc, onSnapshot, setDoc, updateDoc, addDoc, collection, query, where, serverTimestamp,
+  doc, onSnapshot, setDoc, updateDoc, addDoc, getDocs, collection, query, where, serverTimestamp,
 } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { useAuth } from './auth';
@@ -186,6 +186,40 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [places]);
 
+  // Claim a place WITHOUT creating duplicates. If a place doc already exists for
+  // this Google place_id (a seeded/admin doc, or anyone's), adopt it when it's
+  // unowned (else error if owned by someone else). Otherwise create a fresh doc
+  // keyed by the place_id so a later seed/claim can't fork it. Manual places
+  // (no googlePlaceId) fall back to an auto-id doc.
+  const claimOrCreatePlace = useCallback(
+    async (place: NewPlaceInput, extra: Record<string, any> = {}) => {
+      if (!user || !firestore) throw new Error('Not signed in');
+      const gid = place.googlePlaceId;
+      if (gid) {
+        const snap = await getDocs(query(collection(firestore, 'places'), where('googlePlaceId', '==', gid)));
+        const existing = snap.docs[0];
+        if (existing) {
+          const d = existing.data() as any;
+          if (d.ownerUid && d.ownerUid !== user.uid) throw new Error('That place has already been claimed by another business.');
+          // Adopt the existing canonical doc (keeps its status/vouchers); just
+          // attach ownership + any verification fields.
+          await updateDoc(existing.ref, { ownerUid: user.uid, ...extra });
+          return;
+        }
+        await setDoc(doc(firestore, 'places', gid), {
+          ...place, ownerUid: user.uid, status: 'pending', promoted: false, promotionRequested: false,
+          ...extra, createdAt: serverTimestamp(),
+        });
+        return;
+      }
+      await addDoc(collection(firestore, 'places'), {
+        ...place, ownerUid: user.uid, status: 'pending', promoted: false, promotionRequested: false,
+        ...extra, createdAt: serverTimestamp(),
+      });
+    },
+    [user]
+  );
+
   const createMerchant = useCallback(
     async (businessName: string, place: NewPlaceInput, verification?: MerchantVerification) => {
       if (!user || !firestore) throw new Error('Not signed in');
@@ -194,36 +228,17 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
         { businessName: businessName.trim(), verification: verification || null, createdAt: serverTimestamp() },
         { merge: true }
       );
-      await addDoc(collection(firestore, 'places'), {
-        ...place,
-        ownerUid: user.uid,
-        status: 'pending',
-        promoted: false,
-        promotionRequested: false,
+      await claimOrCreatePlace(place, {
         // Copied onto the place so the CRM can vet the claim before approving.
         ownerPhone: verification?.phone || null,
         ownerDocs: verification?.docs || [],
         ownerCivilIdUrl: verification?.civilIdUrl || null,
-        createdAt: serverTimestamp(),
       });
     },
-    [user]
+    [user, claimOrCreatePlace]
   );
 
-  const addPlace = useCallback(
-    async (place: NewPlaceInput) => {
-      if (!user || !firestore) throw new Error('Not signed in');
-      await addDoc(collection(firestore, 'places'), {
-        ...place,
-        ownerUid: user.uid,
-        status: 'pending',
-        promoted: false,
-        promotionRequested: false,
-        createdAt: serverTimestamp(),
-      });
-    },
-    [user]
-  );
+  const addPlace = useCallback((place: NewPlaceInput) => claimOrCreatePlace(place), [claimOrCreatePlace]);
 
   const requestPromotion = useCallback(
     async (placeId: string) => {
