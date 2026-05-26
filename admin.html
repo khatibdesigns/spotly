@@ -96,10 +96,11 @@
       <button data-view="dashboard" class="active"><span class="ico">▦</span><span class="lbl">Dashboard</span></button>
       <button data-view="places"><span class="ico">◎</span><span class="lbl">Places</span></button>
       <button data-view="bookings"><span class="ico">◷</span><span class="lbl">Bookings</span></button>
-      <button data-view="orders"><span class="ico">▤</span><span class="lbl">Orders</span></button>
-      <button data-view="campaigns"><span class="ico">✦</span><span class="lbl">Campaigns</span></button>
-      <button data-view="events"><span class="ico">✸</span><span class="lbl">Hotspots</span></button>
-      <button data-view="reports"><span class="ico">↧</span><span class="lbl">Reports</span></button>
+      <button data-view="vouchers"><span class="ico">🎟</span><span class="lbl">Vouchers</span></button>
+      <button data-view="orders" data-admin="1"><span class="ico">▤</span><span class="lbl">Orders</span></button>
+      <button data-view="campaigns" data-admin="1"><span class="ico">✦</span><span class="lbl">Campaigns</span></button>
+      <button data-view="events" data-admin="1"><span class="ico">✸</span><span class="lbl">Hotspots</span></button>
+      <button data-view="reports" data-admin="1"><span class="ico">↧</span><span class="lbl">Reports</span></button>
     </nav>
     <div class="foot">Signed in as<br/><b id="whoFoot" style="color:rgba(255,255,255,.8)"></b></div>
   </aside>
@@ -142,6 +143,15 @@
           <div class="spacer"></div>
         </div>
         <div class="panel" style="padding:6px 6px 0"><div id="bookingsTable"></div></div>
+      </section>
+
+      <!-- VOUCHERS -->
+      <section id="view-vouchers" class="hide">
+        <div class="toolbar">
+          <select id="voucherFilter" class="status"><option value="">All statuses</option><option>paid</option><option>redeemed</option></select>
+          <div class="spacer"></div>
+        </div>
+        <div class="panel" style="padding:6px 6px 0"><div id="vouchersTable"></div></div>
       </section>
 
       <!-- ORDERS -->
@@ -189,7 +199,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js';
-import { getFirestore, collection, getDocs, addDoc, doc, deleteDoc, updateDoc, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, doc, deleteDoc, updateDoc, query, where, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyANYIyuxNtP-of3AhrdXF0MS8BM73Ja6tM",
@@ -208,21 +218,49 @@ const fmtDate = (ts) => { try { return ts?.toDate ? ts.toDate().toLocaleDateStri
 const AMENITIES = ['playArea','foodOnSite','parking','animals','indoor','outdoor','water','arts','restroom','changing','shade','museum'];
 
 // in-memory caches for reports
-let cache = { places: [], bookings: [], orders: [], campaigns: [] };
+let cache = { places: [], bookings: [], orders: [], campaigns: [], vouchers: [] };
+
+// Who's signed in + their role. Admins (admins/{uid}) see everything; merchants
+// (merchants/{uid}) see only their own places, bookings and voucher sales.
+let me = { uid: null, isAdmin: false, isMerchant: false, businessName: '' };
 
 // ---------- Auth ----------
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   if (user) {
     $('login').classList.add('hide');
     $('app').classList.remove('hide');
     $('who').textContent = user.email || user.uid;
     $('whoFoot').textContent = user.email || user.uid;
+    // Resolve role before rendering so we scope data + hide admin-only tools.
+    let isAdmin = false, isMerchant = false, businessName = '';
+    try { isAdmin = (await getDoc(doc(db, 'admins', user.uid))).exists(); } catch {}
+    try { const m = await getDoc(doc(db, 'merchants', user.uid)); isMerchant = m.exists(); businessName = m.data()?.businessName || ''; } catch {}
+    me = { uid: user.uid, isAdmin, isMerchant, businessName };
+    if (!isAdmin && !isMerchant) {
+      $('app').innerHTML = `<div style="max-width:520px;margin:120px auto;text-align:center;font-family:system-ui">
+        <h1 style="font-size:24px">This account isn't a business</h1>
+        <p style="color:#666;margin:12px 0 22px">Sign up as a business in the Spotly app to manage your place and offers here.</p>
+        <button class="btn ghost" id="naSignout">Sign out</button></div>`;
+      document.getElementById('naSignout').onclick = () => signOut(auth);
+      return;
+    }
+    applyRole();
+    if (businessName) $('whoFoot').textContent = businessName;
     show('dashboard');
   } else {
     $('login').classList.remove('hide');
     $('app').classList.add('hide');
   }
 });
+
+// Show/hide admin-only nav + tools based on role.
+function applyRole() {
+  const merchantOnly = me.isMerchant && !me.isAdmin;
+  document.querySelectorAll('[data-admin]').forEach((el) => el.classList.toggle('hide', !me.isAdmin));
+  // Add-place is admin-only (merchants claim places in the app, with verification).
+  const addBtn = $('addPlaceBtn'); if (addBtn) addBtn.classList.toggle('hide', !me.isAdmin);
+}
+const isMerchantOnly = () => me.isMerchant && !me.isAdmin;
 $('loginBtn').onclick = async () => {
   $('loginErr').textContent = '';
   try { await signInWithEmailAndPassword(auth, $('email').value.trim(), $('password').value); }
@@ -231,9 +269,11 @@ $('loginBtn').onclick = async () => {
 $('signout').onclick = () => signOut(auth);
 
 // ---------- Navigation ----------
-const TITLES = { dashboard:'Dashboard', places:'Places', bookings:'Bookings', orders:'Album orders', campaigns:'Campaigns', events:'Hotspots', reports:'Reports' };
+const TITLES = { dashboard:'Dashboard', places:'Places', bookings:'Bookings', vouchers:'Voucher sales', orders:'Album orders', campaigns:'Campaigns', events:'Hotspots', reports:'Reports' };
 $('nav').addEventListener('click', (e) => { const b = e.target.closest('button[data-view]'); if (b) show(b.dataset.view); });
 function show(view) {
+  // Guard: merchants can't open admin-only views even via stale state.
+  if (!me.isAdmin && ['orders','campaigns','events','reports'].includes(view)) view = 'dashboard';
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.content > section').forEach((s) => s.classList.add('hide'));
   $('view-' + view).classList.remove('hide');
@@ -241,9 +281,19 @@ function show(view) {
   if (view === 'dashboard') loadDashboard();
   if (view === 'places') loadPlaces();
   if (view === 'bookings') loadBookings();
+  if (view === 'vouchers') loadVouchers();
   if (view === 'orders') loadOrders();
   if (view === 'campaigns') loadCampaigns();
   if (view === 'events') loadEvents();
+}
+
+// Fetch a collection scoped to the signed-in merchant by a field (rules deny a
+// full-collection read to non-admins, so we must constrain the query).
+async function fetchMine(name, field) {
+  try {
+    const snap = await getDocs(query(collection(db, name), where(field, '==', me.uid)));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (e) { return []; }
 }
 
 async function fetchAll(name, withOrder = true) {
@@ -260,12 +310,37 @@ async function fetchAll(name, withOrder = true) {
 // ---------- Dashboard ----------
 let chartB, chartS;
 async function loadDashboard() {
-  const [places, bookings, orders, campaigns] = await Promise.all([fetchAll('places'), fetchAll('bookings'), fetchAll('orders'), fetchAll('campaigns')]);
-  cache = { places, bookings, orders, campaigns };
+  let places, bookings, orders, campaigns, vouchers;
+  if (isMerchantOnly()) {
+    // Scoped reads only — rules deny full-collection access to merchants.
+    const all = await fetchAll('places');
+    places = all.filter((p) => p.ownerUid === me.uid);
+    [bookings, vouchers] = await Promise.all([fetchMine('bookings','placeOwnerUid'), fetchMine('voucherOrders','placeOwnerUid')]);
+    orders = []; campaigns = [];
+  } else {
+    [places, bookings, orders, campaigns, vouchers] = await Promise.all([fetchAll('places'), fetchAll('bookings'), fetchAll('orders'), fetchAll('campaigns'), fetchAll('voucherOrders')]);
+  }
+  cache = { places, bookings, orders, campaigns, vouchers };
+
+  // Relabel KPIs for merchants (their own data; revenue instead of campaigns).
+  const k3 = $('kpiOrders'), k4 = $('kpiCampaigns');
+  if (isMerchantOnly()) {
+    const sold = vouchers.length;
+    const rev = {}; vouchers.forEach((s)=>{ rev[s.currencyCode]=(rev[s.currencyCode]||0)+(s.price||0); });
+    const money = (n,c)=>{ const sym={KWD:'KD',BHD:'BD',OMR:'OMR',SAR:'SAR',AED:'AED',QAR:'QAR',USD:'$',EUR:'€',GBP:'£'}[c]||c||''; return ['$','€','£'].includes(sym)?`${sym}${n}`:`${n} ${sym}`; };
+    document.querySelectorAll('#view-dashboard .kpi .l')[0].textContent = 'Your places';
+    document.querySelectorAll('#view-dashboard .kpi .l')[2].textContent = 'Vouchers sold';
+    document.querySelectorAll('#view-dashboard .kpi .l')[3].textContent = 'Voucher revenue';
+    k3.textContent = sold;
+    k4.textContent = Object.keys(rev).length ? Object.entries(rev).map(([c,a])=>money(a,c)).join(' · ') : '0';
+  } else {
+    const labels = document.querySelectorAll('#view-dashboard .kpi .l');
+    labels[0].textContent = 'Curated places'; labels[2].textContent = 'Album orders'; labels[3].textContent = 'Campaigns';
+    $('kpiOrders').textContent = orders.length;
+    $('kpiCampaigns').textContent = campaigns.length;
+  }
   $('kpiPlaces').textContent = places.length;
   $('kpiBookings').textContent = bookings.length;
-  $('kpiOrders').textContent = orders.length;
-  $('kpiCampaigns').textContent = campaigns.length;
 
   // last 14 days bookings
   const days = [], counts = [];
@@ -295,35 +370,46 @@ function verifyLinks(p){
 }
 function placeStatusCell(p){
   const st = p.status || 'approved';
-  if (st === 'pending') return `<span style="color:#9a7b00;background:#fff7e0;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Pending</span> <button class="btn sage sm" data-approve="${p.id}">Approve</button> <button class="danger" data-reject="${p.id}">Reject</button>${verifyLinks(p)}`;
-  if (st === 'rejected') return `<span style="color:#b3261e;background:#fde8e6;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Rejected</span> <button class="btn sage sm" data-approve="${p.id}">Approve</button>${verifyLinks(p)}`;
+  const admin = me.isAdmin;
+  if (st === 'pending') return `<span style="color:#9a7b00;background:#fff7e0;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Pending review</span>${admin?` <button class="btn sage sm" data-approve="${p.id}">Approve</button> <button class="danger" data-reject="${p.id}">Reject</button>${verifyLinks(p)}`:''}`;
+  if (st === 'rejected') return `<span style="color:#b3261e;background:#fde8e6;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Rejected</span>${admin?` <button class="btn sage sm" data-approve="${p.id}">Approve</button>${verifyLinks(p)}`:''}`;
   return `<span style="color:#1c7a52;background:#e4f3ec;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700">Live</span>`;
 }
 function placePromoteCell(p){
-  if (p.promoted) return `<button class="btn ghost sm" data-promote="${p.id}" data-on="1">★ Promoted — turn off</button>`;
-  const req = p.promotionRequested ? ' <span style="color:#5b5be0;font-size:11px;font-weight:700">requested</span>' : '';
-  return `<button class="btn ghost sm" data-promote="${p.id}" data-on="0">Promote</button>${req}`;
+  if (me.isAdmin) {
+    if (p.promoted) return `<button class="btn ghost sm" data-promote="${p.id}" data-on="1">★ Promoted — turn off</button>`;
+    const req = p.promotionRequested ? ' <span style="color:#5b5be0;font-size:11px;font-weight:700">requested</span>' : '';
+    return `<button class="btn ghost sm" data-promote="${p.id}" data-on="0">Promote</button>${req}`;
+  }
+  // Merchant view: show state, or let them request promotion (admin flips it live).
+  if (p.promoted) return `<span style="color:#5b5be0;font-size:12px;font-weight:700">★ Promoted</span>`;
+  if (p.promotionRequested) return `<span style="color:#5b5be0;font-size:11px;font-weight:700">Promotion requested</span>`;
+  return `<button class="btn ghost sm" data-reqpromo="${p.id}">Request promotion</button>`;
 }
 async function loadPlaces() {
-  const places = await fetchAll('places'); cache.places = places;
+  let places = await fetchAll('places');
+  if (isMerchantOnly()) places = places.filter((p) => p.ownerUid === me.uid);
+  cache.places = places;
   // Sort: pending first (need action), then promoted, then the rest.
   places.sort((a,b)=>{ const r=(x)=> x.status==='pending'?0:(x.promoted?1:2); return r(a)-r(b); });
+  const empty = isMerchantOnly() ? 'No places yet. Claim your place in the Spotly app to manage it here.' : 'No places yet. Add your first curated place.';
   $('placesTable').innerHTML = places.length ? table(
     ['', 'Name','Category','Status','Promotion',''],
     places.map((p)=>[
       p.photoUrl?`<img src="${esc(p.photoUrl)}" onerror="this.style.visibility='hidden'"/>`:'',
-      `<b>${esc(p.name)}</b>${p.ownerUid?' <span style="color:var(--ink3);font-size:11px">· merchant</span>':''}`,
+      `<b>${esc(p.name)}</b>${(me.isAdmin&&p.ownerUid)?' <span style="color:var(--ink3);font-size:11px">· merchant</span>':''}`,
       esc(p.category||''),
       placeStatusCell(p),
       placePromoteCell(p),
-      `<button class="btn ghost sm" data-offers="${p.id}">🎟 Offers${(p.vouchers&&p.vouchers.length)?` (${p.vouchers.length})`:''}</button> <button class="danger" data-del-place="${p.id}">Delete</button>`
+      `<button class="btn ghost sm" data-offers="${p.id}">🎟 Offers${(p.vouchers&&p.vouchers.length)?` (${p.vouchers.length})`:''}</button>${me.isAdmin?` <button class="danger" data-del-place="${p.id}">Delete</button>`:''}`
     ])
-  ) : '<div class="muted-note">No places yet. Add your first curated place.</div>';
+  ) : `<div class="muted-note">${empty}</div>`;
   $('placesTable').querySelectorAll('[data-offers]').forEach((b)=> b.onclick = ()=> openVouchersModal(b.dataset.offers));
   $('placesTable').querySelectorAll('[data-del-place]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Delete this place?')){ await deleteDoc(doc(db,'places',b.dataset.delPlace)); loadPlaces(); } });
   $('placesTable').querySelectorAll('[data-approve]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'places',b.dataset.approve),{status:'approved'}); loadPlaces(); });
   $('placesTable').querySelectorAll('[data-reject]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Reject this place?')){ await updateDoc(doc(db,'places',b.dataset.reject),{status:'rejected'}); loadPlaces(); } });
   $('placesTable').querySelectorAll('[data-promote]').forEach((b)=> b.onclick = async ()=>{ const on = b.dataset.on==='1'; await updateDoc(doc(db,'places',b.dataset.promote),{ promoted: !on, promotionRequested:false }); loadPlaces(); });
+  $('placesTable').querySelectorAll('[data-reqpromo]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'places',b.dataset.reqpromo),{ promotionRequested:true }); loadPlaces(); });
 }
 $('addPlaceBtn').onclick = () => openPlaceModal();
 function openPlaceModal() {
@@ -418,22 +504,46 @@ function openVouchersModal(placeId){
 // ---------- Bookings ----------
 const BSTAT = ['requested','confirmed','declined','completed'];
 async function loadBookings() {
-  const bookings = await fetchAll('bookings'); cache.bookings = bookings;
+  const bookings = isMerchantOnly() ? await fetchMine('bookings','placeOwnerUid') : await fetchAll('bookings');
+  bookings.sort((a,b)=> (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+  cache.bookings = bookings;
   const filt = $('bookingFilter').value;
   const rows = (filt? bookings.filter(b=>(b.status||'requested')===filt):bookings);
   $('bookingsTable').innerHTML = rows.length ? table(
-    ['Place','Family','Date / time','Party','Note','Status',''],
+    ['Place','Family','Date / time','Party','Note','Status',...(me.isAdmin?['']:[])],
     rows.map((b)=>[
       `<b>${esc(b.placeName)}</b>`, esc(b.familyName||'—'), `${esc(b.date||'')}<br/><span style="color:var(--ink3)">${esc(b.time||'')}</span>`,
       `${b.adults||0}a · ${b.kids||0}k`, esc(b.note||'')||'—',
       `<select class="status" data-bk="${b.id}">${BSTAT.map(s=>`<option ${s===(b.status||'requested')?'selected':''}>${s}</option>`).join('')}</select>`,
-      `<button class="danger" data-del-bk="${b.id}">Delete</button>`
+      ...(me.isAdmin?[`<button class="danger" data-del-bk="${b.id}">Delete</button>`]:[])
     ])
   ) : '<div class="muted-note">No bookings.</div>';
   $('bookingsTable').querySelectorAll('[data-bk]').forEach((sel)=> sel.onchange = async ()=>{ await updateDoc(doc(db,'bookings',sel.dataset.bk),{status:sel.value}); });
   $('bookingsTable').querySelectorAll('[data-del-bk]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Delete booking?')){ await deleteDoc(doc(db,'bookings',b.dataset.delBk)); loadBookings(); } });
 }
 $('bookingFilter').onchange = loadBookings;
+
+// ---------- Voucher sales ----------
+async function loadVouchers() {
+  const sales = isMerchantOnly() ? await fetchMine('voucherOrders','placeOwnerUid') : await fetchAll('voucherOrders');
+  sales.sort((a,b)=> (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+  cache.vouchers = sales;
+  const filt = $('voucherFilter').value;
+  const rows = (filt? sales.filter(s=>(s.status||'paid')===filt):sales);
+  const money = (n,c)=>{ const s={KWD:'KD',BHD:'BD',OMR:'OMR',SAR:'SAR',AED:'AED',QAR:'QAR',USD:'$',EUR:'€',GBP:'£'}[c]||c||''; return ['$','€','£'].includes(s)?`${s}${n}`:`${n} ${s}`; };
+  $('vouchersTable').innerHTML = rows.length ? table(
+    ['Voucher','Place','Paid','Balance','Code','Status',''],
+    rows.map((s)=>[
+      `<b>${esc(s.label||'Voucher')}</b>`, esc(s.placeName||''),
+      money(s.price, s.currencyCode), money(s.value, s.currencyCode),
+      `<span style="font-family:monospace">${esc(s.code||'')}</span>`,
+      `<span class="pill ${s.status==='redeemed'?'ok':'muted'}">${esc(s.status||'paid')}</span>`,
+      s.status==='redeemed' ? '' : `<button class="btn sage sm" data-redeem="${s.id}">Mark redeemed</button>`
+    ])
+  ) : '<div class="muted-note">No voucher sales yet.</div>';
+  $('vouchersTable').querySelectorAll('[data-redeem]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'voucherOrders',b.dataset.redeem),{status:'redeemed'}); loadVouchers(); });
+}
+$('voucherFilter').onchange = loadVouchers;
 
 // ---------- Orders ----------
 const OSTAT = ['received','in_production','shipped','delivered','cancelled'];
