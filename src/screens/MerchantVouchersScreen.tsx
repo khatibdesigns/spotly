@@ -1,7 +1,7 @@
 // Spotly — merchant voucher editor. A merchant sets the currency and the list
 // of prepaid vouchers (pay X, get Y balance) sold on one of their place pages.
 // Saved to places/{id}.{currency,vouchers}. Opened from the dashboard.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, TextInput, Pressable, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F, R, SH } from '../lib/theme';
@@ -30,6 +30,19 @@ export function MerchantVouchersScreen() {
   const [currency, setCurrency] = useState(place?.currency || 'KWD');
   const [rows, setRows] = useState<Draft[]>([]);
   const [busy, setBusy] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Scroll a newly-focused input above the keyboard (works on iOS + Android;
+  // adjustResize alone doesn't auto-scroll the focused field into view).
+  const reveal = (e: any) => {
+    const node = e?.target;
+    if (node == null) return;
+    setTimeout(() => {
+      try {
+        scrollRef.current?.getScrollResponder?.()?.scrollResponderScrollNativeHandleToKeyboard?.(node, 120, true);
+      } catch {}
+    }, 60);
+  };
 
   useEffect(() => {
     if (!place) return;
@@ -82,7 +95,7 @@ export function MerchantVouchersScreen() {
         <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.serif, fontSize: 21, color: C.ink, letterSpacing: -0.5 }}>{t('mv.title')}</Text>
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top + 50}>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
           {!place ? (
             <Text style={{ marginTop: 40, color: C.ink3, fontFamily: F.regular }}>—</Text>
           ) : (
@@ -111,6 +124,7 @@ export function MerchantVouchersScreen() {
                       <TextInput
                         value={r.label}
                         onChangeText={(v) => update(r.id, { label: v })}
+                        onFocus={reveal}
                         placeholder={t('mv.labelPh')}
                         placeholderTextColor={C.ink3}
                         style={{ flex: 1, fontFamily: F.semibold, fontSize: 15, color: C.ink, paddingVertical: 4 }}
@@ -123,6 +137,7 @@ export function MerchantVouchersScreen() {
                         <TextInput
                           value={r.price}
                           onChangeText={(v) => update(r.id, { price: v.replace(/[^0-9.]/g, '') })}
+                          onFocus={reveal}
                           keyboardType="decimal-pad"
                           placeholder="10"
                           placeholderTextColor={C.ink3}
@@ -134,6 +149,7 @@ export function MerchantVouchersScreen() {
                         <TextInput
                           value={r.value}
                           onChangeText={(v) => update(r.id, { value: v.replace(/[^0-9.]/g, '') })}
+                          onFocus={reveal}
                           keyboardType="decimal-pad"
                           placeholder="15"
                           placeholderTextColor={C.ink3}
