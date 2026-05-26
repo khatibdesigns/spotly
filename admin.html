@@ -316,9 +316,10 @@ async function loadPlaces() {
       esc(p.category||''),
       placeStatusCell(p),
       placePromoteCell(p),
-      `<button class="danger" data-del-place="${p.id}">Delete</button>`
+      `<button class="btn ghost sm" data-offers="${p.id}">🎟 Offers${(p.vouchers&&p.vouchers.length)?` (${p.vouchers.length})`:''}</button> <button class="danger" data-del-place="${p.id}">Delete</button>`
     ])
   ) : '<div class="muted-note">No places yet. Add your first curated place.</div>';
+  $('placesTable').querySelectorAll('[data-offers]').forEach((b)=> b.onclick = ()=> openVouchersModal(b.dataset.offers));
   $('placesTable').querySelectorAll('[data-del-place]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Delete this place?')){ await deleteDoc(doc(db,'places',b.dataset.delPlace)); loadPlaces(); } });
   $('placesTable').querySelectorAll('[data-approve]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'places',b.dataset.approve),{status:'approved'}); loadPlaces(); });
   $('placesTable').querySelectorAll('[data-reject]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Reject this place?')){ await updateDoc(doc(db,'places',b.dataset.reject),{status:'rejected'}); loadPlaces(); } });
@@ -357,6 +358,60 @@ function openPlaceModal() {
       await addDoc(collection(db,'places'),{ name, category:$('p_cat').value.trim(), city:$('p_city').value.trim(), lat, lng, price:$('p_price').value||null, ages:$('p_ages').value.trim()||null, photoUrl:$('p_photo').value.trim()||null, address:$('p_addr').value.trim()||null, amenities, bookable:$('p_book').checked, tone:'sun', createdAt:serverTimestamp() });
       $('modalRoot').innerHTML=''; loadPlaces();
     }catch(e){ $('p_err').textContent=e.message.replace('Firebase: ',''); }
+  };
+}
+
+// ── Vouchers / offers per place ───────────────────────────────────
+const CURRENCIES = ['KWD','SAR','AED','QAR','BHD','OMR','USD','EUR','GBP'];
+function voucherRowHtml(v){
+  v = v || { id:'', label:'', price:'', value:'', active:true };
+  const id = v.id || ('v'+Math.random().toString(36).slice(2,9));
+  return `<div class="vRow" data-vid="${id}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+    <input class="vLabel" placeholder="Name (e.g. Arcade card)" value="${esc(v.label||'')}" style="flex:2"/>
+    <input class="vPrice" type="number" step="any" placeholder="Price" value="${v.price??''}" style="flex:1"/>
+    <input class="vValue" type="number" step="any" placeholder="Balance" value="${v.value??''}" style="flex:1"/>
+    <label style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px"><input type="checkbox" class="vActive" ${v.active!==false?'checked':''} style="width:auto"/> Visible</label>
+    <button class="danger vDel" type="button">✕</button>
+  </div>`;
+}
+function openVouchersModal(placeId){
+  const p = (cache.places||[]).find(x=>x.id===placeId) || {};
+  const vouchers = Array.isArray(p.vouchers) ? p.vouchers : [];
+  $('modalRoot').innerHTML = `
+  <div class="modal-bg"><div class="modal">
+    <h2>Offers — ${esc(p.name||'')}</h2>
+    <p class="muted-note" style="margin:0 0 12px">Prepaid vouchers customers buy on this place's page (pay X, get Y balance on a card they redeem at the venue).</p>
+    <div style="margin-bottom:12px"><label class="fld">Currency</label>
+      <select id="v_cur">${CURRENCIES.map(c=>`<option ${(p.currency||'KWD')===c?'selected':''}>${c}</option>`).join('')}</select>
+    </div>
+    <label class="fld">Vouchers</label>
+    <div id="v_rows">${(vouchers.length?vouchers:[null]).map(voucherRowHtml).join('')}</div>
+    <button class="btn ghost sm" id="v_add" type="button">+ Add voucher</button>
+    <p id="v_err" class="err"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn ghost" id="v_cancel">Cancel</button>
+      <button class="btn sage" id="v_save">Save offers</button>
+    </div>
+  </div></div>`;
+  const bindDel = ()=> $('v_rows').querySelectorAll('.vDel').forEach(b=> b.onclick=()=>{ b.closest('.vRow').remove(); });
+  bindDel();
+  $('v_add').onclick = ()=>{ $('v_rows').insertAdjacentHTML('beforeend', voucherRowHtml()); bindDel(); };
+  $('v_cancel').onclick = ()=> $('modalRoot').innerHTML='';
+  $('v_save').onclick = async ()=>{
+    const rows = [...$('v_rows').querySelectorAll('.vRow')];
+    const vouchers = [];
+    for (const r of rows){
+      const label = r.querySelector('.vLabel').value.trim();
+      const price = parseFloat(r.querySelector('.vPrice').value);
+      const value = parseFloat(r.querySelector('.vValue').value);
+      if (!label && isNaN(price) && isNaN(value)) continue;
+      if (isNaN(price) || price<=0){ $('v_err').textContent='Each voucher needs a price greater than 0.'; return; }
+      vouchers.push({ id:r.dataset.vid, label, price, value:isNaN(value)?price:value, active:r.querySelector('.vActive').checked });
+    }
+    try{
+      await updateDoc(doc(db,'places',placeId), { currency:$('v_cur').value, vouchers });
+      $('modalRoot').innerHTML=''; loadPlaces();
+    }catch(e){ $('v_err').textContent=e.message.replace('Firebase: ',''); }
   };
 }
 
