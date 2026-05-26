@@ -108,7 +108,20 @@ export function Shell() {
   if (!user) return <OnboardingScreen />;
   if (merchantLoading || profileLoading) return <Splash />;
   // Merchant account → the business dashboard (separate from the customer app).
-  if (isMerchant) return <MerchantHomeScreen />;
+  // Render the overlay stack too, so pushed screens (e.g. Manage offers) appear.
+  if (isMerchant) return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <MerchantHomeScreen />
+      {stack.map((route, i) => {
+        const Cmp = OVERLAYS[route.name];
+        return (
+          <AnimatedOverlay key={`${route.name}-${i}`}>
+            <Cmp />
+          </AnimatedOverlay>
+        );
+      })}
+    </View>
+  );
   // A new sign-up that chose "business" but hasn't created their merchant doc yet.
   if (!hasProfile && authIntent === 'merchant') return <MerchantSetupScreen />;
   if (!hasProfile) return <SetupScreen />;
