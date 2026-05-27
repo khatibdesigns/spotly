@@ -260,10 +260,15 @@ export function DiscoverScreen() {
             </View>
           ) : null}
 
-          {/* What are you looking for — kind selector (hide kinds with no results) */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 10 }}>
+          {/* One filter row: Filters button + kinds + quick filters (single-select).
+              Hides options with no results. */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
+            <Chip icon={Icons.filter({ size: 13, color: C.ink })} onPress={() => push('filters')}>{t('discover.filters')}</Chip>
             {KINDS.filter((k) => filters.has(k.id) || filterHasResults(k.id, spots)).map((k) => (
               <Chip key={k.id} active={filters.has(k.id)} onPress={() => setOnlyFilter(k.id)}>{t(k.key)}</Chip>
+            ))}
+            {FILTER_CHIPS.filter((f) => filters.has(f.id) || filterHasResults(f.id, spots)).map((f) => (
+              <Chip key={f.id} active={filters.has(f.id)} onPress={() => setOnlyFilter(f.id)}>{t(f.key)}</Chip>
             ))}
           </ScrollView>
 
@@ -287,14 +292,6 @@ export function DiscoverScreen() {
               </ScrollView>
             </>
           ) : null}
-
-          {/* Filters */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingBottom: 14 }}>
-            <Chip icon={Icons.filter({ size: 13, color: C.ink })} onPress={() => push('filters')}>{t('discover.filters')}</Chip>
-            {FILTER_CHIPS.filter((f) => filters.has(f.id) || filterHasResults(f.id, spots)).map((f) => (
-              <Chip key={f.id} active={filters.has(f.id)} onPress={() => setOnlyFilter(f.id)}>{t(f.key)}</Chip>
-            ))}
-          </ScrollView>
 
           {/* Categories */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20, paddingBottom: 18 }}>

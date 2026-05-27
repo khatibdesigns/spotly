@@ -115,21 +115,13 @@ export function MapScreen() {
             coordinate={{ latitude: p.lat, longitude: p.lng }}
             onPress={(e) => { (e as any)?.stopPropagation?.(); setActiveEvent(null); setActive(p); }}
           >
-            {/* Visited → green, else orange. Promoted → a star + larger pin. */}
-            {(() => {
-              const size = p.promoted ? 42 : 30;
-              const color = p.visited ? C.sage : C.coral;
-              return (
-                <View style={{ padding: 6, alignItems: 'center' }}>
-                  <Icons.Mark size={size} color={color} />
-                  {p.promoted ? (
-                    <View style={{ position: 'absolute', top: 6 + size * 0.13, left: 0, right: 0, alignItems: 'center' }}>
-                      {Icons.star({ size: Math.round(size * 0.4), color: '#fff', filled: true })}
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })()}
+            {/* Visited → green, else orange. Promoted → starred Mark + larger;
+                otherwise a plain pin (no star). */}
+            <View style={{ padding: 6 }}>
+              {p.promoted
+                ? <Icons.Mark size={42} color={p.visited ? C.sage : C.coral} />
+                : <Icons.MarkPlain size={30} color={p.visited ? C.sage : C.coral} />}
+            </View>
           </Marker>
         ))}
 

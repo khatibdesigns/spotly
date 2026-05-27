@@ -72,7 +72,7 @@ export function Btn({
   const kinds: Record<BtnKind, { bg: string; fg: string; border?: string }> = {
     primary: { bg: C.coral, fg: '#fff' },
     dark: { bg: C.ink, fg: '#fff' },
-    ghost: { bg: 'transparent', fg: C.ink, border: C.line },
+    ghost: { bg: C.surface, fg: C.ink, border: C.line }, // opaque so it never shows content through when overlapping
     soft: { bg: C.coralLt, fg: C.coralDk },
     sage: { bg: C.sage, fg: '#fff' },
     premium: { bg: C.premium, fg: '#fff' },

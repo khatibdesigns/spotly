@@ -1,5 +1,5 @@
 // Spotly — Gallery. Real family memories (photos in Storage + Firestore).
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, Image, Modal, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,18 +9,54 @@ import { Icons } from '../components/icons';
 import { Btn, CircBtn, TitleHeader } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useMemories, Memory } from '../lib/memories';
+import { usePlaces } from '../lib/placesStore';
+import { searchPlaces, PlaceSearchResult } from '../lib/places';
 import { useI18n } from '../lib/i18n';
 
 export function GalleryScreen() {
   const insets = useSafeAreaInsets();
   const { push } = useStore();
   const { memories, visited, addMemory, uploading } = useMemories();
+  const { loc } = usePlaces();
   const { t } = useI18n();
   const [picked, setPicked] = useState<string | null>(null);
   const [placeName, setPlaceName] = useState('');
   const [city, setCity] = useState('');
   const [note, setNote] = useState('');
   const [viewing, setViewing] = useState<Memory | null>(null);
+  // Google Places search for "Where was this?" — picking a result captures the
+  // place's coords so the memory lands on the map too.
+  const [results, setResults] = useState<PlaceSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const chosen = useRef<{ placeId?: string; lat?: number; lng?: number; category?: string } | null>(null);
+
+  // Debounced search as the user types (skips the change made by picking).
+  useEffect(() => {
+    if (!picked) return; // only while the add-memory modal is open
+    const q = placeName.trim();
+    if (chosen.current || q.length < 2) { setResults([]); setSearching(false); return; }
+    setSearching(true);
+    const id = setTimeout(async () => {
+      const near = loc?.latitude != null ? { latitude: loc.latitude, longitude: loc.longitude } : undefined;
+      const r = await searchPlaces(q, near);
+      setResults(r.slice(0, 6));
+      setSearching(false);
+    }, 350);
+    return () => clearTimeout(id);
+  }, [placeName, picked, loc?.latitude, loc?.longitude]);
+
+  const onPlaceChange = (text: string) => { chosen.current = null; setPlaceName(text); };
+  const pickPlace = (r: PlaceSearchResult) => {
+    chosen.current = { placeId: r.placeId, lat: r.lat, lng: r.lng, category: r.category };
+    setPlaceName(r.name);
+    // Best-effort city from the address (token before the country).
+    if (!city && r.address) {
+      const parts = r.address.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length >= 2) setCity(parts[parts.length - 2]);
+    }
+    setResults([]);
+    setSearching(false);
+  };
 
   // Open the most recent memory captured at a given visited place.
   const openPlace = (key: string) => {
@@ -40,13 +76,24 @@ export function GalleryScreen() {
       setPlaceName('');
       setCity('');
       setNote('');
+      setResults([]);
+      chosen.current = null;
     }
   };
 
   const save = async () => {
     if (!picked || !placeName.trim()) return;
     try {
-      await addMemory({ photoUri: picked, placeName: placeName.trim(), city: city.trim() || undefined, note: note.trim() || undefined });
+      await addMemory({
+        photoUri: picked,
+        placeName: placeName.trim(),
+        city: city.trim() || undefined,
+        note: note.trim() || undefined,
+        placeId: chosen.current?.placeId,
+        category: chosen.current?.category,
+        lat: chosen.current?.lat,
+        lng: chosen.current?.lng,
+      });
       setPicked(null);
     } catch (e: any) {
       Alert.alert('Could not save', e?.message || 'Please try again.');
@@ -136,7 +183,24 @@ export function GalleryScreen() {
             <Text style={{ fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>{t('gallery.addMemory')}</Text>
             {picked ? <Image source={{ uri: picked }} style={{ width: '100%', height: 180, borderRadius: R.lg, marginTop: 14, backgroundColor: C.surface2 }} resizeMode="cover" /> : null}
             <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 16, marginBottom: 6 }}>{t('gallery.place')} *</Text>
-            <TextInput value={placeName} onChangeText={setPlaceName} placeholder={t('gallery.placeHint')} placeholderTextColor={C.ink3} style={inputStyle} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface, borderRadius: R.md, paddingHorizontal: 12, borderWidth: 1, borderColor: C.line }}>
+              {Icons.search({ size: 16, color: C.ink3 })}
+              <TextInput value={placeName} onChangeText={onPlaceChange} placeholder={t('gallery.placeHint')} placeholderTextColor={C.ink3} style={{ flex: 1, fontFamily: F.regular, fontSize: 15, color: C.ink, paddingVertical: 12 }} autoCorrect={false} />
+              {searching ? <ActivityIndicator size="small" color={C.ink3} /> : placeName.length ? <Pressable onPress={() => onPlaceChange('')} hitSlop={8}>{Icons.close({ size: 15, color: C.ink3 })}</Pressable> : null}
+            </View>
+            {results.length > 0 ? (
+              <View style={[{ backgroundColor: C.surface, borderRadius: R.md, marginTop: 6, overflow: 'hidden' }, SH.card]}>
+                {results.map((r, i) => (
+                  <Pressable key={r.placeId || i} onPress={() => pickPlace(r)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 11, borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}>
+                    {Icons.pin({ size: 15, color: C.coral })}
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={{ fontFamily: F.semibold, fontSize: 14, color: C.ink }}>{r.name}</Text>
+                      {r.address ? <Text numberOfLines={1} style={{ fontFamily: F.regular, fontSize: 12, color: C.ink3, marginTop: 1 }}>{r.address}</Text> : null}
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
             <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 12, marginBottom: 6 }}>{t('gallery.city')}</Text>
             <TextInput value={city} onChangeText={setCity} placeholder={t('gallery.cityHint')} placeholderTextColor={C.ink3} style={inputStyle} />
             <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 12, marginBottom: 6 }}>{t('gallery.note')}</Text>

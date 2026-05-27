@@ -42,6 +42,18 @@ export const Mark = ({ size = 28, color = C.coral }: { size?: number; color?: st
   </Svg>
 );
 
+// Plain teardrop pin (no star) — used for normal/visited map markers; the
+// starred Mark above is reserved for promoted places.
+export const MarkPlain = ({ size = 28, color = C.coral }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size * 1.18} viewBox="0 0 100 118">
+    <Path
+      d="M50 4 C24 4 6 22 6 47 c0 23 18 41 38 65 c2 2 4 2 6 2 c2 0 4 0 6-2 c20-24 38-42 38-65 C94 22 76 4 50 4z"
+      fill={color}
+    />
+    <Circle cx="50" cy="46" r="15" fill="white" fillOpacity={0.96} />
+  </Svg>
+);
+
 // ── Wordmark — "Spotly" with the o as a map pin ───────────────
 export const Wordmark = ({
   size = 40,
@@ -364,6 +376,7 @@ export const age812 = ageBadge('8-12');
 
 export const Icons = {
   Mark,
+  MarkPlain,
   Wordmark,
   compass,
   calendar,
