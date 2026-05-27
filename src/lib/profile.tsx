@@ -13,11 +13,12 @@ export type Kid = {
   age: number;
   favFoods?: string[]; // foods this child loves
   avoidFoods?: string[]; // foods to avoid (allergies / not allowed)
+  photoUrl?: string; // this child's photo
 };
 
 // An adult member of the family (the parents). Each signed-in adult who is in
 // the family appears here, so a joined partner shows as themselves — not as you.
-export type FamilyMember = { uid: string; name: string };
+export type FamilyMember = { uid: string; name: string; photoUrl?: string };
 
 export type Profile = {
   familyName: string;
@@ -40,7 +41,8 @@ type ProfileState = {
   loading: boolean;
   hasProfile: boolean;
   saveProfile: (data: Partial<Profile>) => Promise<void>;
-  uploadAvatar: (uri: string) => Promise<void>;
+  uploadAvatar: (uri: string) => Promise<void>; // family header photo
+  uploadImage: (uri: string) => Promise<string>; // generic upload → returns URL
 };
 
 const Ctx = createContext<ProfileState | null>(null);
@@ -97,9 +99,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     [user, familyId, profile]
   );
 
-  // Upload a picked image as the family profile photo, then save its URL.
-  const uploadAvatar = useCallback(
-    async (uri: string) => {
+  // Upload a picked image to the family's storage and return its URL.
+  const uploadImage = useCallback(
+    async (uri: string): Promise<string> => {
       if (!user || !firestore || !storage || !familyId) throw new Error('Not signed in');
       // RN-reliable local-file → Blob (fetch().blob() is flaky in Hermes).
       const blob: Blob = await new Promise((resolve, reject) => {
@@ -110,13 +112,21 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         xhr.open('GET', uri, true);
         xhr.send(null);
       });
-      const r = ref(storage, `families/${familyId}/avatar-${Date.now()}.jpg`);
+      const r = ref(storage, `families/${familyId}/avatar-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.jpg`);
       await uploadBytes(r, blob, { contentType: 'image/jpeg' });
       try { (blob as any).close?.(); } catch {}
-      const url = await getDownloadURL(r);
+      return getDownloadURL(r);
+    },
+    [user, familyId]
+  );
+
+  // Family header photo.
+  const uploadAvatar = useCallback(
+    async (uri: string) => {
+      const url = await uploadImage(uri);
       await saveProfile({ photoUrl: url });
     },
-    [user, familyId, saveProfile]
+    [uploadImage, saveProfile]
   );
 
   const value: ProfileState = {
@@ -125,6 +135,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     hasProfile: !!profile && !!profile.familyName,
     saveProfile,
     uploadAvatar,
+    uploadImage,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

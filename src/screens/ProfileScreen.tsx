@@ -35,6 +35,19 @@ function Avatar({ letter, color, size = 36, photoUrl }: { letter: string; color:
   );
 }
 
+// Tappable avatar with a camera badge — set a photo for a person/kid.
+function EditableAvatar({ letter, color, photoUrl, busy, onPress, size = 36 }: { letter: string; color: string; photoUrl?: string; busy?: boolean; onPress: () => void; size?: number }) {
+  const badge = Math.max(16, Math.round(size * 0.34));
+  return (
+    <Pressable onPress={onPress} hitSlop={4} style={{ opacity: busy ? 0.5 : 1 }}>
+      <Avatar letter={letter} color={color} photoUrl={photoUrl} size={size} />
+      <View style={{ position: 'absolute', right: -2, bottom: -2, width: badge, height: badge, borderRadius: badge / 2, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.surface }}>
+        {Icons.camera({ size: Math.round(badge * 0.55), color: '#fff' })}
+      </View>
+    </Pressable>
+  );
+}
+
 function IconBox({ ic, c }: { ic: (p: any) => React.ReactNode; c: string }) {
   return (
     <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: '#f1ece4', alignItems: 'center', justifyContent: 'center' }}>
@@ -73,29 +86,53 @@ export function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { push, setTab } = useStore();
   const { user, signOut } = useAuth();
-  const { profile, saveProfile, uploadAvatar } = useProfile();
+  const { profile, saveProfile, uploadAvatar, uploadImage } = useProfile();
   const { stats, memories, visited } = useMemories();
   const { t, lang, setLang } = useI18n();
   const { isOwnFamily, inviteToFamily, joinFamily, leaveFamily } = useFamily();
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
-  const [avatarBusy, setAvatarBusy] = useState(false);
+  // Which avatar is mid-upload: 'family', a member uid, or a kid id.
+  const [photoBusy, setPhotoBusy] = useState<string | null>(null);
+
+  const pickImage = async (): Promise<string | null> => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert(t('gallery.permTitle'), t('gallery.permMsg')); return null; }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    return res.canceled || !res.assets?.[0] ? null : res.assets[0].uri;
+  };
 
   const onChangePhoto = async () => {
-    if (avatarBusy) return;
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert(t('gallery.permTitle'), t('gallery.permMsg')); return; }
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
-    if (res.canceled || !res.assets?.[0]) return;
-    setAvatarBusy(true);
+    if (photoBusy) return;
+    const uri = await pickImage(); if (!uri) return;
+    setPhotoBusy('family');
+    try { await uploadAvatar(uri); }
+    catch (e: any) { Alert.alert(t('common.error'), e?.message || t('common.tryAgain')); }
+    finally { setPhotoBusy(null); }
+  };
+
+  const setMemberPhoto = async (uid: string) => {
+    if (photoBusy) return;
+    const uri = await pickImage(); if (!uri) return;
+    setPhotoBusy(uid);
     try {
-      await uploadAvatar(res.assets[0].uri);
-    } catch (e: any) {
-      Alert.alert(t('common.error'), e?.message || t('common.tryAgain'));
-    } finally {
-      setAvatarBusy(false);
-    }
+      const url = await uploadImage(uri);
+      const base = profile?.members?.length ? profile.members : [{ uid: user?.uid || 'me', name: profile?.parentName || 'Parent' }];
+      await saveProfile({ members: base.map((m) => (m.uid === uid ? { ...m, photoUrl: url } : m)) });
+    } catch (e: any) { Alert.alert(t('common.error'), e?.message || t('common.tryAgain')); }
+    finally { setPhotoBusy(null); }
+  };
+
+  const setKidPhoto = async (kidId: string) => {
+    if (photoBusy) return;
+    const uri = await pickImage(); if (!uri) return;
+    setPhotoBusy(kidId);
+    try {
+      const url = await uploadImage(uri);
+      await saveProfile({ kids: (profile?.kids || []).map((k) => (k.id === kidId ? { ...k, photoUrl: url } : k)) });
+    } catch (e: any) { Alert.alert(t('common.error'), e?.message || t('common.tryAgain')); }
+    finally { setPhotoBusy(null); }
   };
 
   const onInvite = async () => {
@@ -159,13 +196,7 @@ export function ProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }}>
         {/* Family header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <Pressable onPress={onChangePhoto} hitSlop={6}>
-            <Avatar letter={initial(profile?.familyName || profile?.parentName, 'S')} color={C.coral} size={70} photoUrl={profile?.photoUrl} />
-            {/* Camera badge — tap to change the photo */}
-            <View style={{ position: 'absolute', right: -2, bottom: -2, width: 26, height: 26, borderRadius: 13, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg }}>
-              {avatarBusy ? <ActivityIndicator size="small" color="#fff" /> : Icons.camera({ size: 13, color: '#fff' })}
-            </View>
-          </Pressable>
+          <EditableAvatar letter={initial(profile?.familyName || profile?.parentName, 'S')} color={C.coral} size={70} photoUrl={profile?.photoUrl} busy={photoBusy === 'family'} onPress={onChangePhoto} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: F.serif, fontSize: 26, letterSpacing: -0.6, lineHeight: 28, color: C.ink }}>{profile?.familyName || 'My family'}</Text>
             <Text style={{ fontSize: 13, color: C.ink3, fontFamily: F.regular, marginTop: 3 }}>
@@ -201,7 +232,7 @@ export function ProfileScreen() {
           ).map((m, i, arr) => (
             <Row
               key={m.uid}
-              icon={<Avatar letter={initial(m.name, '?')} color={i === 0 ? C.coral : C.sky} />}
+              icon={<EditableAvatar letter={initial(m.name, '?')} color={i === 0 ? C.coral : C.sky} photoUrl={m.photoUrl} busy={photoBusy === m.uid} onPress={() => setMemberPhoto(m.uid)} />}
               title={m.name || 'Parent'}
               sub={m.uid === user?.uid ? t('profile.parentYou') : t('profile.parent')}
               last={arr.length - 1 === i && kids.length === 0}
@@ -216,7 +247,7 @@ export function ProfileScreen() {
             return (
               <Row
                 key={k.id}
-                icon={<Avatar letter={initial(k.name, '?')} color={KID_COLORS[i % KID_COLORS.length]} />}
+                icon={<EditableAvatar letter={initial(k.name, '?')} color={KID_COLORS[i % KID_COLORS.length]} photoUrl={k.photoUrl} busy={photoBusy === k.id} onPress={() => setKidPhoto(k.id)} />}
                 title={k.name || `Child ${i + 1}`}
                 sub={`${t('profile.ageFmt', { age: k.age })} · ${foodSub}`}
                 last={i === kids.length - 1}
