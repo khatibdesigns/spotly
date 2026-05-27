@@ -283,13 +283,17 @@ export function PlaceScreen() {
         </Pressable>
       ) : null}
 
-      {/* Sticky CTA */}
+      {/* Sticky CTA. Booking is hidden for now (not every place takes bookings —
+          parks, shops, etc.). With offers: Add to plan + View offers. Without:
+          Add to plan is the sole action, full width. */}
       <View style={[{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 12, height: 72, backgroundColor: C.surface, borderRadius: 24, flexDirection: 'row', alignItems: 'center', padding: 10, gap: 10 }, SH.pop]}>
-        <Btn kind="ghost" style={{ flex: 1, height: 52 }} icon={Icons.calendar({ size: 15, color: C.ink })} onPress={addToPlan}>{t('place.addToPlan')}</Btn>
         {hasOffers ? (
-          <Btn kind="primary" style={{ flex: 1.3, height: 52 }} onPress={toggleOffers}>{offersOpen ? t('place.hideOffers') : t('place.viewOffers')}</Btn>
+          <>
+            <Btn kind="ghost" style={{ flex: 1, height: 52 }} icon={Icons.calendar({ size: 15, color: C.ink })} onPress={addToPlan}>{t('place.addToPlan')}</Btn>
+            <Btn kind="primary" style={{ flex: 1.3, height: 52 }} onPress={toggleOffers}>{offersOpen ? t('place.hideOffers') : t('place.viewOffers')}</Btn>
+          </>
         ) : (
-          <Btn kind="primary" style={{ flex: 1.3, height: 52 }} onPress={() => push('booking')}>{t('place.requestBook')}</Btn>
+          <Btn kind="primary" style={{ flex: 1, height: 52 }} icon={Icons.calendar({ size: 15, color: '#fff' })} onPress={addToPlan}>{t('place.addToPlan')}</Btn>
         )}
       </View>
     </View>
