@@ -236,6 +236,12 @@ export const trash = ico(
     <Path d="M4 7h16M9 7V5a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0115 5v2M6 7l1 13h10l1-13" />
   </>
 );
+export const hotel = ico(
+  <>
+    <Path d="M3 21V5a1 1 0 011-1h9a1 1 0 011 1v16M14 21V9h6a1 1 0 011 1v11M2 21h20" />
+    <Path d="M6 8h2M6 12h2M10 8h1M10 12h1M17 13h1" />
+  </>
+);
 
 // ── Amenity icons ─────────────────────────────────────────────
 export const playArea = ico(
@@ -380,6 +386,7 @@ export const Icons = {
   chevU,
   bag,
   trash,
+  hotel,
   camera,
   sparkle,
   clock,

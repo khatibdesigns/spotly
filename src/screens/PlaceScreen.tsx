@@ -29,7 +29,7 @@ const AMENITY_META: Record<string, { ic: (p: any) => React.ReactNode; c: string;
   animals: { ic: Icons.animals, c: C.sun, label: 'Animals' },
   indoor: { ic: Icons.indoor, c: C.ink2, label: 'Indoor' },
   outdoor: { ic: Icons.outdoor, c: C.sage, label: 'Outdoor' },
-  water: { ic: Icons.water, c: C.sky, label: 'Water' },
+  water: { ic: Icons.water, c: C.sky, label: 'Waterpark' },
   arts: { ic: Icons.arts, c: C.plum, label: 'Arts' },
   restroom: { ic: Icons.restroom, c: C.ink2, label: 'Restrooms' },
   changing: { ic: Icons.changing, c: C.ink2, label: 'Changing' },

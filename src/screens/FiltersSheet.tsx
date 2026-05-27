@@ -6,7 +6,7 @@ import { C, F, R } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Chip, Btn } from '../components/ui';
 import { useStore } from '../lib/store';
-import { usePlaces } from '../lib/placesStore';
+import { usePlaces, filterHasResults } from '../lib/placesStore';
 import { useI18n } from '../lib/i18n';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -22,6 +22,7 @@ const KINDS = [
   { id: 'activity', key: 'kind.activity', ic: Icons.compass },
   { id: 'dining', key: 'kind.dining', ic: Icons.dining },
   { id: 'shop', key: 'kind.shop', ic: Icons.shop },
+  { id: 'stay', key: 'kind.stay', ic: Icons.hotel },
 ];
 const AMENITIES = [
   { id: 'playArea', label: 'Play area', ic: Icons.playArea },
@@ -29,7 +30,7 @@ const AMENITIES = [
   { id: 'outdoor', label: 'Outdoor', ic: Icons.outdoor },
   { id: 'foodOnSite', label: 'Food on site', ic: Icons.foodOnSite },
   { id: 'animals', label: 'Animals', ic: Icons.animals },
-  { id: 'water', label: 'Water', ic: Icons.water },
+  { id: 'water', label: 'Waterparks', ic: Icons.water },
   { id: 'museum', label: 'Museum', ic: Icons.museum },
   { id: 'arts', label: 'Arts', ic: Icons.arts },
 ];
@@ -39,8 +40,11 @@ const PRICE_ID: Record<string, string> = { Free: 'free', $: '$', $$: '$$', $$$: 
 export function FiltersSheet() {
   const insets = useSafeAreaInsets();
   const { pop } = useStore();
-  const { filters, toggleFilter, clearFilters, filtered } = usePlaces();
+  const { filters, toggleFilter, clearFilters, filtered, spots } = usePlaces();
   const { t } = useI18n();
+  // Hide any option that wouldn't return results (keep it if it's active so the
+  // user can still switch it off).
+  const show = (id: string) => filters.has(id) || filterHasResults(id, spots);
 
   return (
     <View style={{ flex: 1 }}>
@@ -54,7 +58,7 @@ export function FiltersSheet() {
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
           <Section title={t('filters.lookingFor')}>
-            {KINDS.map((k) => {
+            {KINDS.filter((k) => show(k.id)).map((k) => {
               const on = filters.has(k.id);
               return (
                 <Chip key={k.id} active={on} onPress={() => toggleFilter(k.id)} icon={k.ic({ size: 14, color: on ? '#fff' : C.ink })}>{t(k.key)}</Chip>
@@ -63,7 +67,7 @@ export function FiltersSheet() {
           </Section>
 
           <Section title={t('filters.amenities')}>
-            {AMENITIES.map((a) => {
+            {AMENITIES.filter((a) => show(a.id)).map((a) => {
               const on = filters.has(a.id);
               return (
                 <Chip key={a.id} active={on} onPress={() => toggleFilter(a.id)} icon={a.ic({ size: 14, color: on ? '#fff' : C.ink })}>{a.label}</Chip>
@@ -71,15 +75,19 @@ export function FiltersSheet() {
             })}
           </Section>
 
-          <Section title={t('filters.price')}>
-            {PRICES.map((p) => (
-              <Chip key={p} active={filters.has(PRICE_ID[p])} onPress={() => toggleFilter(PRICE_ID[p])}>{p}</Chip>
-            ))}
-          </Section>
+          {PRICES.some((p) => show(PRICE_ID[p])) ? (
+            <Section title={t('filters.price')}>
+              {PRICES.filter((p) => show(PRICE_ID[p])).map((p) => (
+                <Chip key={p} active={filters.has(PRICE_ID[p])} onPress={() => toggleFilter(PRICE_ID[p])}>{p}</Chip>
+              ))}
+            </Section>
+          ) : null}
 
-          <Section title={t('filters.more')}>
-            <Chip active={filters.has('openNow')} onPress={() => toggleFilter('openNow')}>{t('filter.openNow')}</Chip>
-          </Section>
+          {show('openNow') ? (
+            <Section title={t('filters.more')}>
+              <Chip active={filters.has('openNow')} onPress={() => toggleFilter('openNow')}>{t('filter.openNow')}</Chip>
+            </Section>
+          ) : null}
         </ScrollView>
 
         <View style={{ flexDirection: 'row', gap: 10, paddingBottom: insets.bottom + 12, paddingTop: 6 }}>

@@ -3,12 +3,24 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { getUserLocation, getSpots, KUWAIT_CITY, Spot, UserLoc } from './places';
 
-// Kind filters (activity / dining / shop) — OR among themselves.
+// Kind filters (activity / dining / shop / stay) — OR among themselves.
 const KIND_OF: Record<string, Spot['kind']> = {
   activity: 'activity',
   dining: 'dining',
   shop: 'shop',
+  stay: 'stay',
 };
+
+const PRICE_LABEL: Record<string, string> = { free: 'Free', $: '$', $$: '$$', $$$: '$$$' };
+
+// True if at least one loaded spot would match this filter — used to hide
+// filters that would return nothing.
+export function filterHasResults(id: string, spots: Spot[]): boolean {
+  if (KIND_OF[id]) return spots.some((s) => s.kind === KIND_OF[id]);
+  if (id in PRICE_LABEL) return spots.some((s) => s.price === PRICE_LABEL[id]);
+  if (id === 'openNow') return spots.some((s) => s.openNow === true);
+  return spots.some((s) => s.amenities.includes(id)); // amenity
+}
 
 // Amenity/price/openNow predicates — a spot must satisfy ALL active ones (AND).
 const PRED: Record<string, (s: Spot) => boolean> = {

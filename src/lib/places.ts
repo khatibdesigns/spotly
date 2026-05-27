@@ -13,7 +13,7 @@ export const KUWAIT_CITY = { latitude: 29.3759, longitude: 47.9774 };
 export type SpotSource = 'google' | 'curated';
 
 // What kind of place this is — drives the Discover sections/filters.
-export type SpotKind = 'activity' | 'dining' | 'shop';
+export type SpotKind = 'activity' | 'dining' | 'shop' | 'stay';
 
 export type Spot = {
   id: string;
@@ -79,14 +79,17 @@ const PRICE: Record<string, string> = {
 };
 
 // Kid-friendly place types (valid Google Places "Table A" included types).
-const KID_TYPES = ['park', 'zoo', 'aquarium', 'amusement_park', 'amusement_center', 'museum', 'tourist_attraction'];
+const KID_TYPES = ['park', 'zoo', 'aquarium', 'water_park', 'amusement_park', 'amusement_center', 'museum', 'tourist_attraction'];
 // Family dining (valid Table A types).
 const DINING_TYPES = ['restaurant', 'cafe', 'bakery', 'ice_cream_shop'];
+// Hotels & resorts (valid Table A lodging types).
+const STAY_TYPES = ['resort_hotel', 'hotel'];
 
 const TYPE_AMENITY: Record<string, string> = {
   park: 'outdoor',
   zoo: 'animals',
-  aquarium: 'water',
+  aquarium: 'animals', // marine life (the 'water' amenity = waterparks now)
+  water_park: 'water',
   amusement_park: 'playArea',
   amusement_center: 'playArea',
   museum: 'museum',
@@ -96,7 +99,6 @@ const TYPE_AMENITY: Record<string, string> = {
   bakery: 'foodOnSite',
   ice_cream_shop: 'foodOnSite',
   art_gallery: 'arts',
-  water_park: 'water',
 };
 const TYPE_TONE: Record<string, string> = {
   park: 'sage',
@@ -111,6 +113,8 @@ const TYPE_TONE: Record<string, string> = {
   cafe: 'warm',
   bakery: 'sun',
   ice_cream_shop: 'sky',
+  hotel: 'plum',
+  resort_hotel: 'plum',
 };
 
 function prettyType(t?: string): string {
@@ -349,10 +353,11 @@ export async function searchPlaces(text: string, near?: { latitude: number; long
 // Curated spots first (hand-picked), then Google activities + dining + shops,
 // de-duped by name and sorted by distance.
 export async function getSpots(loc: UserLoc): Promise<Spot[]> {
-  const [activities, dining, shops, curated] = await Promise.all([
+  const [activities, dining, shops, stays, curated] = await Promise.all([
     searchNearby(loc, KID_TYPES, 'activity', 20),
     searchNearby(loc, DINING_TYPES, 'dining', 15),
     searchShops(loc),
+    searchNearby(loc, STAY_TYPES, 'stay', 12),
     fetchCurated(loc),
   ]);
   // A curated doc may be a "claim record" linked to a Google place_id (the
@@ -373,7 +378,7 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
   const seenNames = new Set(curated.map((c) => c.name.toLowerCase()));
   const seenIds = new Set<string>(); // guard: a place can appear in >1 search list
   const google: Spot[] = [];
-  for (const g of [...activities, ...dining, ...shops]) {
+  for (const g of [...activities, ...dining, ...shops, ...stays]) {
     if (seenIds.has(g.id)) continue; // same place returned by multiple type searches
     seenIds.add(g.id);
     const claim = claimByPlaceId.get(g.id);

@@ -54,6 +54,8 @@ const EN: Record<string, string> = {
   'cart.couldNotBuy': 'Couldn’t complete the purchase',
   // voucher pass
   'voucher.title': 'Your voucher',
+  'voucher.titlePlural': 'Your vouchers',
+  'voucher.ofCount': '{n} of {total}',
   'voucher.paid': 'Paid',
   'voucher.redeemed': 'Redeemed',
   'voucher.cardBalance': 'Card balance',
@@ -79,6 +81,7 @@ const EN: Record<string, string> = {
   'kind.activity': 'Activities',
   'kind.dining': 'Dining',
   'kind.shop': 'Kids & baby shops',
+  'kind.stay': 'Hotels & resorts',
   'filter.playArea': 'Has play area',
   'filter.openNow': 'Open now',
   'filter.free': 'Free',
@@ -89,7 +92,8 @@ const EN: Record<string, string> = {
   'cat.kidsShops': 'Kids shops',
   'cat.museums': 'Museums',
   'cat.zoos': 'Zoos',
-  'cat.water': 'Water',
+  'cat.water': 'Waterparks',
+  'cat.stays': 'Hotels',
   // discover
   'discover.morning': 'Good morning,',
   'discover.afternoon': 'Good afternoon,',
@@ -525,6 +529,8 @@ const AR: Record<string, string> = {
   'cart.couldNotBuy': 'تعذّر إتمام الشراء',
   // voucher pass
   'voucher.title': 'قسيمتك',
+  'voucher.titlePlural': 'قسائمك',
+  'voucher.ofCount': '{n} من {total}',
   'voucher.paid': 'مدفوعة',
   'voucher.redeemed': 'مُستخدمة',
   'voucher.cardBalance': 'رصيد البطاقة',
@@ -550,6 +556,7 @@ const AR: Record<string, string> = {
   'kind.activity': 'أنشطة',
   'kind.dining': 'مطاعم',
   'kind.shop': 'متاجر الأطفال والرضّع',
+  'kind.stay': 'فنادق ومنتجعات',
   'filter.playArea': 'منطقة لعب',
   'filter.openNow': 'مفتوح الآن',
   'filter.free': 'مجاني',
@@ -560,7 +567,8 @@ const AR: Record<string, string> = {
   'cat.kidsShops': 'متاجر أطفال',
   'cat.museums': 'متاحف',
   'cat.zoos': 'حدائق حيوان',
-  'cat.water': 'ألعاب مائية',
+  'cat.water': 'مدن ألعاب مائية',
+  'cat.stays': 'فنادق',
   // discover
   'discover.morning': 'صباح الخير،',
   'discover.afternoon': 'مساء الخير،',

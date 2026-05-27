@@ -9,7 +9,7 @@ import { Chip, Btn, SpotImage, Stars } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useProfile, myFirstName, kidNames, familyFood } from '../lib/profile';
 import { useAuth } from '../lib/auth';
-import { usePlaces } from '../lib/placesStore';
+import { usePlaces, filterHasResults } from '../lib/placesStore';
 import { useSaves } from '../lib/saves';
 import { useVouchers } from '../lib/vouchers';
 import { useI18n } from '../lib/i18n';
@@ -78,6 +78,7 @@ const KINDS = [
   { id: 'activity', key: 'kind.activity' },
   { id: 'dining', key: 'kind.dining' },
   { id: 'shop', key: 'kind.shop' },
+  { id: 'stay', key: 'kind.stay' },
 ];
 const FILTER_CHIPS = [
   { id: 'playArea', key: 'filter.playArea' },
@@ -93,6 +94,7 @@ const CATEGORIES = [
   { id: 'museum', ic: Icons.museum, color: C.ink2, key: 'cat.museums' },
   { id: 'animals', ic: Icons.animals, color: C.sun, key: 'cat.zoos' },
   { id: 'water', ic: Icons.water, color: C.sky, key: 'cat.water' },
+  { id: 'stay', ic: Icons.hotel, color: C.plum, key: 'cat.stays' },
 ];
 
 function FeedCard({ spot, onPress }: { spot: Spot; onPress: () => void }) {
@@ -257,9 +259,9 @@ export function DiscoverScreen() {
             </View>
           ) : null}
 
-          {/* What are you looking for — kind selector */}
+          {/* What are you looking for — kind selector (hide kinds with no results) */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 10 }}>
-            {KINDS.map((k) => (
+            {KINDS.filter((k) => filters.has(k.id) || filterHasResults(k.id, spots)).map((k) => (
               <Chip key={k.id} active={filters.has(k.id)} onPress={() => toggleFilter(k.id)}>{t(k.key)}</Chip>
             ))}
           </ScrollView>
@@ -287,14 +289,14 @@ export function DiscoverScreen() {
           {/* Filters */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingBottom: 14 }}>
             <Chip icon={Icons.filter({ size: 13, color: C.ink })} onPress={() => push('filters')}>{t('discover.filters')}</Chip>
-            {FILTER_CHIPS.map((f) => (
+            {FILTER_CHIPS.filter((f) => filters.has(f.id) || filterHasResults(f.id, spots)).map((f) => (
               <Chip key={f.id} active={filters.has(f.id)} onPress={() => toggleFilter(f.id)}>{t(f.key)}</Chip>
             ))}
           </ScrollView>
 
           {/* Categories */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20, paddingBottom: 18 }}>
-            {CATEGORIES.map((c, i) => (
+            {CATEGORIES.filter((c) => filters.has(c.id) || filterHasResults(c.id, spots)).map((c, i) => (
               <CatTile key={`${c.id}-${i}`} ic={c.ic} color={c.color} label={t(c.key)} active={filters.has(c.id)} onPress={() => toggleFilter(c.id)} />
             ))}
           </ScrollView>
