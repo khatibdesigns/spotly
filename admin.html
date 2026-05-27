@@ -683,25 +683,46 @@ $('addCampaignBtn').onclick = () => {
     <h2>New campaign</h2>
     <label class="fld">Title *</label><input id="c_title" placeholder="Summer splash pads"/>
     <label class="fld">Message</label><textarea id="c_msg" rows="3" placeholder="Beat the heat — free water parks this week!"></textarea>
-    <div class="form-grid" style="margin-top:4px">
-      <div><label class="fld">Audience</label><select id="c_aud"><option>All families</option><option>Kuwait</option><option>Plus subscribers</option></select></div>
-      <div><label class="fld">Status</label><select id="c_stat"><option>draft</option><option>active</option></select></div>
-      <div><label class="fld">Starts</label><input type="date" id="c_start"/></div>
-      <div><label class="fld">Ends</label><input type="date" id="c_end"/></div>
+    <label class="fld">Send to</label>
+    <select id="c_aud">
+      <option value="all">All app users</option>
+      <option value="city">A city</option>
+      <option value="family">A specific family (by email)</option>
+    </select>
+    <div id="c_target_wrap" style="display:none;margin-top:8px">
+      <input id="c_target" placeholder=""/>
     </div>
+    <p class="muted-note" style="margin:8px 0 0">"Send push" queues the campaign — the server delivers it to the chosen audience.</p>
     <p id="c_err" class="err"></p>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
       <button class="btn ghost" id="c_cancel">Cancel</button>
-      <button class="btn sage" id="c_save">Create campaign</button>
+      <button class="btn ghost" id="c_draft">Save draft</button>
+      <button class="btn sage" id="c_send">🔔 Send push</button>
     </div>
   </div></div>`;
+  const aud = $('c_aud'), wrap = $('c_target_wrap'), target = $('c_target');
+  aud.onchange = () => {
+    wrap.style.display = aud.value === 'all' ? 'none' : 'block';
+    target.placeholder = aud.value === 'city' ? 'e.g. Kuwait City' : 'parent@email.com';
+  };
   $('c_cancel').onclick = () => $('modalRoot').innerHTML='';
-  $('c_save').onclick = async () => {
+  const create = async (status) => {
     const title=$('c_title').value.trim(); if(!title){ $('c_err').textContent='Title is required.'; return; }
-    try{ await addDoc(collection(db,'campaigns'),{ title, message:$('c_msg').value.trim()||null, audience:$('c_aud').value, status:$('c_stat').value, starts:$('c_start').value||null, ends:$('c_end').value||null, createdAt:serverTimestamp() });
+    if (aud.value !== 'all' && !target.value.trim()) { $('c_err').textContent='Enter the '+(aud.value==='city'?'city':'family email')+'.'; return; }
+    try{
+      await addDoc(collection(db,'campaigns'),{
+        title, message:$('c_msg').value.trim()||null,
+        audience: aud.value,
+        targetCity: aud.value==='city' ? target.value.trim() : null,
+        targetEmail: aud.value==='family' ? target.value.trim().toLowerCase() : null,
+        push: status==='queued', status,
+        createdAt:serverTimestamp(),
+      });
       $('modalRoot').innerHTML=''; loadCampaigns();
     }catch(e){ $('c_err').textContent=e.message.replace('Firebase: ',''); }
   };
+  $('c_draft').onclick = () => create('draft');
+  $('c_send').onclick = () => create('queued');
 };
 
 // ---------- Hotspots / Events ----------
