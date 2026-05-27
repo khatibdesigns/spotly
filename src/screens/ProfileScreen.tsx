@@ -12,7 +12,6 @@ import { useProfile } from '../lib/profile';
 import { useFamily, buildInviteUrl } from '../lib/family';
 import { useI18n } from '../lib/i18n';
 import { useMemories } from '../lib/memories';
-import { useBookings } from '../lib/bookings';
 import { useVouchers } from '../lib/vouchers';
 import { useSaves } from '../lib/saves';
 import { usePurchases } from '../lib/purchases';
@@ -124,7 +123,6 @@ export function ProfileScreen() {
     }
   };
   const openURL = (u: string) => Linking.openURL(u).catch(() => {});
-  const { bookings } = useBookings();
   const { orders: voucherOrders } = useVouchers();
   const { saved } = useSaves();
   const { isPlus } = usePurchases();
@@ -225,28 +223,7 @@ export function ProfileScreen() {
           <Row icon={<IconBox ic={Icons.bag} c={C.coral} />} title={t('profile.myPurchases')} det={String(voucherOrders.length)} onPress={() => push('purchases')} />
           <Row icon={<IconBox ic={Icons.bookmark} c={C.coral} />} title={t('profile.savedSpots')} det={String(saved.length)} onPress={() => push('saved')} />
           <Row icon={<IconBox ic={Icons.clock} c={C.sage} />} title={t('profile.placesVisited')} det={String(visited.length)} onPress={() => setTab('gallery')} />
-          <Row icon={<IconBox ic={Icons.album} c={C.plum} />} title={t('profile.memories')} det={String(memories.length)} onPress={() => setTab('gallery')} />
-          <Row icon={<IconBox ic={Icons.calendar} c={C.sky} />} title={t('profile.bookings')} det={String(bookings.length)} onPress={() => setTab('plan')} last />
-        </View>
-
-        {/* Bookings with their QR passes */}
-        <SectionLabel>{t('profile.yourBookings')}</SectionLabel>
-        <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
-          {bookings.length === 0 ? (
-            <Text style={{ padding: 14, color: C.ink3, fontFamily: F.regular, fontSize: 13.5 }}>{t('profile.noBookings')}</Text>
-          ) : (
-            bookings.map((b, i) => (
-              <Row
-                key={b.id}
-                icon={<IconBox ic={Icons.calendar} c={C.coral} />}
-                title={b.placeName}
-                sub={`${b.date} · ${b.time} · ${b.status}`}
-                det={b.code ? t('profile.viewPass') : undefined}
-                onPress={() => push('pass', { bookingId: b.id })}
-                last={i === bookings.length - 1}
-              />
-            ))
-          )}
+          <Row icon={<IconBox ic={Icons.album} c={C.plum} />} title={t('profile.memories')} det={String(memories.length)} onPress={() => setTab('gallery')} last />
         </View>
 
         {/* Settings */}
