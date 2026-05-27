@@ -1,6 +1,6 @@
 // Spotly — app shell. Auth + profile gating → tabs + tab bar + overlay stack.
 import React, { useRef, useEffect } from 'react';
-import { View, ActivityIndicator, Animated, Easing } from 'react-native';
+import { View, ActivityIndicator, Animated, Easing, BackHandler, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from './lib/theme';
 import { useStore, RouteName } from './lib/store';
@@ -92,8 +92,21 @@ export function Shell() {
   const { hasProfile, loading: profileLoading } = useProfile();
   const { isMerchant, loading: merchantLoading } = useMerchant();
   const { familyId } = useFamily();
-  const { tab, stack, push, authIntent } = useStore();
+  const { tab, setTab, stack, push, pop, authIntent } = useStore();
   const insets = useSafeAreaInsets();
+
+  // Android hardware back: close an open overlay, else go to Discover, else let
+  // the OS exit — instead of always quitting the app.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const onBack = () => {
+      if (stack.length > 0) { pop(); return true; }
+      if (tab !== 'discover') { setTab('discover'); return true; }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => sub.remove();
+  }, [stack.length, tab, pop, setTab]);
 
   // Register this device for push (FCM) once signed in, so campaigns can reach
   // it. No-ops until the native messaging module ships in a rebuild.

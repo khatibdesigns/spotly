@@ -29,6 +29,7 @@ const AMENITIES = [
   { id: 'indoor', label: 'Indoor', ic: Icons.indoor },
   { id: 'outdoor', label: 'Outdoor', ic: Icons.outdoor },
   { id: 'foodOnSite', label: 'Food on site', ic: Icons.foodOnSite },
+  { id: 'halal', label: 'Halal', ic: Icons.dining },
   { id: 'animals', label: 'Animals', ic: Icons.animals },
   { id: 'water', label: 'Waterparks', ic: Icons.water },
   { id: 'museum', label: 'Museum', ic: Icons.museum },

@@ -214,6 +214,32 @@ async function searchShops(loc: UserLoc): Promise<Spot[]> {
   }
 }
 
+// Halal family restaurants via text search — there's no reliable "halal" type,
+// so we query by intent and tag the results with a 'halal' amenity to filter on.
+async function searchHalal(loc: UserLoc): Promise<Spot[]> {
+  if (!KEY) return [];
+  try {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK },
+      body: JSON.stringify({
+        textQuery: 'halal family restaurant',
+        maxResultCount: 15,
+        locationBias: { circle: { center: { latitude: loc.latitude, longitude: loc.longitude }, radius: 15000 } },
+      }),
+    });
+    const data = await res.json();
+    if (!data?.places) return [];
+    return data.places.map((p: any) => {
+      const s = mapPlace(p, loc, 'dining');
+      if (!s.amenities.includes('halal')) s.amenities = ['halal', ...s.amenities].slice(0, 4);
+      return s;
+    });
+  } catch {
+    return [];
+  }
+}
+
 async function fetchCurated(loc: UserLoc): Promise<Spot[]> {
   if (!firestore) return [];
   try {
@@ -355,11 +381,12 @@ export async function searchPlaces(text: string, near?: { latitude: number; long
 // Curated spots first (hand-picked), then Google activities + dining + shops,
 // de-duped by name and sorted by distance.
 export async function getSpots(loc: UserLoc): Promise<Spot[]> {
-  const [activities, dining, shops, stays, curated] = await Promise.all([
+  const [activities, dining, shops, stays, halal, curated] = await Promise.all([
     searchNearby(loc, KID_TYPES, 'activity', 20),
     searchNearby(loc, DINING_TYPES, 'dining', 15),
     searchShops(loc),
     searchNearby(loc, STAY_TYPES, 'stay', 12),
+    searchHalal(loc),
     fetchCurated(loc),
   ]);
   // A curated doc may be a "claim record" linked to a Google place_id (the
@@ -379,8 +406,10 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
   const consumed = new Set<string>(); // place_ids merged into a Google result
   const seenNames = new Set(curated.map((c) => c.name.toLowerCase()));
   const seenIds = new Set<string>(); // guard: a place can appear in >1 search list
+  // Halal before dining so a halal-tagged restaurant isn't shadowed by its
+  // untagged duplicate from the generic dining search.
   const google: Spot[] = [];
-  for (const g of [...activities, ...dining, ...shops, ...stays]) {
+  for (const g of [...activities, ...halal, ...dining, ...shops, ...stays]) {
     if (seenIds.has(g.id)) continue; // same place returned by multiple type searches
     seenIds.add(g.id);
     const claim = claimByPlaceId.get(g.id);

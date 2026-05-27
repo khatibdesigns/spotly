@@ -81,6 +81,7 @@ function buildPrompt(input: PlanInput): string {
     avoid.length ? `IMPORTANT — never suggest places centered on these foods (allergies / not allowed): ${avoid.join(', ')}.` : '',
     input.notes ? `Notes from the family: ${input.notes}.` : '',
     ``,
+    `The "title" MUST name the destination (${input.destination}) — e.g. "${input.destination} family trip", not a generic "Family Adventure".`,
     `Return STRICT JSON ONLY — no prose, no markdown fences — matching exactly:`,
     `{"title":"string","destination":"string","summary":"one warm sentence","days":[{"day":1,"label":"Day 1 — theme","stops":[{"name":"REAL place name","category":"e.g. Park / Museum / Café","time":"e.g. 10:00","note":"why it's great for these ages + a quick tip","estCost":"approx per family"}]}],"tips":["short practical tip"]}`,
     ``,
@@ -224,8 +225,17 @@ export async function generateItinerary(input: PlanInput): Promise<Itinerary> {
     throw new AiPlanError('Couldn’t read the generated plan. Please try again.');
   }
   if (!parsed?.days?.length) throw new AiPlanError('The plan came back empty. Try adding a few more details.');
-  parsed.destination = parsed.destination || input.destination;
-  parsed.title = parsed.title || `${input.destination} · ${input.days} days`;
+  const dest = (input.destination || '').trim();
+  const genericDest = !dest || /^(near me|your area|nearby)$/i.test(dest);
+  parsed.destination = parsed.destination || dest;
+  const aiTitle = (parsed.title || '').trim();
+  // Force the destination into the title when the user named one (e.g. a trip
+  // to France should read "France trip", not "Family Adventure").
+  if (!genericDest && (!aiTitle || !aiTitle.toLowerCase().includes(dest.toLowerCase()))) {
+    parsed.title = `${input.days > 1 ? `${input.days}-day ` : ''}${dest} trip`;
+  } else {
+    parsed.title = aiTitle || `${dest} · ${input.days} days`;
+  }
   if (input.startDate) parsed.startDate = input.startDate;
   return enrich(parsed);
 }

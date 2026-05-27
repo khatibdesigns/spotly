@@ -1,6 +1,6 @@
 // Spotly — Discover. Real nearby places (Google Places + curated) with photos.
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, F, R, SH } from '../lib/theme';
@@ -13,7 +13,7 @@ import { usePlaces, filterHasResults } from '../lib/placesStore';
 import { useSaves } from '../lib/saves';
 import { useVouchers } from '../lib/vouchers';
 import { useI18n } from '../lib/i18n';
-import { Spot, formatDistance } from '../lib/places';
+import { Spot, formatDistance, searchPlaces, PlaceSearchResult } from '../lib/places';
 import { getWeather, Weather } from '../lib/weather';
 
 const AMENITY_ICON: Record<string, (p: any) => React.ReactNode> = {
@@ -82,6 +82,7 @@ const KINDS = [
 ];
 const FILTER_CHIPS = [
   { id: 'playArea', key: 'filter.playArea' },
+  { id: 'halal', key: 'filter.halal' },
   { id: 'openNow', key: 'filter.openNow' },
   { id: 'free', key: 'filter.free' },
   { id: 'indoor', key: 'filter.indoor' },
@@ -148,7 +149,30 @@ export function DiscoverScreen() {
   const { push } = useStore();
   const { profile } = useProfile();
   const { cartCount } = useVouchers();
-  const { spots, filtered, loading, locationGranted, reload, setSelected, filters, setOnlyFilter, clearFilters, loc } = usePlaces();
+  const { spots, filtered, loading, locationGranted, reload, searchAt, areaLabel, setSelected, filters, setOnlyFilter, clearFilters, loc } = usePlaces();
+  // Location picker (search any city/area, or use my location).
+  const [locOpen, setLocOpen] = useState(false);
+  const [locQuery, setLocQuery] = useState('');
+  const [locResults, setLocResults] = useState<PlaceSearchResult[]>([]);
+  const [locSearching, setLocSearching] = useState(false);
+  useEffect(() => {
+    if (!locOpen) return;
+    const q = locQuery.trim();
+    if (q.length < 2) { setLocResults([]); setLocSearching(false); return; }
+    setLocSearching(true);
+    const id = setTimeout(async () => {
+      const r = await searchPlaces(q, loc?.latitude != null ? { latitude: loc.latitude, longitude: loc.longitude } : undefined);
+      setLocResults(r.slice(0, 6));
+      setLocSearching(false);
+    }, 350);
+    return () => clearTimeout(id);
+  }, [locQuery, locOpen, loc?.latitude, loc?.longitude]);
+  const pickLocation = (r: PlaceSearchResult) => {
+    if (r.lat == null || r.lng == null) return;
+    searchAt(r.lat, r.lng, r.name);
+    setLocOpen(false); setLocQuery(''); setLocResults([]);
+  };
+  const useMyLocation = () => { reload(); setLocOpen(false); setLocQuery(''); setLocResults([]); };
   const [weather, setWeather] = useState<Weather | null>(null);
   useEffect(() => {
     if (loc?.latitude != null) getWeather(loc.latitude, loc.longitude).then(setWeather).catch(() => {});
@@ -208,9 +232,10 @@ export function DiscoverScreen() {
                 <Text style={{ fontSize: 12.5, fontFamily: F.bold, color: C.ink }}>{weather.tempC}°</Text>
               </View>
             ) : null}
-            <Pressable onPress={reload} style={[{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill, backgroundColor: C.surface }, SH.pill]}>
+            <Pressable onPress={() => setLocOpen(true)} style={[{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill, backgroundColor: C.surface }, SH.pill]}>
               {Icons.pin({ size: 13, color: C.coral, filled: true })}
-              <Text style={{ fontSize: 12, fontFamily: F.bold, color: C.ink }}>{locationGranted ? t('discover.nearYou') : profile?.homeCity || 'Kuwait'}</Text>
+              <Text numberOfLines={1} style={{ fontSize: 12, fontFamily: F.bold, color: C.ink, maxWidth: 130 }}>{areaLabel || (locationGranted ? t('discover.nearYou') : profile?.homeCity || 'Kuwait')}</Text>
+              {Icons.chevD({ size: 12, color: C.ink3 })}
             </Pressable>
             <Pressable onPress={() => push('paywall')} style={[{ width: 38, height: 38, borderRadius: 19, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }, SH.pill]}>
               {Icons.sparkle({ size: 16, color: C.premium })}
@@ -326,6 +351,33 @@ export function DiscoverScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* Location picker — search any city/area, or use my location */}
+      <Modal visible={locOpen} transparent animationType="slide" onRequestClose={() => setLocOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.42)' }} onPress={() => setLocOpen(false)} />
+        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 22, paddingTop: 14, paddingBottom: insets.bottom + 22 }}>
+          <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 14 }} />
+          <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, letterSpacing: -0.5, marginBottom: 12 }}>{t('discover.searchArea')}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.bg, borderRadius: R.pill, paddingHorizontal: 16, height: 46, borderWidth: 1, borderColor: C.line }}>
+            {Icons.search({ size: 17, color: C.ink3 })}
+            <TextInput style={{ flex: 1, fontFamily: F.medium, fontSize: 15, color: C.ink }} placeholder={t('discover.searchAreaHint')} placeholderTextColor={C.ink3} value={locQuery} onChangeText={setLocQuery} autoFocus autoCorrect={false} />
+            {locSearching ? <ActivityIndicator size="small" color={C.ink3} /> : null}
+          </View>
+          <Pressable onPress={useMyLocation} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14 }}>
+            {Icons.pin({ size: 16, color: C.coral, filled: true })}
+            <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.coralDk }}>{t('discover.useMyLocation')}</Text>
+          </Pressable>
+          {locResults.map((r, i) => (
+            <Pressable key={r.placeId || i} onPress={() => pickLocation(r)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderTopWidth: 1, borderTopColor: C.line }}>
+              {Icons.pin({ size: 15, color: C.ink3 })}
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={{ fontFamily: F.semibold, fontSize: 14, color: C.ink }}>{r.name}</Text>
+                {r.address ? <Text numberOfLines={1} style={{ fontFamily: F.regular, fontSize: 12, color: C.ink3, marginTop: 1 }}>{r.address}</Text> : null}
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      </Modal>
     </View>
   );
 }

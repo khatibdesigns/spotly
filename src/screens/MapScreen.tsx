@@ -49,10 +49,13 @@ function Toggle({ mode, onChange }: { mode: 'nearby' | 'been'; onChange: (m: 'ne
 export function MapScreen() {
   const insets = useSafeAreaInsets();
   const { push } = useStore();
-  const { loc, filtered, setSelected } = usePlaces();
+  const { loc, filtered, setSelected, searchAt } = usePlaces();
   const { visited, stats } = useMemories();
   const { t } = useI18n();
   const [mode, setMode] = useState<'nearby' | 'been'>('nearby');
+  // When the user pans the map away from the current search centre, offer to
+  // re-search there ("search this area").
+  const [movedTo, setMovedTo] = useState<{ lat: number; lng: number } | null>(null);
   const [active, setActive] = useState<Pin | null>(null);
   const [events, setEvents] = useState<SpotEvent[]>([]);
   const [activeEvent, setActiveEvent] = useState<SpotEvent | null>(null);
@@ -109,6 +112,10 @@ export function MapScreen() {
           setActive(null);
           setActiveEvent(null);
         }}
+        onRegionChangeComplete={(r) => {
+          const moved = Math.abs(r.latitude - loc.latitude) > 0.03 || Math.abs(r.longitude - loc.longitude) > 0.03;
+          setMovedTo(moved ? { lat: r.latitude, lng: r.longitude } : null);
+        }}
       >
         {shownPins.map((p) => (
           <Marker
@@ -142,6 +149,17 @@ export function MapScreen() {
           </Marker>
         ))}
       </MapView>
+
+      {/* "Search this area" — appears after panning the map (nearby mode). */}
+      {mode === 'nearby' && movedTo ? (
+        <Pressable
+          onPress={() => { searchAt(movedTo.lat, movedTo.lng); setMovedTo(null); }}
+          style={[{ position: 'absolute', top: insets.top + 108, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.ink, borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 11 }, SH.pop]}
+        >
+          {Icons.search({ size: 14, color: '#fff' })}
+          <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 13 }}>{t('map.searchThisArea')}</Text>
+        </Pressable>
+      ) : null}
 
       {/* Top toggle */}
       <View style={{ position: 'absolute', top: insets.top + 6, left: 16, right: 16, flexDirection: 'row', gap: 10 }}>

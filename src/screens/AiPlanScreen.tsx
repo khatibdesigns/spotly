@@ -14,6 +14,8 @@ import { usePlanner } from '../lib/planner';
 import { useI18n } from '../lib/i18n';
 import { Itinerary, ItStop, dayDateLabel } from '../lib/aiPlan';
 import { searchPlaces, PlaceSearchResult, getUserLocation } from '../lib/places';
+import { usePlaces } from '../lib/placesStore';
+import * as Location from 'expo-location';
 
 const SUGGESTION_KEYS = ['ai.s1', 'ai.s2', 'ai.s3', 'ai.s4'];
 
@@ -29,10 +31,27 @@ export function AiPlanScreen() {
   const insets = useSafeAreaInsets();
   const { pop, setTab, popToRoot } = useStore();
   const { profile } = useProfile();
+  const { loc } = usePlaces();
   const { saveItinerary } = usePlans();
   const { status, result, error, startedAt, generate, retry, reset } = usePlanner();
   const { t } = useI18n();
   const [text, setText] = useState('');
+  // The user's current area (for location-aware suggestions) — reverse-geocoded
+  // from their location, falling back to their home city.
+  const [area, setArea] = useState<string>('');
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (loc?.latitude == null) return;
+        const g = (await Location.reverseGeocodeAsync({ latitude: loc.latitude, longitude: loc.longitude }))?.[0];
+        const name = g?.city || g?.region || g?.country;
+        if (!cancelled && name) setArea(name);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [loc?.latitude, loc?.longitude]);
+  const place = area || profile?.homeCity || t('ai.yourArea');
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(Date.now());
   // Editable working copy of the generated plan (remove / add stops before saving).
@@ -212,7 +231,7 @@ export function AiPlanScreen() {
           ) : status === 'error' ? (
             <ErrorState message={error} />
           ) : (
-            <Idle text={text} setText={setText} profile={profile} />
+            <Idle text={text} setText={setText} profile={profile} place={place} />
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -272,7 +291,7 @@ export function AiPlanScreen() {
   );
 }
 
-function Idle({ text, setText, profile }: { text: string; setText: (s: string) => void; profile: any }) {
+function Idle({ text, setText, profile, place }: { text: string; setText: (s: string) => void; profile: any; place: string }) {
   const { t } = useI18n();
   const forKids = profile?.kids?.length ? t('ai.forKids', { names: profile.kids.map((k: any) => k.name || 'your child').join(' & ') }) : '';
   return (
@@ -294,7 +313,7 @@ function Idle({ text, setText, profile }: { text: string; setText: (s: string) =
       <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 18, marginBottom: 10 }}>{t('ai.try')}</Text>
       <View style={{ gap: 8 }}>
         {SUGGESTION_KEYS.map((key) => {
-          const s = t(key);
+          const s = t(key, { place });
           return (
             <Pressable key={key} onPress={() => setText(s)} style={{ backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               {Icons.sparkle({ size: 14, color: C.coral })}

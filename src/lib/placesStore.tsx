@@ -29,6 +29,7 @@ const PRED: Record<string, (s: Spot) => boolean> = {
   outdoor: (s) => s.amenities.includes('outdoor'),
   water: (s) => s.amenities.includes('water'),
   foodOnSite: (s) => s.amenities.includes('foodOnSite'),
+  halal: (s) => s.amenities.includes('halal'),
   animals: (s) => s.amenities.includes('animals'),
   museum: (s) => s.amenities.includes('museum'),
   arts: (s) => s.amenities.includes('arts'),
@@ -46,6 +47,10 @@ type PlacesState = {
   loading: boolean;
   locationGranted: boolean;
   reload: () => void;
+  // Load places centered on an arbitrary point (map "search this area" + the
+  // Discover location picker). `label` is shown on the location pill.
+  searchAt: (latitude: number, longitude: number, label?: string) => Promise<void>;
+  areaLabel: string | null; // custom area name when not on the user's GPS location
   selected: Spot | null;
   setSelected: (s: Spot | null) => void;
   filters: Set<string>;
@@ -62,11 +67,24 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Spot | null>(null);
   const [filters, setFilters] = useState<Set<string>>(new Set());
+  const [areaLabel, setAreaLabel] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
     const l = await getUserLocation();
     setLoc(l);
+    setAreaLabel(null); // back on the user's own location
+    const s = await getSpots(l);
+    setSpots(s);
+    setLoading(false);
+  }, []);
+
+  // Re-centre the search on a chosen point (a city, a map region…).
+  const searchAt = useCallback(async (latitude: number, longitude: number, label?: string) => {
+    setLoading(true);
+    const l: UserLoc = { latitude, longitude, granted: true };
+    setLoc(l);
+    setAreaLabel(label ?? null);
     const s = await getSpots(l);
     setSpots(s);
     setLoading(false);
@@ -102,7 +120,7 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
   }, [spots, filters]);
 
   return (
-    <Ctx.Provider value={{ loc, spots, filtered, loading, locationGranted: loc.granted, reload, selected, setSelected, filters, toggleFilter, setOnlyFilter, clearFilters }}>
+    <Ctx.Provider value={{ loc, spots, filtered, loading, locationGranted: loc.granted, reload, searchAt, areaLabel, selected, setSelected, filters, toggleFilter, setOnlyFilter, clearFilters }}>
       {children}
     </Ctx.Provider>
   );
