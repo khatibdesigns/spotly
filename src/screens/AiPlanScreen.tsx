@@ -224,12 +224,12 @@ export function AiPlanScreen() {
           <Btn kind="ghost" size="lg" full onPress={pop}>{t('ai.closeNotify')}</Btn>
         ) : status === 'error' ? (
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Btn kind="ghost" style={{ flex: 1 }} onPress={reset}>{t('common.edit')}</Btn>
+            <Btn kind="ghost" style={[{ flex: 1, backgroundColor: C.surface }, SH.cta]} onPress={reset}>{t('common.edit')}</Btn>
             <Btn kind="premium" style={{ flex: 1.4 }} onPress={retry}>{t('common.retry')}</Btn>
           </View>
         ) : (
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Btn kind="ghost" style={{ flex: 1 }} onPress={reset}>{t('ai.editPrompt')}</Btn>
+            <Btn kind="ghost" style={[{ flex: 1, backgroundColor: C.surface }, SH.cta]} onPress={reset}>{t('ai.editPrompt')}</Btn>
             <Btn kind="primary" style={{ flex: 1.6 }} onPress={save}>{saving ? t('gallery.saving') : t('ai.saveToPlans')}</Btn>
           </View>
         )}
