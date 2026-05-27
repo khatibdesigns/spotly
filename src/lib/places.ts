@@ -39,6 +39,7 @@ export type Spot = {
   currencyCode?: string; // ISO code the place sells vouchers in (e.g. 'KWD')
   vouchers?: Voucher[]; // prepaid vouchers/offers the place sells
   googlePlaceId?: string; // Google place_id this curated/claim record links to
+  publicEvent?: boolean; // marked as a public event → yellow map pin
 };
 
 export type UserLoc = { latitude: number; longitude: number; granted: boolean };
@@ -256,6 +257,7 @@ async function fetchCurated(loc: UserLoc): Promise<Spot[]> {
             ? (v.vouchers as Voucher[]).filter((x) => x && x.active !== false && Number(x.price) > 0)
             : undefined,
           googlePlaceId: v.googlePlaceId || undefined,
+          publicEvent: !!v.publicEvent,
         };
       });
   } catch {
