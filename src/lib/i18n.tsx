@@ -33,6 +33,9 @@ const EN: Record<string, string> = {
   'common.error': 'Something went wrong',
   'common.saving': 'Saving…',
   'common.tryAgain': 'Please try again.',
+  'photo.title': 'Add a photo',
+  'photo.take': 'Take photo',
+  'photo.library': 'Choose from library',
   // vouchers — place page offers
   'place.offers': 'Offers',
   'place.viewOffers': 'View offers',
@@ -514,6 +517,9 @@ const AR: Record<string, string> = {
   'common.error': 'حدث خطأ ما',
   'common.saving': 'جارٍ الحفظ…',
   'common.tryAgain': 'يرجى المحاولة مرة أخرى.',
+  'photo.title': 'إضافة صورة',
+  'photo.take': 'التقاط صورة',
+  'photo.library': 'اختيار من المعرض',
   // vouchers — place page offers
   'place.offers': 'العروض',
   'place.viewOffers': 'عرض العروض',

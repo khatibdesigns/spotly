@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, Pressable, Linking, Alert, Platform, Share, Modal, TextInput, ActivityIndicator, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as ImagePicker from 'expo-image-picker';
+import { choosePhoto } from '../lib/pickImage';
 import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { CircBtn, SectionLabel, Btn } from '../components/ui';
@@ -96,12 +96,8 @@ export function ProfileScreen() {
   // Which avatar is mid-upload: 'family', a member uid, or a kid id.
   const [photoBusy, setPhotoBusy] = useState<string | null>(null);
 
-  const pickImage = async (): Promise<string | null> => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert(t('gallery.permTitle'), t('gallery.permMsg')); return null; }
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
-    return res.canceled || !res.assets?.[0] ? null : res.assets[0].uri;
-  };
+  const pickImage = (): Promise<string | null> =>
+    choosePhoto({ square: true, labels: { title: t('photo.title'), camera: t('photo.take'), library: t('photo.library'), cancel: t('common.cancel'), permTitle: t('gallery.permTitle'), permMsg: t('gallery.permMsg') } });
 
   const onChangePhoto = async () => {
     if (photoBusy) return;

@@ -11,6 +11,7 @@ import { useStore } from '../lib/store';
 import { useMemories, Memory } from '../lib/memories';
 import { usePlaces } from '../lib/placesStore';
 import { searchPlaces, PlaceSearchResult } from '../lib/places';
+import { choosePhoto } from '../lib/pickImage';
 import { useI18n } from '../lib/i18n';
 
 export function GalleryScreen() {
@@ -65,20 +66,14 @@ export function GalleryScreen() {
   };
 
   const pick = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert(t('gallery.permTitle'), t('gallery.permMsg'));
-      return;
-    }
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
-    if (!res.canceled && res.assets?.[0]) {
-      setPicked(res.assets[0].uri);
-      setPlaceName('');
-      setCity('');
-      setNote('');
-      setResults([]);
-      chosen.current = null;
-    }
+    const uri = await choosePhoto({ labels: { title: t('photo.title'), camera: t('photo.take'), library: t('photo.library'), cancel: t('common.cancel'), permTitle: t('gallery.permTitle'), permMsg: t('gallery.permMsg') } });
+    if (!uri) return;
+    setPicked(uri);
+    setPlaceName('');
+    setCity('');
+    setNote('');
+    setResults([]);
+    chosen.current = null;
   };
 
   const save = async () => {

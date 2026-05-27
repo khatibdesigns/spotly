@@ -81,6 +81,7 @@ export default {
         'expo-image-picker',
         {
           photosPermission: 'Spotly needs access to your photos so you can add family memories.',
+          cameraPermission: 'Spotly needs camera access so you can take photos for memories and profiles.',
         },
       ],
       [
