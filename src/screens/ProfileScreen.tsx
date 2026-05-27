@@ -1,8 +1,9 @@
 // Spotly — Profile, backed by the live family profile + auth.
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Linking, Alert, Platform, Share, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, Linking, Alert, Platform, Share, Modal, TextInput, ActivityIndicator, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { CircBtn, SectionLabel, Btn } from '../components/ui';
@@ -23,7 +24,10 @@ function initial(s?: string, fallback = '?') {
   return c ? c.toUpperCase() : fallback;
 }
 
-function Avatar({ letter, color, size = 36 }: { letter: string; color: string; size?: number }) {
+function Avatar({ letter, color, size = 36, photoUrl }: { letter: string; color: string; size?: number; photoUrl?: string }) {
+  if (photoUrl) {
+    return <Image source={{ uri: photoUrl }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />;
+  }
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
       <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: size * 0.42 }}>{letter}</Text>
@@ -69,13 +73,30 @@ export function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { push, setTab } = useStore();
   const { user, signOut } = useAuth();
-  const { profile, saveProfile } = useProfile();
+  const { profile, saveProfile, uploadAvatar } = useProfile();
   const { stats, memories, visited } = useMemories();
   const { t, lang, setLang } = useI18n();
   const { isOwnFamily, inviteToFamily, joinFamily, leaveFamily } = useFamily();
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+
+  const onChangePhoto = async () => {
+    if (avatarBusy) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert(t('gallery.permTitle'), t('gallery.permMsg')); return; }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    if (res.canceled || !res.assets?.[0]) return;
+    setAvatarBusy(true);
+    try {
+      await uploadAvatar(res.assets[0].uri);
+    } catch (e: any) {
+      Alert.alert(t('common.error'), e?.message || t('common.tryAgain'));
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   const onInvite = async () => {
     try {
@@ -138,7 +159,13 @@ export function ProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }}>
         {/* Family header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <Avatar letter={initial(profile?.familyName || profile?.parentName, 'S')} color={C.coral} size={70} />
+          <Pressable onPress={onChangePhoto} hitSlop={6}>
+            <Avatar letter={initial(profile?.familyName || profile?.parentName, 'S')} color={C.coral} size={70} photoUrl={profile?.photoUrl} />
+            {/* Camera badge — tap to change the photo */}
+            <View style={{ position: 'absolute', right: -2, bottom: -2, width: 26, height: 26, borderRadius: 13, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg }}>
+              {avatarBusy ? <ActivityIndicator size="small" color="#fff" /> : Icons.camera({ size: 13, color: '#fff' })}
+            </View>
+          </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: F.serif, fontSize: 26, letterSpacing: -0.6, lineHeight: 28, color: C.ink }}>{profile?.familyName || 'My family'}</Text>
             <Text style={{ fontSize: 13, color: C.ink3, fontFamily: F.regular, marginTop: 3 }}>

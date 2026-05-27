@@ -2,7 +2,8 @@
 // Replaces all the static "Maya / The Khalils / Léa & Sami" placeholder data.
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { doc, onSnapshot, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { firestore } from './firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { firestore, storage } from './firebase';
 import { useAuth } from './auth';
 import { useFamily } from './family';
 
@@ -27,6 +28,7 @@ export type Profile = {
   interests: string[];
   locationEnabled: boolean;
   plus: boolean;
+  photoUrl?: string; // family profile photo (header avatar)
   stats: { spots: number; countries: number; weekends: number };
   createdAt: number;
 };
@@ -38,6 +40,7 @@ type ProfileState = {
   loading: boolean;
   hasProfile: boolean;
   saveProfile: (data: Partial<Profile>) => Promise<void>;
+  uploadAvatar: (uri: string) => Promise<void>;
 };
 
 const Ctx = createContext<ProfileState | null>(null);
@@ -94,11 +97,34 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     [user, familyId, profile]
   );
 
+  // Upload a picked image as the family profile photo, then save its URL.
+  const uploadAvatar = useCallback(
+    async (uri: string) => {
+      if (!user || !firestore || !storage || !familyId) throw new Error('Not signed in');
+      // RN-reliable local-file → Blob (fetch().blob() is flaky in Hermes).
+      const blob: Blob = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = () => resolve(xhr.response);
+        xhr.onerror = () => reject(new Error('Could not read the selected photo.'));
+        xhr.responseType = 'blob';
+        xhr.open('GET', uri, true);
+        xhr.send(null);
+      });
+      const r = ref(storage, `families/${familyId}/avatar-${Date.now()}.jpg`);
+      await uploadBytes(r, blob, { contentType: 'image/jpeg' });
+      try { (blob as any).close?.(); } catch {}
+      const url = await getDownloadURL(r);
+      await saveProfile({ photoUrl: url });
+    },
+    [user, familyId, saveProfile]
+  );
+
   const value: ProfileState = {
     profile,
     loading,
     hasProfile: !!profile && !!profile.familyName,
     saveProfile,
+    uploadAvatar,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
