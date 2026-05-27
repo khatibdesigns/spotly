@@ -10,6 +10,7 @@ import { useAuth } from './auth';
 import { useFamily } from './family';
 import { Voucher } from './currency';
 import { sendVoucherEmail } from './email';
+import { logEvent } from './analytics';
 
 export type CartItem = {
   key: string; // unique per add (placeId + voucherId + nonce)
@@ -124,6 +125,7 @@ export function VouchersProvider({ children }: { children: React.ReactNode }) {
       };
       const ref = await addDoc(collection(firestore, 'voucherOrders'), payload);
       ids.push(ref.id);
+      logEvent('voucher_purchase', { place: item.placeName, value: item.voucher.value, currency: item.currencyCode });
       if (user.email) {
         sendVoucherEmail({
           to: user.email,

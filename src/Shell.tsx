@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from './lib/theme';
 import { useStore, RouteName } from './lib/store';
 import { useAuth } from './lib/auth';
+import { useFamily } from './lib/family';
+import { registerPush } from './lib/push';
 import { useProfile } from './lib/profile';
 import { useMerchant } from './lib/merchant';
 import { PlacesProvider } from './lib/placesStore';
@@ -89,8 +91,15 @@ export function Shell() {
   const { user, loading: authLoading } = useAuth();
   const { hasProfile, loading: profileLoading } = useProfile();
   const { isMerchant, loading: merchantLoading } = useMerchant();
+  const { familyId } = useFamily();
   const { tab, stack, push, authIntent } = useStore();
   const insets = useSafeAreaInsets();
+
+  // Register this device for push (FCM) once signed in, so campaigns can reach
+  // it. No-ops until the native messaging module ships in a rebuild.
+  useEffect(() => {
+    if (user?.uid) registerPush(user.uid, familyId || undefined);
+  }, [user?.uid, familyId]);
 
   // Tapping a planner notification opens the AI planner.
   useEffect(() => {

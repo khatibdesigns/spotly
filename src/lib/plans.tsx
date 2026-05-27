@@ -6,6 +6,7 @@ import { useAuth } from './auth';
 import { useFamily } from './family';
 import { Spot } from './places';
 import { Itinerary } from './aiPlan';
+import { logEvent } from './analytics';
 
 export type Stop = {
   placeId: string;
@@ -123,6 +124,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
         status: 'upcoming',
         createdAt: serverTimestamp(),
       });
+      logEvent('plan_saved', { title: it.title, stops: stops.length });
     },
     [user, familyId]
   );

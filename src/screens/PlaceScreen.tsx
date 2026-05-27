@@ -15,6 +15,7 @@ import { useProfile, familyFood } from '../lib/profile';
 import { useI18n } from '../lib/i18n';
 import { formatDistance } from '../lib/places';
 import { bumpPlaceStat } from '../lib/stats';
+import { logEvent } from '../lib/analytics';
 import { useVouchers } from '../lib/vouchers';
 import { currencyFor, formatMoney, Voucher } from '../lib/currency';
 
@@ -93,6 +94,7 @@ export function PlaceScreen() {
   // Count a profile view for the merchant's analytics (curated/claimed places).
   useEffect(() => {
     if (spot?.source === 'curated' && spot.id) bumpPlaceStat(spot.id, 'views');
+    if (spot?.id) logEvent('place_view', { place: spot.name, kind: spot.kind });
   }, [spot?.id]);
 
   const addToPlan = async () => {

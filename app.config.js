@@ -19,6 +19,7 @@ export default {
       bundleIdentifier: 'com.khd.spotly',
       buildNumber: '28',
       usesAppleSignIn: true,
+      googleServicesFile: './GoogleService-Info.plist', // Firebase (FCM + Analytics)
       // Universal Links — tapping https://meetspotly.com/join?code=… opens the
       // app (family invites). Requires the AASA file hosted at that domain.
       associatedDomains: ['applinks:meetspotly.com'],
@@ -39,6 +40,7 @@ export default {
     android: {
       package: 'com.khd.spotly',
       versionCode: 28,
+      googleServicesFile: './google-services.json', // Firebase (FCM + Analytics)
       // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
       usesCleartextTraffic: true,
       // App Links — tapping https://meetspotly.com/join?code=… opens the app
@@ -67,6 +69,7 @@ export default {
     plugins: [
       'expo-font',
       'expo-apple-authentication',
+      '@react-native-firebase/app', // FCM + Analytics native config
       ['@react-native-google-signin/google-signin', { iosUrlScheme: googleIosUrlScheme }],
       [
         'expo-location',
@@ -91,6 +94,8 @@ export default {
         {
           // Allow cleartext HTTP in release builds (EC2 Claude proxy / AI planner).
           android: { usesCleartextTraffic: true },
+          // @react-native-firebase needs static frameworks on iOS.
+          ios: { useFrameworks: 'static' },
         },
       ],
       'expo-notifications',
