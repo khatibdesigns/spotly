@@ -44,5 +44,14 @@
     "ios": "expo run:ios",
     "web": "expo start --web"
   },
+  "expo": {
+    "autolinking": {
+      "exclude": [
+        "@react-native-firebase/app",
+        "@react-native-firebase/analytics",
+        "@react-native-firebase/messaging"
+      ]
+    }
+  },
   "private": true
 }
