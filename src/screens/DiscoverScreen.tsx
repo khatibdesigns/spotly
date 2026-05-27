@@ -11,6 +11,7 @@ import { useProfile, myFirstName, kidNames, familyFood } from '../lib/profile';
 import { useAuth } from '../lib/auth';
 import { usePlaces } from '../lib/placesStore';
 import { useSaves } from '../lib/saves';
+import { useVouchers } from '../lib/vouchers';
 import { useI18n } from '../lib/i18n';
 import { Spot, formatDistance } from '../lib/places';
 import { getWeather, Weather } from '../lib/weather';
@@ -144,6 +145,7 @@ export function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const { push } = useStore();
   const { profile } = useProfile();
+  const { cartCount } = useVouchers();
   const { spots, filtered, loading, locationGranted, reload, setSelected, filters, toggleFilter, clearFilters, loc } = usePlaces();
   const [weather, setWeather] = useState<Weather | null>(null);
   useEffect(() => {
@@ -213,19 +215,30 @@ export function DiscoverScreen() {
           </View>
         </View>
 
-        {/* Search */}
-        <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, backgroundColor: C.surface, borderRadius: R.pill, paddingHorizontal: 16, height: 46 }, SH.pill]}>
-          {Icons.search({ size: 18, color: C.ink3 })}
-          <TextInput
-            style={{ flex: 1, fontFamily: F.medium, fontSize: 15, color: C.ink }}
-            placeholder={t('common.searchPlaces')}
-            placeholderTextColor={C.ink3}
-            value={q}
-            onChangeText={setQ}
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-          {q.length ? <Pressable onPress={() => setQ('')} hitSlop={8}>{Icons.close({ size: 16, color: C.ink3 })}</Pressable> : null}
+        {/* Search + cart */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>
+          <View style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderRadius: R.pill, paddingHorizontal: 16, height: 46 }, SH.pill]}>
+            {Icons.search({ size: 18, color: C.ink3 })}
+            <TextInput
+              style={{ flex: 1, fontFamily: F.medium, fontSize: 15, color: C.ink }}
+              placeholder={t('common.searchPlaces')}
+              placeholderTextColor={C.ink3}
+              value={q}
+              onChangeText={setQ}
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {q.length ? <Pressable onPress={() => setQ('')} hitSlop={8}>{Icons.close({ size: 16, color: C.ink3 })}</Pressable> : null}
+          </View>
+          {/* Global cart — buy vouchers from multiple places */}
+          <Pressable onPress={() => push('cart')} style={[{ width: 46, height: 46, borderRadius: 23, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }, SH.pill]}>
+            {Icons.bag({ size: 19, color: C.ink })}
+            {cartCount > 0 ? (
+              <View style={{ position: 'absolute', top: -3, right: -3, minWidth: 19, height: 19, paddingHorizontal: 5, borderRadius: 10, backgroundColor: C.coral, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg }}>
+                <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 10 }}>{cartCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
         </View>
       </View>
 
