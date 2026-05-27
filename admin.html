@@ -418,10 +418,11 @@ async function loadPlaces() {
       esc(p.category||''),
       placeStatusCell(p) + claimCell(p),
       placePromoteCell(p),
-      `<button class="btn ghost sm" data-offers="${p.id}">🎟 Offers${(p.vouchers&&p.vouchers.length)?` (${p.vouchers.length})`:''}</button>${me.isAdmin?` <button class="danger" data-del-place="${p.id}">Delete</button>`:''}`
+      `<button class="btn ghost sm" data-offers="${p.id}">🎟 Offers${(p.vouchers&&p.vouchers.length)?` (${p.vouchers.length})`:''}</button>${me.isAdmin?` <button class="btn ghost sm" data-pubev="${p.id}" data-on="${p.publicEvent?1:0}" style="${p.publicEvent?'background:#fbf0d0;border-color:#eebc4a':''}">🎪 ${p.publicEvent?'Public event ✓':'Public event'}</button> <button class="danger" data-del-place="${p.id}">Delete</button>`:''}`
     ])
   ) : `<div class="muted-note">${empty}</div>`;
   $('placesTable').querySelectorAll('[data-offers]').forEach((b)=> b.onclick = ()=> openVouchersModal(b.dataset.offers));
+  $('placesTable').querySelectorAll('[data-pubev]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'places',b.dataset.pubev),{ publicEvent: b.dataset.on!=='1' }); loadPlaces(); });
   $('placesTable').querySelectorAll('[data-approveown]').forEach((b)=> b.onclick = async ()=>{ const p=(cache.places||[]).find(x=>x.id===b.dataset.approveown); await updateDoc(doc(db,'places',b.dataset.approveown),{ ownerUid: p.pendingOwnerUid, pendingOwnerUid: null, status:'approved' }); loadPlaces(); });
   $('placesTable').querySelectorAll('[data-del-place]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Delete this place?')){ await deleteDoc(doc(db,'places',b.dataset.delPlace)); loadPlaces(); } });
   $('placesTable').querySelectorAll('[data-approve]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'places',b.dataset.approve),{status:'approved'}); loadPlaces(); });
