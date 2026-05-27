@@ -44,6 +44,9 @@ yarn-error.*
 *.p8
 GoogleService-Info.plist
 google-services.json
+certs/
+*-firebase-adminsdk-*.json
+*-service-account*.json
 .env
 
 # Large marketing / store assets — keep the source repo lean (add back later w/ LFS if needed)
