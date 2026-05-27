@@ -148,7 +148,7 @@ export function DiscoverScreen() {
   const { push } = useStore();
   const { profile } = useProfile();
   const { cartCount } = useVouchers();
-  const { spots, filtered, loading, locationGranted, reload, setSelected, filters, toggleFilter, clearFilters, loc } = usePlaces();
+  const { spots, filtered, loading, locationGranted, reload, setSelected, filters, setOnlyFilter, clearFilters, loc } = usePlaces();
   const [weather, setWeather] = useState<Weather | null>(null);
   useEffect(() => {
     if (loc?.latitude != null) getWeather(loc.latitude, loc.longitude).then(setWeather).catch(() => {});
@@ -175,7 +175,8 @@ export function DiscoverScreen() {
     return `${s.name} ${s.category}`.toLowerCase().includes(needle);
   };
   const searched = filtered.filter(matchesQ);
-  const heroes = q.trim() ? [] : filtered.slice(0, 2);
+  // "Where to today?" shows only promoted places (the section hides if none).
+  const heroes = q.trim() ? [] : filtered.filter((s) => s.promoted);
   const feed = searched;
 
   // "Tastes they'll love" — dining spots, ranked so any matching the kids'
@@ -262,42 +263,43 @@ export function DiscoverScreen() {
           {/* What are you looking for — kind selector (hide kinds with no results) */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 10 }}>
             {KINDS.filter((k) => filters.has(k.id) || filterHasResults(k.id, spots)).map((k) => (
-              <Chip key={k.id} active={filters.has(k.id)} onPress={() => toggleFilter(k.id)}>{t(k.key)}</Chip>
+              <Chip key={k.id} active={filters.has(k.id)} onPress={() => setOnlyFilter(k.id)}>{t(k.key)}</Chip>
             ))}
           </ScrollView>
 
-          {/* This week */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
-              <View>
-                <Eyebrow>{t('discover.thisWeek')}</Eyebrow>
-                <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, marginTop: 2, letterSpacing: -0.5 }}>{t('discover.whereToday')}</Text>
-              </View>
-              <Pressable onPress={seeAll} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                <Text style={{ fontSize: 12, color: C.coralDk, fontFamily: F.bold }}>{t('common.seeAll')}</Text>
-                {Icons.chevR({ size: 14, color: C.coralDk })}
-              </Pressable>
-            </View>
-          </View>
-
+          {/* Where to today — promoted places only; whole section hides if none */}
           {heroes.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 20, paddingBottom: 18 }}>
-              {heroes.map((s) => <HeroCard key={s.id} spot={s} onPress={() => open(s)} />)}
-            </ScrollView>
+            <>
+              <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <View>
+                    <Eyebrow>{t('discover.thisWeek')}</Eyebrow>
+                    <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, marginTop: 2, letterSpacing: -0.5 }}>{t('discover.whereToday')}</Text>
+                  </View>
+                  <Pressable onPress={seeAll} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <Text style={{ fontSize: 12, color: C.coralDk, fontFamily: F.bold }}>{t('common.seeAll')}</Text>
+                    {Icons.chevR({ size: 14, color: C.coralDk })}
+                  </Pressable>
+                </View>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 20, paddingBottom: 18 }}>
+                {heroes.map((s) => <HeroCard key={s.id} spot={s} onPress={() => open(s)} />)}
+              </ScrollView>
+            </>
           ) : null}
 
           {/* Filters */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingBottom: 14 }}>
             <Chip icon={Icons.filter({ size: 13, color: C.ink })} onPress={() => push('filters')}>{t('discover.filters')}</Chip>
             {FILTER_CHIPS.filter((f) => filters.has(f.id) || filterHasResults(f.id, spots)).map((f) => (
-              <Chip key={f.id} active={filters.has(f.id)} onPress={() => toggleFilter(f.id)}>{t(f.key)}</Chip>
+              <Chip key={f.id} active={filters.has(f.id)} onPress={() => setOnlyFilter(f.id)}>{t(f.key)}</Chip>
             ))}
           </ScrollView>
 
           {/* Categories */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20, paddingBottom: 18 }}>
             {CATEGORIES.filter((c) => filters.has(c.id) || filterHasResults(c.id, spots)).map((c, i) => (
-              <CatTile key={`${c.id}-${i}`} ic={c.ic} color={c.color} label={t(c.key)} active={filters.has(c.id)} onPress={() => toggleFilter(c.id)} />
+              <CatTile key={`${c.id}-${i}`} ic={c.ic} color={c.color} label={t(c.key)} active={filters.has(c.id)} onPress={() => setOnlyFilter(c.id)} />
             ))}
           </ScrollView>
 

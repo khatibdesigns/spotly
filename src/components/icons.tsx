@@ -242,6 +242,7 @@ export const hotel = ico(
     <Path d="M6 8h2M6 12h2M10 8h1M10 12h1M17 13h1" />
   </>
 );
+export const star = ico(<Path d="M12 3.2l2.6 5.27 5.82.85-4.21 4.1.99 5.79L12 16.48l-5.2 2.73.99-5.79-4.21-4.1 5.82-.85L12 3.2z" />);
 
 // ── Amenity icons ─────────────────────────────────────────────
 export const playArea = ico(
@@ -387,6 +388,7 @@ export const Icons = {
   bag,
   trash,
   hotel,
+  star,
   camera,
   sparkle,
   clock,

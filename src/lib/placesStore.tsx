@@ -49,7 +49,8 @@ type PlacesState = {
   selected: Spot | null;
   setSelected: (s: Spot | null) => void;
   filters: Set<string>;
-  toggleFilter: (id: string) => void;
+  toggleFilter: (id: string) => void; // multi-select (Filters sheet)
+  setOnlyFilter: (id: string) => void; // single-select (home chips/tiles)
   clearFilters: () => void;
 };
 
@@ -82,6 +83,11 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, []);
+  // Single-select: tapping a chip makes it the only active filter (tap again
+  // clears). Used by the home screen quick filters.
+  const setOnlyFilter = useCallback((id: string) => {
+    setFilters((prev) => (prev.has(id) && prev.size === 1 ? new Set() : new Set([id])));
+  }, []);
   const clearFilters = useCallback(() => setFilters(new Set()), []);
 
   const filtered = useMemo(() => {
@@ -96,7 +102,7 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
   }, [spots, filters]);
 
   return (
-    <Ctx.Provider value={{ loc, spots, filtered, loading, locationGranted: loc.granted, reload, selected, setSelected, filters, toggleFilter, clearFilters }}>
+    <Ctx.Provider value={{ loc, spots, filtered, loading, locationGranted: loc.granted, reload, selected, setSelected, filters, toggleFilter, setOnlyFilter, clearFilters }}>
       {children}
     </Ctx.Provider>
   );

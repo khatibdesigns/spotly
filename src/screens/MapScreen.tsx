@@ -13,7 +13,7 @@ import { useMemories } from '../lib/memories';
 import { useI18n } from '../lib/i18n';
 import { Spot, formatDistance, getEvents, SpotEvent } from '../lib/places';
 
-type Pin = { id: string; name: string; lat: number; lng: number; photoUrl?: string; tone?: string; sub: string; spot?: Spot };
+type Pin = { id: string; name: string; lat: number; lng: number; photoUrl?: string; tone?: string; sub: string; spot?: Spot; promoted?: boolean; visited?: boolean };
 
 function StatPill({ icon, v, l }: { icon: React.ReactNode; v: string; l: string }) {
   return (
@@ -68,16 +68,21 @@ export function MapScreen() {
     [loc.latitude, loc.longitude]
   );
 
+  // Cross-reference sets so a pin reflects BOTH attributes (visited + promoted)
+  // regardless of which mode surfaces it.
+  const visitedNames = useMemo(() => new Set(visited.map((v) => v.name.trim().toLowerCase())), [visited]);
+  const promotedNames = useMemo(() => new Set(filtered.filter((s) => s.promoted).map((s) => s.name.trim().toLowerCase())), [filtered]);
+
   const pins: Pin[] = useMemo(() => {
     if (mode === 'nearby') {
       return filtered
         .filter((s) => s.lat != null)
-        .map((s) => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, photoUrl: s.photoUrl, tone: s.tone, sub: `${s.category}${s.distanceKm != null ? ` · ${formatDistance(s.distanceKm)}` : ''}`, spot: s }));
+        .map((s) => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, photoUrl: s.photoUrl, tone: s.tone, sub: `${s.category}${s.distanceKm != null ? ` · ${formatDistance(s.distanceKm)}` : ''}`, spot: s, promoted: !!s.promoted, visited: visitedNames.has(s.name.trim().toLowerCase()) }));
     }
     return visited
       .filter((v) => v.lat != null)
-      .map((v) => ({ id: v.key, name: v.name, lat: v.lat as number, lng: v.lng as number, photoUrl: v.photoUrl, tone: v.tone, sub: `${v.city ? v.city + ' · ' : ''}${t(v.visits === 1 ? 'gallery.visit' : 'gallery.visits', { n: v.visits })}` }));
-  }, [mode, filtered, visited, t]);
+      .map((v) => ({ id: v.key, name: v.name, lat: v.lat as number, lng: v.lng as number, photoUrl: v.photoUrl, tone: v.tone, sub: `${v.city ? v.city + ' · ' : ''}${t(v.visits === 1 ? 'gallery.visit' : 'gallery.visits', { n: v.visits })}`, visited: true, promoted: promotedNames.has(v.name.trim().toLowerCase()) }));
+  }, [mode, filtered, visited, t, visitedNames, promotedNames]);
 
   const shownPins = useMemo(() => {
     const needle = mq.trim().toLowerCase();
@@ -110,9 +115,21 @@ export function MapScreen() {
             coordinate={{ latitude: p.lat, longitude: p.lng }}
             onPress={(e) => { (e as any)?.stopPropagation?.(); setActiveEvent(null); setActive(p); }}
           >
-            <View style={{ padding: 6 }}>
-              <Icons.Mark size={p.spot?.promoted ? 36 : 30} color={p.spot?.promoted ? C.premium : mode === 'been' ? C.coral : C.sage} />
-            </View>
+            {/* Visited → green, else orange. Promoted → a star + larger pin. */}
+            {(() => {
+              const size = p.promoted ? 42 : 30;
+              const color = p.visited ? C.sage : C.coral;
+              return (
+                <View style={{ padding: 6, alignItems: 'center' }}>
+                  <Icons.Mark size={size} color={color} />
+                  {p.promoted ? (
+                    <View style={{ position: 'absolute', top: 6 + size * 0.13, left: 0, right: 0, alignItems: 'center' }}>
+                      {Icons.star({ size: Math.round(size * 0.4), color: '#fff', filled: true })}
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })()}
           </Marker>
         ))}
 
