@@ -17,6 +17,7 @@ export type Stop = {
   dayLabel?: string;
   time?: string | null;
   note?: string | null;
+  estCost?: string | null; // approx cost per family (from the AI plan)
   lat?: number | null;
   lng?: number | null;
 };
@@ -105,6 +106,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
             dayLabel: d.label,
             time: s.time ?? null,
             note: s.note ?? null,
+            estCost: s.estCost ?? null,
             lat: s.lat ?? null,
             lng: s.lng ?? null,
           })

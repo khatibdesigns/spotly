@@ -78,6 +78,7 @@ function StopRow({
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
           {s.time ? <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.coralDk }}>{s.time}</Text> : null}
           <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.ink }}>{s.name}</Text>
+          {s.estCost ? <Text style={{ fontFamily: F.semibold, fontSize: 11, color: C.ink3 }}>{s.estCost}</Text> : null}
         </View>
         {s.note ? <Text numberOfLines={2} style={{ fontSize: 12, color: C.ink2, fontFamily: F.regular, marginTop: 1, lineHeight: 16 }}>{s.note}</Text> : s.category ? <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{s.category}</Text> : null}
       </View>
