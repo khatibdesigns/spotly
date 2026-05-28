@@ -79,13 +79,17 @@ function CatTile({ ic, color, label, active, onPress }: { ic: (p: any) => React.
 // Filters sheet, reachable from the filter button next to the cart.)
 const CATEGORIES = [
   { id: 'outdoor', ic: Icons.outdoor, color: C.sage, key: 'cat.parks' },
+  // Amusement parks / theme parks / big rides — its own tile so
+  // amusement_park-typed places (e.g. Pokiddo) get a clear home.
+  { id: 'funPark', ic: Icons.sparkle, color: C.coral, key: 'cat.funParks' },
+  // Indoor play centres / arcades / soft play.
   { id: 'playArea', ic: Icons.playArea, color: C.coral, key: 'cat.indoorPlay' },
-  { id: 'dining', ic: Icons.dining, color: C.coralDk, key: 'cat.dining' },
-  { id: 'shop', ic: Icons.shop, color: C.plum, key: 'cat.kidsShops' },
-  { id: 'museum', ic: Icons.museum, color: C.ink2, key: 'cat.museums' },
   { id: 'animals', ic: Icons.animals, color: C.sun, key: 'cat.zoos' },
   { id: 'water', ic: Icons.water, color: C.sky, key: 'cat.water' },
-  { id: 'stay', ic: Icons.hotel, color: C.plum, key: 'cat.stays' },
+  { id: 'museum', ic: Icons.museum, color: C.ink2, key: 'cat.museums' },
+  { id: 'dining', ic: Icons.dining, color: C.coralDk, key: 'cat.dining' },
+  { id: 'shop', ic: Icons.shop, color: C.plum, key: 'cat.kidsShops' },
+  // 'stay' (Hotels) removed for now — comes back with the travel/packages release.
 ];
 
 function FeedCard({ spot, onPress }: { spot: Spot; onPress: () => void }) {
@@ -249,9 +253,8 @@ export function DiscoverScreen() {
               <Text numberOfLines={1} style={{ fontSize: 12, fontFamily: F.bold, color: C.ink, maxWidth: 130 }}>{areaLabel || (locationGranted ? t('discover.nearYou') : profile?.homeCity || 'Kuwait')}</Text>
               {Icons.chevD({ size: 12, color: C.ink3 })}
             </Pressable>
-            <Pressable onPress={() => push('paywall')} style={[{ width: 38, height: 38, borderRadius: 19, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }, SH.pill]}>
-              {Icons.sparkle({ size: 16, color: C.premium })}
-            </Pressable>
+            {/* Spotly Plus sparkle hidden for free launch — re-enable when paid
+                tiers go live. PaywallScreen still routable from elsewhere. */}
           </View>
         </View>
 

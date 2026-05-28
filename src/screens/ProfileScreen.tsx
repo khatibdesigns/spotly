@@ -11,7 +11,6 @@ import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { useProfile } from '../lib/profile';
 import { useFamily, buildInviteUrl } from '../lib/family';
-import { getPushDiagnostics, registerPush } from '../lib/push';
 import { useI18n } from '../lib/i18n';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useMemories } from '../lib/memories';
@@ -154,37 +153,6 @@ export function ProfileScreen() {
     }
   };
 
-  // Notifications diagnostics — calls the same APIs registerPush calls and
-  // surfaces the EXACT error string verbatim, so we stop guessing.
-  const onNotificationsDiag = async () => {
-    const d = await getPushDiagnostics();
-    const permLabel =
-      d.permissionStatus === 1 ? 'authorized'
-      : d.permissionStatus === 2 ? 'provisional'
-      : d.permissionStatus === 0 ? 'denied'
-      : d.permissionStatus === -1 ? 'notDetermined'
-      : String(d.permissionStatus);
-    const fcmPrev = d.fcmToken ? `${d.fcmToken.slice(0, 16)}…${d.fcmToken.slice(-6)}` : 'none';
-    const apnsPrev = d.apnsToken ? `${d.apnsToken.slice(0, 16)}…${d.apnsToken.slice(-6)}` : (Platform.OS === 'ios' ? 'NOT REGISTERED' : '—');
-    const lines = [
-      `Permission: ${permLabel}`,
-      Platform.OS === 'ios' ? `APNs: ${apnsPrev}` : null,
-      `FCM: ${fcmPrev}`,
-      d.error ? `\nError:\n${d.error}` : null,
-    ].filter(Boolean);
-    Alert.alert(
-      'Notifications',
-      lines.join('\n'),
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Re-register', onPress: () => { if (user?.uid) registerPush(user.uid).catch(() => {}); } },
-        d.fcmToken ? { text: 'Share token', onPress: () => Share.share({ message: d.fcmToken! }).catch(() => {}) } : null,
-        d.error ? { text: 'Share error', onPress: () => Share.share({ message: d.error! }).catch(() => {}) } : null,
-        { text: 'Open Settings', onPress: () => Linking.openSettings().catch(() => {}) },
-      ].filter(Boolean) as any,
-    );
-  };
-
   const onInvite = async () => {
     try {
       const code = await inviteToFamily();
@@ -255,23 +223,8 @@ export function ProfileScreen() {
           </View>
         </View>
 
-        {/* Plus badge */}
-        <Pressable onPress={() => push('paywall')}>
-          <LinearGradient colors={[C.premium, '#363a82']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[{ marginTop: 18, paddingVertical: 14, paddingHorizontal: 16, borderRadius: R.xl, flexDirection: 'row', alignItems: 'center', gap: 12 }, SH.card]}>
-            <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}>
-              {Icons.sparkle({ size: 18, color: '#fff' })}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: F.extrabold, fontSize: 14, color: '#fff' }}>{t('profile.plusTitle')}</Text>
-              <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.88)', fontFamily: F.regular, marginTop: 1 }}>
-                {isPlus ? t('profile.plusActive') : t('profile.plusUnlock')}
-              </Text>
-            </View>
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: R.pill, paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ fontSize: 12, color: '#fff', fontFamily: F.bold }}>{isPlus ? t('profile.manage') : t('profile.upgrade')}</Text>
-            </View>
-          </LinearGradient>
-        </Pressable>
+        {/* Spotly Plus card hidden for the free launch — re-enable when paid
+            tiers go live. PaywallScreen + usePurchases() are kept intact. */}
 
         {/* Family members — every adult + the kids */}
         <SectionLabel>{t('profile.family')}</SectionLabel>
@@ -340,7 +293,7 @@ export function ProfileScreen() {
           <Row icon={<IconBox ic={Icons.pin} c={C.ink2} />} title={t('profile.homeLoc')} det={profile?.homeCity || t('common.set')} onPress={editHome} />
           <Row icon={<IconBox ic={Icons.globe} c={C.ink2} />} title={t('profile.language')} det={lang === 'ar' ? 'العربية' : 'English'} onPress={pickLanguage} />
           <Row icon={<IconBox ic={Icons.lock} c={C.ink2} />} title={t('profile.privacy')} sub={user?.email || 'Photos are private by default'} onPress={() => openURL('https://meetspotly.com/privacy.html')} />
-          <Row icon={<IconBox ic={Icons.sparkle} c={C.ink2} />} title={t('profile.notifications')} onPress={onNotificationsDiag} last />
+          <Row icon={<IconBox ic={Icons.sparkle} c={C.ink2} />} title={t('profile.notifications')} onPress={() => Linking.openSettings().catch(() => {})} last />
         </View>
 
         {/* Sign out */}

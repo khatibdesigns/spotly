@@ -13,6 +13,8 @@ export const KUWAIT_CITY = { latitude: 29.3759, longitude: 47.9774 };
 export type SpotSource = 'google' | 'curated';
 
 // What kind of place this is — drives the Discover sections/filters.
+// Note: 'stay' was retired in #42 (Hotels comes back with the travel/packages
+// release). Kept in the union so any old persisted data still typechecks.
 export type SpotKind = 'activity' | 'dining' | 'shop' | 'stay';
 
 export type Spot = {
@@ -80,43 +82,86 @@ const PRICE: Record<string, string> = {
   PRICE_LEVEL_VERY_EXPENSIVE: '$$$$',
 };
 
-// Kid-friendly place types (valid Google Places "Table A" included types).
-const KID_TYPES = ['park', 'zoo', 'aquarium', 'water_park', 'amusement_park', 'amusement_center', 'museum', 'tourist_attraction'];
+// Kid-friendly place types, split into 3 clusters so Google's per-call result
+// cap (≈20) gives every theme fair representation instead of letting one
+// theme dominate. Each name is a valid Google Places "Table A" included type.
+//
+// NATURE  = parks/gardens/zoos/aquariums/landmarks
+// FUN     = amusement parks, indoor play, arcades, ice rinks, bowling, etc.
+//           (THE Pokiddo bucket — `amusement_park` lives here)
+// CULTURE = museums, planetariums, art galleries, cinema, historical sites
+const KID_NATURE_TYPES = [
+  'park', 'national_park', 'state_park',
+  'garden', 'botanical_garden', 'picnic_ground', 'hiking_area',
+  'zoo', 'aquarium', 'wildlife_park', 'wildlife_refuge',
+  'tourist_attraction', 'observation_deck',
+];
+const KID_FUN_TYPES = [
+  'amusement_park', 'water_park', 'roller_coaster', 'ferris_wheel',
+  'amusement_center', 'video_arcade', 'bowling_alley',
+  'playground', 'ice_skating_rink', 'community_center',
+];
+const KID_CULTURE_TYPES = [
+  'museum', 'planetarium',
+  'art_gallery', 'art_studio',
+  'historical_landmark', 'cultural_landmark', 'monument',
+  'movie_theater',
+];
 // Family dining (valid Table A types).
 const DINING_TYPES = ['restaurant', 'cafe', 'bakery', 'ice_cream_shop'];
-// Hotels & resorts (valid Table A lodging types).
-const STAY_TYPES = ['resort_hotel', 'hotel'];
 
+// Type → amenity tag. The amenity tag is what `CATEGORIES` tiles + the
+// Filters sheet check against, so every kid-relevant type MUST map to one.
 const TYPE_AMENITY: Record<string, string> = {
-  park: 'outdoor',
-  zoo: 'animals',
-  aquarium: 'animals', // marine life (the 'water' amenity = waterparks now)
+  // Outdoors
+  park: 'outdoor', national_park: 'outdoor', state_park: 'outdoor',
+  garden: 'outdoor', botanical_garden: 'outdoor', picnic_ground: 'outdoor',
+  hiking_area: 'outdoor',
+  tourist_attraction: 'outdoor', observation_deck: 'outdoor',
+  // Animals
+  zoo: 'animals', aquarium: 'animals',
+  wildlife_park: 'animals', wildlife_refuge: 'animals',
+  // Waterparks (separate from 'animals' aquarium)
   water_park: 'water',
-  amusement_park: 'playArea',
-  amusement_center: 'playArea',
-  museum: 'museum',
-  tourist_attraction: 'outdoor',
-  restaurant: 'foodOnSite',
-  cafe: 'foodOnSite',
-  bakery: 'foodOnSite',
-  ice_cream_shop: 'foodOnSite',
-  art_gallery: 'arts',
+  // Fun parks / theme parks / big rides — own bucket so amusement_park
+  // (Pokiddo) gets the right tile instead of being lumped into Indoor play.
+  amusement_park: 'funPark', roller_coaster: 'funPark', ferris_wheel: 'funPark',
+  // Indoor play / arcades / soft play / community spaces
+  amusement_center: 'playArea', video_arcade: 'playArea', bowling_alley: 'playArea',
+  playground: 'playArea', ice_skating_rink: 'playArea', community_center: 'playArea',
+  // Culture / museums (cinema folded in here for now)
+  museum: 'museum', planetarium: 'museum',
+  historical_landmark: 'museum', cultural_landmark: 'museum', monument: 'museum',
+  movie_theater: 'museum',
+  // Arts
+  art_gallery: 'arts', art_studio: 'arts',
+  // Dining
+  restaurant: 'foodOnSite', cafe: 'foodOnSite',
+  bakery: 'foodOnSite', ice_cream_shop: 'foodOnSite',
 };
 const TYPE_TONE: Record<string, string> = {
-  park: 'sage',
-  zoo: 'sun',
-  aquarium: 'sky',
-  amusement_park: 'plum',
-  amusement_center: 'plum',
-  museum: 'warm',
-  tourist_attraction: 'sage',
+  // Outdoors → sage
+  park: 'sage', national_park: 'sage', state_park: 'sage', garden: 'sage',
+  botanical_garden: 'sage', picnic_ground: 'sage', hiking_area: 'sage',
+  tourist_attraction: 'sage', observation_deck: 'sage',
+  // Animals → sun
+  zoo: 'sun', aquarium: 'sky',
+  wildlife_park: 'sun', wildlife_refuge: 'sun',
+  // Water → sky
   water_park: 'sky',
-  restaurant: 'coral',
-  cafe: 'warm',
-  bakery: 'sun',
-  ice_cream_shop: 'sky',
-  hotel: 'plum',
-  resort_hotel: 'plum',
+  // Fun parks → plum (bright)
+  amusement_park: 'plum', roller_coaster: 'plum', ferris_wheel: 'plum',
+  // Indoor play → coral
+  amusement_center: 'coral', video_arcade: 'coral', bowling_alley: 'coral',
+  playground: 'coral', ice_skating_rink: 'sky', community_center: 'sage',
+  // Museums / culture → warm
+  museum: 'warm', planetarium: 'sky',
+  historical_landmark: 'warm', cultural_landmark: 'warm', monument: 'warm',
+  movie_theater: 'plum',
+  // Arts → plum
+  art_gallery: 'plum', art_studio: 'plum',
+  // Dining
+  restaurant: 'coral', cafe: 'warm', bakery: 'sun', ice_cream_shop: 'sky',
 };
 
 function prettyType(t?: string): string {
@@ -385,14 +430,20 @@ export async function searchPlaces(text: string, near?: { latitude: number; long
 // Curated spots first (hand-picked), then Google activities + dining + shops,
 // de-duped by name and sorted by distance.
 export async function getSpots(loc: UserLoc): Promise<Spot[]> {
-  const [activities, dining, shops, stays, halal, curated] = await Promise.all([
-    searchNearby(loc, KID_TYPES, 'activity', 20),
+  // Three parallel kid-activity searches (nature / fun / culture) so Google's
+  // ≈20-result cap doesn't drown any one theme. Hotels (stays) removed in #42
+  // — returns with the travel/packages release.
+  const [nature, fun, culture, dining, shops, halal, curated] = await Promise.all([
+    searchNearby(loc, KID_NATURE_TYPES, 'activity', 20),
+    searchNearby(loc, KID_FUN_TYPES, 'activity', 20),
+    searchNearby(loc, KID_CULTURE_TYPES, 'activity', 15),
     searchNearby(loc, DINING_TYPES, 'dining', 15),
     searchShops(loc),
-    searchNearby(loc, STAY_TYPES, 'stay', 12),
     searchHalal(loc),
     fetchCurated(loc),
   ]);
+  const activities = [...nature, ...fun, ...culture];
+  const stays: Spot[] = []; // kept as an empty array so the merge loop below still typechecks
   // A curated doc may be a "claim record" linked to a Google place_id (the
   // merchant claimed their real listing). Match Google results to those claims
   // by place_id and overlay the merchant's commercial fields (vouchers,

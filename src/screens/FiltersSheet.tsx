@@ -22,10 +22,11 @@ const KINDS = [
   { id: 'activity', key: 'kind.activity', ic: Icons.compass },
   { id: 'dining', key: 'kind.dining', ic: Icons.dining },
   { id: 'shop', key: 'kind.shop', ic: Icons.shop },
-  { id: 'stay', key: 'kind.stay', ic: Icons.hotel },
+  // 'stay' (Hotels) removed for now — returns with the travel/packages release.
 ];
 const AMENITIES = [
   { id: 'playArea', label: 'Play area', ic: Icons.playArea },
+  { id: 'funPark', label: 'Fun parks', ic: Icons.sparkle },
   { id: 'indoor', label: 'Indoor', ic: Icons.indoor },
   { id: 'outdoor', label: 'Outdoor', ic: Icons.outdoor },
   { id: 'foodOnSite', label: 'Food on site', ic: Icons.foodOnSite },
