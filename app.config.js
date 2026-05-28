@@ -17,7 +17,7 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.khd.spotly',
-      buildNumber: '38',
+      buildNumber: '39',
       usesAppleSignIn: true,
       googleServicesFile: './GoogleService-Info.plist', // Firebase (FCM + Analytics)
       // Universal Links — tapping https://meetspotly.com/join?code=… opens the
@@ -39,7 +39,7 @@ export default {
     },
     android: {
       package: 'com.khd.spotly',
-      versionCode: 38,
+      versionCode: 39,
       googleServicesFile: './google-services.json', // Firebase (FCM + Analytics)
       // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
       usesCleartextTraffic: true,
