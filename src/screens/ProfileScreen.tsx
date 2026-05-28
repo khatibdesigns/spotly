@@ -154,21 +154,23 @@ export function ProfileScreen() {
     }
   };
 
-  // Notifications diagnostics — surfaces what's actually on this device so we
-  // can tell whether FCM/APNs is working without having to scrape Firestore.
+  // Notifications diagnostics — calls the same APIs registerPush calls and
+  // surfaces the EXACT error string verbatim, so we stop guessing.
   const onNotificationsDiag = async () => {
     const d = await getPushDiagnostics();
-    if (!d.nativeLinked) {
-      Alert.alert('Notifications', 'The native FCM module is not linked in this build.');
-      return;
-    }
+    const permLabel =
+      d.permissionStatus === 1 ? 'authorized'
+      : d.permissionStatus === 2 ? 'provisional'
+      : d.permissionStatus === 0 ? 'denied'
+      : d.permissionStatus === -1 ? 'notDetermined'
+      : String(d.permissionStatus);
     const fcmPrev = d.fcmToken ? `${d.fcmToken.slice(0, 16)}…${d.fcmToken.slice(-6)}` : 'none';
     const apnsPrev = d.apnsToken ? `${d.apnsToken.slice(0, 16)}…${d.apnsToken.slice(-6)}` : (Platform.OS === 'ios' ? 'NOT REGISTERED' : '—');
     const lines = [
-      `Permission: ${d.permissionStatus}`,
-      Platform.OS === 'ios' ? `APNs token: ${apnsPrev}` : null,
-      `FCM token: ${fcmPrev}`,
-      d.error ? `Error: ${d.error}` : null,
+      `Permission: ${permLabel}`,
+      Platform.OS === 'ios' ? `APNs: ${apnsPrev}` : null,
+      `FCM: ${fcmPrev}`,
+      d.error ? `\nError:\n${d.error}` : null,
     ].filter(Boolean);
     Alert.alert(
       'Notifications',
@@ -177,6 +179,7 @@ export function ProfileScreen() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Re-register', onPress: () => { if (user?.uid) registerPush(user.uid).catch(() => {}); } },
         d.fcmToken ? { text: 'Share token', onPress: () => Share.share({ message: d.fcmToken! }).catch(() => {}) } : null,
+        d.error ? { text: 'Share error', onPress: () => Share.share({ message: d.error! }).catch(() => {}) } : null,
         { text: 'Open Settings', onPress: () => Linking.openSettings().catch(() => {}) },
       ].filter(Boolean) as any,
     );
