@@ -6,19 +6,42 @@
 // Registers the device's FCM token in Firestore (users/{uid}) so the CRM/EC2
 // can target a specific user, and subscribes to the 'all' topic so broadcast
 // campaigns (Firebase Console or CRM) reach everyone.
-import { Platform, NativeModules, PermissionsAndroid } from 'react-native';
+import { Platform, NativeModules, PermissionsAndroid, TurboModuleRegistry } from 'react-native';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { firestore } from './firebase';
 
-function messaging(): any | null {
-  // Only touch RNFirebase when its native module is actually linked — avoids a
-  // throw (and dev redbox) on the JS-only sim before the native rebuild.
-  if (!NativeModules.RNFBAppModule) return null;
+// Memoised messaging() handle. Lazy-resolves through TurboModuleRegistry (New
+// Architecture / Bridgeless) AND the legacy NativeModules bridge, then falls
+// back to a try/catch require so we never throw at import time.
+//
+// History (#37): the check used only `NativeModules.RNFBAppModule`, which is
+// undefined under Bridgeless mode even though the TurboModule IS linked, so
+// every device on New Arch saw "native FCM module is not linked" and no push
+// ever fired.
+let _messaging: any = null;
+let _messagingChecked = false;
+
+function nativeFcmLinked(): boolean {
+  // 1) TurboModuleRegistry first (New Architecture path).
+  try { if (TurboModuleRegistry?.get?.('RNFBAppModule')) return true; } catch {}
+  // 2) Legacy NativeModules bridge.
+  if (NativeModules?.RNFBAppModule) return true;
+  // 3) Last resort: try to require + instantiate; if that works, native is up.
   try {
-    return require('@react-native-firebase/messaging').default();
+    require('@react-native-firebase/messaging').default();
+    return true;
+  } catch { return false; }
+}
+
+function messaging(): any | null {
+  if (_messagingChecked) return _messaging;
+  _messagingChecked = true;
+  try {
+    _messaging = require('@react-native-firebase/messaging').default();
   } catch {
-    return null;
+    _messaging = null;
   }
+  return _messaging;
 }
 
 // Android 13+ (API 33) requires POST_NOTIFICATIONS as a runtime permission AND
@@ -100,8 +123,9 @@ export type PushDiagnostics = {
 };
 
 export async function getPushDiagnostics(): Promise<PushDiagnostics> {
+  const linked = nativeFcmLinked();
   const m = messaging();
-  if (!m) return { nativeLinked: false, permissionStatus: 'unavailable' };
+  if (!m) return { nativeLinked: linked, permissionStatus: 'unavailable', error: linked ? 'messaging() returned null despite native module being present' : undefined };
   const out: PushDiagnostics = { nativeLinked: true, permissionStatus: 'unknown' };
   try {
     const status = await m.hasPermission();
