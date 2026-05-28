@@ -1,6 +1,6 @@
 // Spotly — Place detail for a real selected place (Google/curated).
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, Alert, Linking, Share, Platform, Pressable, LayoutAnimation, UIManager } from 'react-native';
+import { View, Text, ScrollView, Alert, Linking, Share, Platform, Pressable, LayoutAnimation, UIManager, useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker } from 'react-native-maps';
@@ -61,6 +61,14 @@ export function PlaceScreen() {
   const [offersOpen, setOffersOpen] = useState(false);
   const [justAdded, setJustAdded] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  // Hero photo carousel: prefer the multi-photo list, fall back to the single photo.
+  const { width: winW } = useWindowDimensions();
+  const heroPhotos = (spot?.photoUrls && spot.photoUrls.length ? spot.photoUrls : (spot?.photoUrl ? [spot.photoUrl] : []));
+  const [heroIdx, setHeroIdx] = useState(0);
+  const onHeroScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const i = Math.round(e.nativeEvent.contentOffset.x / Math.max(1, winW));
+    if (i !== heroIdx) setHeroIdx(i);
+  };
   const offersY = useRef(0);
 
   const toggleOffers = () => {
@@ -136,10 +144,31 @@ export function PlaceScreen() {
         scrollEventThrottle={16}
         alwaysBounceVertical
       >
-        {/* Hero */}
+        {/* Hero — swipeable photo carousel (falls back to one image) */}
         <View style={{ height: 360 }}>
-          <SpotImage photoUrl={spot?.photoUrl} tone={spot?.tone || 'sun'} height={360} radius={0} label={spot?.name} />
-          <LinearGradient colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.45)']} locations={[0, 0.4, 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+          {heroPhotos.length > 1 ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={onHeroScroll}
+              scrollEventThrottle={16}
+            >
+              {heroPhotos.map((u, i) => (
+                <SpotImage key={i} photoUrl={u} tone={spot?.tone || 'sun'} height={360} radius={0} label={spot?.name} style={{ width: winW }} />
+              ))}
+            </ScrollView>
+          ) : (
+            <SpotImage photoUrl={spot?.photoUrl} tone={spot?.tone || 'sun'} height={360} radius={0} label={spot?.name} />
+          )}
+          <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.45)']} locations={[0, 0.4, 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+          {heroPhotos.length > 1 ? (
+            <View pointerEvents="none" style={{ position: 'absolute', bottom: 44, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+              {heroPhotos.map((_, i) => (
+                <View key={i} style={{ width: i === heroIdx ? 18 : 6, height: 6, borderRadius: 3, backgroundColor: i === heroIdx ? '#fff' : 'rgba(255,255,255,0.55)' }} />
+              ))}
+            </View>
+          ) : null}
         </View>
 
         {/* Content card */}

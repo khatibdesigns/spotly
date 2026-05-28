@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth';
 import { useProfile, Kid, EMPTY_STATS } from '../lib/profile';
 import { useI18n } from '../lib/i18n';
 import { useStore } from '../lib/store';
+import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 
 const KID_COLORS = [C.sky, C.plum, C.sun, C.sage, C.coral];
 let _kidSeq = 0;
@@ -26,6 +27,7 @@ const INTERESTS = [
 
 export function SetupScreen() {
   const insets = useSafeAreaInsets();
+  const kbPad = useAndroidKeyboardPad();
   const { user } = useAuth();
   const { saveProfile } = useProfile();
   const { t } = useI18n();
@@ -66,7 +68,7 @@ export function SetupScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 24, paddingHorizontal: 28, paddingBottom: 200 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive">
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 24, paddingHorizontal: 28, paddingBottom: 200 + kbPad }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive">
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {[0, 1].map((i) => (
             <View key={i} style={{ width: i === step ? 22 : 6, height: 6, borderRadius: 3, backgroundColor: i === step ? C.coral : C.line }} />

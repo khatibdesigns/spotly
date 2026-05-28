@@ -11,6 +11,7 @@ import { useStore } from '../lib/store';
 import { useMerchant } from '../lib/merchant';
 import { useI18n } from '../lib/i18n';
 import { CURRENCIES, Voucher } from '../lib/currency';
+import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 
 type Draft = { id: string; label: string; price: string; value: string; active: boolean };
 
@@ -20,6 +21,7 @@ function newDraft(): Draft {
 
 export function MerchantVouchersScreen() {
   const insets = useSafeAreaInsets();
+  const kbPad = useAndroidKeyboardPad();
   const { pop, stack } = useStore();
   const { places, setPlaceVouchers } = useMerchant();
   const { t } = useI18n();
@@ -95,7 +97,7 @@ export function MerchantVouchersScreen() {
         <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.serif, fontSize: 21, color: C.ink, letterSpacing: -0.5 }}>{t('mv.title')}</Text>
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top + 50}>
-        <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28 + kbPad }} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
           {!place ? (
             <Text style={{ marginTop: 40, color: C.ink3, fontFamily: F.regular }}>—</Text>
           ) : (

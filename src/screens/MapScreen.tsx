@@ -154,7 +154,7 @@ export function MapScreen() {
       {mode === 'nearby' && movedTo ? (
         <Pressable
           onPress={() => { searchAt(movedTo.lat, movedTo.lng); setMovedTo(null); }}
-          style={[{ position: 'absolute', top: insets.top + 108, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.ink, borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 11 }, SH.pop]}
+          style={[{ position: 'absolute', top: insets.top + 158, alignSelf: 'center', zIndex: 30, elevation: 12, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.ink, borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 11 }, SH.pop]}
         >
           {Icons.search({ size: 14, color: '#fff' })}
           <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 13 }}>{t('map.searchThisArea')}</Text>

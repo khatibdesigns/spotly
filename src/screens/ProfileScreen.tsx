@@ -12,6 +12,7 @@ import { useAuth } from '../lib/auth';
 import { useProfile } from '../lib/profile';
 import { useFamily, buildInviteUrl } from '../lib/family';
 import { useI18n } from '../lib/i18n';
+import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 import { useMemories } from '../lib/memories';
 import { useVouchers } from '../lib/vouchers';
 import { useSaves } from '../lib/saves';
@@ -84,6 +85,7 @@ function StatCard({ n, l, c }: { n: number; l: string; c: string }) {
 
 export function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const kbPad = useAndroidKeyboardPad();
   const { push, setTab } = useStore();
   const { user, signOut } = useAuth();
   const { profile, saveProfile, uploadAvatar, uploadImage } = useProfile();
@@ -298,7 +300,7 @@ export function ProfileScreen() {
       {/* Join a family — enter invite code */}
       <Modal visible={joinOpen} transparent animationType="slide" onRequestClose={() => setJoinOpen(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.45)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: insets.bottom + 22 }}>
+          <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: insets.bottom + 22 + kbPad }}>
             <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 16 }} />
             <Text style={{ fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>{t('family.join')}</Text>
             <Text style={{ fontSize: 13, color: C.ink2, fontFamily: F.regular, marginTop: 4 }}>{t('family.joinSub')}</Text>

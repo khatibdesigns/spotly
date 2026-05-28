@@ -29,6 +29,7 @@ export type Spot = {
   ages?: string; // curated only
   amenities: string[]; // icon keys understood by the UI
   photoUrl?: string;
+  photoUrls?: string[]; // up to several photos for the place gallery/carousel
   distanceKm?: number;
   openNow?: boolean;
   bookable?: boolean;
@@ -163,6 +164,9 @@ function mapPlace(p: any, loc: UserLoc, kind: SpotKind, shopAmenity = false): Sp
     price: p.priceLevel ? PRICE[p.priceLevel] : undefined,
     amenities: amenities.slice(0, 4),
     photoUrl: p.photos?.[0]?.name ? photoUrl(p.photos[0].name) : undefined,
+    photoUrls: Array.isArray(p.photos)
+      ? p.photos.slice(0, 8).map((ph: any) => (ph?.name ? photoUrl(ph.name) : null)).filter(Boolean)
+      : undefined,
     distanceKm: lat != null ? distKm(loc.latitude, loc.longitude, lat, lng) : undefined,
     openNow: p.currentOpeningHours?.openNow,
     address: p.formattedAddress,

@@ -15,6 +15,7 @@ import { storage } from '../lib/firebase';
 import { useMerchant } from '../lib/merchant';
 import { useI18n } from '../lib/i18n';
 import { getUserLocation, searchPlaces, PlaceSearchResult } from '../lib/places';
+import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 
 // RN-reliable local-file → Blob upload (fetch().blob() is flaky in Hermes).
 async function uploadFile(uri: string, path: string, contentType: string): Promise<string> {
@@ -46,6 +47,7 @@ function Field({ label, ...props }: any) {
 
 export function MerchantSetupScreen() {
   const insets = useSafeAreaInsets();
+  const kbPad = useAndroidKeyboardPad();
   const { signOut } = useAuth();
   const { createMerchant } = useMerchant();
   const { t } = useI18n();
@@ -138,7 +140,7 @@ export function MerchantSetupScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 24, paddingBottom: insets.bottom + 120 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 24, paddingBottom: insets.bottom + 120 + kbPad }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
           <Pressable onPress={signOut} hitSlop={8}><Text style={{ color: C.ink3, fontFamily: F.bold, fontSize: 13 }}>{t('profile.signOut')}</Text></Pressable>
         </View>

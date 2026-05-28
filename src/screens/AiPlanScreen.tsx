@@ -14,6 +14,7 @@ import { usePlanner } from '../lib/planner';
 import { useI18n } from '../lib/i18n';
 import { Itinerary, ItStop, dayDateLabel } from '../lib/aiPlan';
 import { searchPlaces, PlaceSearchResult, getUserLocation } from '../lib/places';
+import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 import { usePlaces } from '../lib/placesStore';
 import * as Location from 'expo-location';
 
@@ -29,11 +30,12 @@ const PROGRESS_STEPS = [
 
 export function AiPlanScreen() {
   const insets = useSafeAreaInsets();
+  const kbPad = useAndroidKeyboardPad();
   const { pop, setTab, popToRoot } = useStore();
   const { profile } = useProfile();
   const { loc } = usePlaces();
   const { saveItinerary } = usePlans();
-  const { status, result, error, startedAt, generate, retry, reset } = usePlanner();
+  const { status, result, error, startedAt, lastInput, generate, retry, reset } = usePlanner();
   const { t } = useI18n();
   const [text, setText] = useState('');
   // The user's current area (for location-aware suggestions) — reverse-geocoded
@@ -181,6 +183,22 @@ export function AiPlanScreen() {
     return nextSaturdayISO();
   };
 
+  // "Edit prompt" must bring the user back to the editor with their original
+  // prompt intact — not a blank box. The prompt survives in the planner store
+  // (lastInput.notes) even if this screen remounted (e.g. close-&-notify), so
+  // restore it before clearing the result.
+  const editPrompt = () => {
+    if (lastInput?.notes) setText(lastInput.notes);
+    reset();
+  };
+
+  // On (re)mount, if a previous prompt exists and the box is empty, seed it so
+  // the editor never looks wiped after returning to the screen.
+  useEffect(() => {
+    if (!text && lastInput?.notes) setText(lastInput.notes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const onGenerate = () => {
     if (!text.trim()) return;
     const food = familyFood(profile);
@@ -214,7 +232,7 @@ export function AiPlanScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: insets.bottom + 120 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: insets.bottom + 120 + kbPad }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <CircBtn onPress={pop}>{Icons.arrowL({ size: 18, color: C.ink })}</CircBtn>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -243,12 +261,12 @@ export function AiPlanScreen() {
           <Btn kind="ghost" size="lg" full onPress={pop}>{t('ai.closeNotify')}</Btn>
         ) : status === 'error' ? (
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Btn kind="ghost" style={[{ flex: 1, backgroundColor: C.surface }, SH.cta]} onPress={reset}>{t('common.edit')}</Btn>
+            <Btn kind="ghost" style={[{ flex: 1, backgroundColor: C.surface }, SH.cta]} onPress={editPrompt}>{t('common.edit')}</Btn>
             <Btn kind="premium" style={{ flex: 1.4 }} onPress={retry}>{t('common.retry')}</Btn>
           </View>
         ) : (
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Btn kind="ghost" style={[{ flex: 1, backgroundColor: C.surface }, SH.cta]} onPress={reset}>{t('ai.editPrompt')}</Btn>
+            <Btn kind="ghost" style={[{ flex: 1, backgroundColor: C.surface }, SH.cta]} onPress={editPrompt}>{t('ai.editPrompt')}</Btn>
             <Btn kind="primary" style={{ flex: 1.6 }} onPress={save}>{saving ? t('gallery.saving') : t('ai.saveToPlans')}</Btn>
           </View>
         )}

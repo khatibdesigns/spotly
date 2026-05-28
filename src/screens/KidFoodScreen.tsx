@@ -10,6 +10,7 @@ import { Chip, Btn, CircBtn } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useProfile, Kid } from '../lib/profile';
 import { useI18n } from '../lib/i18n';
+import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 
 const LIKE_PRESETS = ['Pizza', 'Pasta', 'Burgers', 'Chicken', 'Rice', 'Noodles', 'Sushi', 'Sandwiches', 'Fruit', 'Pancakes', 'Ice cream', 'Cheese'];
 const AVOID_PRESETS = ['Nuts', 'Peanuts', 'Dairy', 'Gluten', 'Eggs', 'Shellfish', 'Pork', 'Soy', 'Spicy', 'Honey'];
@@ -22,6 +23,7 @@ function uniqMerge(presets: string[], picked: string[]): string[] {
 
 export function KidFoodScreen() {
   const insets = useSafeAreaInsets();
+  const kbPad = useAndroidKeyboardPad();
   const { pop, stack } = useStore();
   const { profile, saveProfile } = useProfile();
   const { t } = useI18n();
@@ -75,7 +77,7 @@ export function KidFoodScreen() {
           </View>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 + kbPad }}>
           {/* Loves */}
           <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.sage, letterSpacing: 1, textTransform: 'uppercase', marginTop: 10, marginBottom: 12 }}>{t('food.loves')}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

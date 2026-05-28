@@ -13,9 +13,11 @@ import { usePlaces } from '../lib/placesStore';
 import { searchPlaces, PlaceSearchResult } from '../lib/places';
 import { choosePhoto } from '../lib/pickImage';
 import { useI18n } from '../lib/i18n';
+import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 
 export function GalleryScreen() {
   const insets = useSafeAreaInsets();
+  const kbPad = useAndroidKeyboardPad();
   const { push } = useStore();
   const { memories, visited, addMemory, uploading } = useMemories();
   const { loc } = usePlaces();
@@ -173,7 +175,7 @@ export function GalleryScreen() {
       <Modal visible={!!picked} transparent animationType="slide" onRequestClose={() => setPicked(null)}>
         <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.45)', justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView keyboardShouldPersistTaps="handled" bounces={false} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: insets.bottom + 22 }}>
+          <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: insets.bottom + 22 + kbPad }}>
             <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 16 }} />
             <Text style={{ fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>{t('gallery.addMemory')}</Text>
             {picked ? <Image source={{ uri: picked }} style={{ width: '100%', height: 180, borderRadius: R.lg, marginTop: 14, backgroundColor: C.surface2 }} resizeMode="cover" /> : null}

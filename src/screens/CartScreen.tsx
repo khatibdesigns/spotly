@@ -28,7 +28,7 @@ export function CartScreen() {
     setBusy(true);
     try {
       const ids = await checkout();
-      if (ids.length > 0) push('voucherPass', { orderId: ids[0], more: ids.length - 1 });
+      if (ids.length > 0) push('voucherPass', { orderIds: ids });
       else pop();
     } catch (e: any) {
       Alert.alert(t('cart.couldNotBuy'), e?.message || t('common.tryAgain'));
