@@ -13,9 +13,10 @@ import subprocess
 import threading
 
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "/home/ec2-user/.nvm/versions/node/v22.22.2/bin/claude")
-# Screening is a simple classification — Haiku is fast + plenty good here
-# (unlike the planner, which the user wants on Sonnet/Opus for quality).
-SCREEN_MODEL = os.environ.get("SCREEN_MODEL", "haiku")
+# Sonnet for accuracy — screening must reason about the NAME, not just the type
+# (e.g. a "Baqala"/grocery tagged as a store must FAIL). Cached, so the one-time
+# cost per place is fine. Override with SCREEN_MODEL if needed.
+SCREEN_MODEL = os.environ.get("SCREEN_MODEL", "sonnet")
 SCREEN_TIMEOUT = int(os.environ.get("SCREEN_TIMEOUT", "120"))
 SA_PATH = os.environ.get("SPOTLY_SA", "/home/ec2-user/caption-proxy/spotly-sa.json")
 
@@ -40,18 +41,36 @@ def _get_db():
     return _db
 
 
-RUBRIC = """You screen places for Spotly, an app that helps families find KID-FRIENDLY places to take their children (toddlers to about 12 years old) out for the day.
+RUBRIC = """You are the Ultimate Quality Gatekeeper for "Spotly" — a curated app that helps families find places to take their CHILDREN (toddlers to ~12 years old) OUT for the day. Your job is to screen raw Google Places data and decide if each venue TRULY fits the theme.
 
-KEEP (keep=true) — genuine kid / family outing destinations:
-parks, gardens, playgrounds, amusement & theme parks, water parks, zoos, aquariums, wildlife parks, museums and science / discovery / children's centers, planetariums, kids entertainment & indoor soft-play centers, arcades, bowling, ice or roller skating rinks, trampoline parks, family restaurants (especially with a kids play area or kids menu), ice-cream & dessert shops, kid-focused shops (toy or book stores), and clearly family-oriented attractions.
+Google data is notoriously noisy: it calls graveyards "parks", baqalas/grocery shops "stores", gas-station counters "restaurants". You must look PAST the generic tags and analyze the NAME (and types, rating, price) to make an intelligent, human-like decision. The NAME is often the strongest signal.
 
-DROP (keep=false) — NOT a kid/family outing:
-cafes, coffee shops, shisha / hookah lounges, bars, pubs, night clubs, adult venues, gyms / fitness studios, spas / salons, clinics / pharmacies, offices, banks, car services / garages, generic grocery / retail / electronics, government buildings, mosques / religious or community halls, wedding / banquet halls, hotels / lodging.
+### WHAT PASSES (keep=true) — genuine kid/family OUTING destinations
+Parks & public gardens (for recreation/play), playgrounds, amusement & theme parks, water parks, zoos, aquariums, wildlife parks, museums and science / discovery / children's centers, planetariums, kids entertainment & indoor soft-play centers, arcades, bowling alleys, ice / roller skating rinks, trampoline parks, REAL sit-down family restaurants (especially with a kids play area or kids menu), ice-cream & dessert parlours, and kid-focused shops (toy stores, kids' book stores). Family-oriented experiential attractions.
 
-For each place pick the best category from: park, funPark, playArea, animals, water, museum, eatPlay, dining, shop, other.
+### WHAT FAILS (keep=false) — NOT a kids outing
+- Baqalas, grocery / convenience stores, supermarkets, mini-marts.
+- Cafes, coffee shops, shisha / hookah lounges, bars, pubs, night clubs, lounges, any adult venue.
+- Gas stations and their food counters; grab-and-go / takeaway-only fast-food counters.
+- Laundries, salons / spas / barbers, clinics / pharmacies / hospitals, gyms / fitness studios.
+- Offices, banks, car services / garages, phone / electronics / generic retail.
+- Government buildings, mosques / religious or community halls, wedding / banquet halls, hotels / lodging.
+- Cemeteries, roundabouts, parking lots, transit/utility points, vacant lots.
 
-Return STRICT JSON ONLY — no prose, no markdown fences:
-{"results":[{"id":"<id>","keep":true,"category":"park"}]}"""
+### RULES
+1. BE SKEPTICAL — never trust Google's category alone; READ THE NAME. A name containing words like Baqala, Grocery, Market, Laundry, Clinic, Pharmacy, Salon, Barber, Gas, Petrol, Café/Coffee, Shisha/Hookah, Lounge, Garage, Mosque, Co-op/Jam'iya is almost never a kids outing → FAIL.
+2. GRAVEYARD TEST — a "green space" that is a cemetery, roundabout, median, or utility area is a FAIL.
+3. BAQALA / SANDWICH TEST — groceries, baqalas, convenience stores, gas-station counters, and grab-and-go joints are a FAIL even if Google tags them restaurant/store.
+4. WHEN IN DOUBT, REJECT — a small, 100% accurate database beats a populated one full of junk.
+
+### CATEGORY (for passes only) — choose the single best:
+park, funPark, playArea, animals, water, museum, eatPlay, dining, shop, other
+
+### INPUT
+A list of places, each line: id | name | primaryType | types | rating | price | address
+
+### OUTPUT — STRICT JSON ONLY, no prose, no markdown fences. Include EVERY input id exactly once:
+{"results":[{"id":"<id>","keep":true,"category":"park","reason":"<one short sentence>"}]}"""
 
 
 def run_screen(places):
@@ -59,9 +78,15 @@ def run_screen(places):
     items = [p for p in places if p.get("id")]
     if not items:
         return []
+    def _types(p):
+        t = p.get("types")
+        if isinstance(t, list):
+            return ",".join(t)
+        return t or p.get("category", "")
     listing = "\n".join(
-        "- id=%s | name=%s | type=%s | cat=%s | %s"
-        % (p.get("id", ""), p.get("name", ""), p.get("primaryType", ""), p.get("category", ""), p.get("address", ""))
+        "%s | %s | %s | %s | %s | %s | %s"
+        % (p.get("id", ""), p.get("name", ""), p.get("primaryType", ""), _types(p),
+           p.get("rating", ""), p.get("price", ""), p.get("address", ""))
         for p in items
     )
     prompt = RUBRIC + "\n\nPLACES:\n" + listing
