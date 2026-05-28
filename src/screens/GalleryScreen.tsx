@@ -1,6 +1,7 @@
 // Spotly — Gallery. Real family memories (photos in Storage + Firestore).
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, Image, Modal, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Linking } from 'react-native';
+import { View, Text, ScrollView, Pressable, Image, Modal, TextInput, ActivityIndicator, Alert, Platform, Linking } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,11 +14,9 @@ import { usePlaces } from '../lib/placesStore';
 import { searchPlaces, PlaceSearchResult } from '../lib/places';
 import { choosePhoto } from '../lib/pickImage';
 import { useI18n } from '../lib/i18n';
-import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 
 export function GalleryScreen() {
   const insets = useSafeAreaInsets();
-  const kbPad = useAndroidKeyboardPad();
   const { push } = useStore();
   const { memories, visited, addMemory, uploading } = useMemories();
   const { loc } = usePlaces();
@@ -173,9 +172,9 @@ export function GalleryScreen() {
 
       {/* Add memory modal */}
       <Modal visible={!!picked} transparent animationType="slide" onRequestClose={() => setPicked(null)}>
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.45)', justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.45)', justifyContent: 'flex-end' }}>
           <ScrollView keyboardShouldPersistTaps="handled" bounces={false} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: insets.bottom + 22 + kbPad }}>
+          <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: insets.bottom + 22 }}>
             <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 16 }} />
             <Text style={{ fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>{t('gallery.addMemory')}</Text>
             {picked ? <Image source={{ uri: picked }} style={{ width: '100%', height: 180, borderRadius: R.lg, marginTop: 14, backgroundColor: C.surface2 }} resizeMode="cover" /> : null}

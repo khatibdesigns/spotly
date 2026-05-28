@@ -1,7 +1,8 @@
 // Spotly — AI itinerary planner. Generation runs globally (PlannerProvider) so
 // you can leave this screen; a sound notification fires when it's ready.
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Modal, Image } from 'react-native';
+import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Alert, Modal, Image } from 'react-native';
+import { KeyboardAwareScrollView, KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, F, R, SH } from '../lib/theme';
@@ -12,9 +13,8 @@ import { useProfile, familyFood } from '../lib/profile';
 import { usePlans } from '../lib/plans';
 import { usePlanner } from '../lib/planner';
 import { useI18n } from '../lib/i18n';
-import { Itinerary, ItStop, dayDateLabel } from '../lib/aiPlan';
+import { Itinerary, ItStop, ItDay, dayDateLabel } from '../lib/aiPlan';
 import { searchPlaces, PlaceSearchResult, getUserLocation } from '../lib/places';
-import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 import { usePlaces } from '../lib/placesStore';
 import * as Location from 'expo-location';
 
@@ -30,7 +30,6 @@ const PROGRESS_STEPS = [
 
 export function AiPlanScreen() {
   const insets = useSafeAreaInsets();
-  const kbPad = useAndroidKeyboardPad();
   const { pop, setTab, popToRoot } = useStore();
   const { profile } = useProfile();
   const { loc } = usePlaces();
@@ -96,6 +95,30 @@ export function AiPlanScreen() {
       if (!it) return it;
       const copy: Itinerary = JSON.parse(JSON.stringify(it));
       copy.days[dayIdx].stops.push(stop);
+      return copy;
+    });
+  };
+
+  // Edit trip duration before saving: add/remove whole days. Day numbers (used
+  // for the per-day date labels) are kept sequential; any "Day N" prefix in the
+  // AI's label is renumbered to match.
+  const renumberDays = (days: ItDay[]): ItDay[] =>
+    days.map((d, i) => ({ ...d, day: i + 1, label: (d.label || '').replace(/^Day\s*\d+/i, `Day ${i + 1}`) || `Day ${i + 1}` }));
+  const removeDay = (dayIdx: number) => {
+    setEdited((it) => {
+      if (!it || (it.days?.length ?? 0) <= 1) return it;
+      const copy: Itinerary = JSON.parse(JSON.stringify(it));
+      copy.days.splice(dayIdx, 1);
+      copy.days = renumberDays(copy.days);
+      return copy;
+    });
+  };
+  const addDay = () => {
+    setEdited((it) => {
+      if (!it) return it;
+      const copy: Itinerary = JSON.parse(JSON.stringify(it));
+      const n = (copy.days?.length ?? 0) + 1;
+      copy.days = [...(copy.days || []), { day: n, label: `Day ${n}`, stops: [] }];
       return copy;
     });
   };
@@ -231,8 +254,7 @@ export function AiPlanScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: insets.bottom + 120 + kbPad }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <KeyboardAwareScrollView showsVerticalScrollIndicator={false} bottomOffset={24} contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: insets.bottom + 120 }} keyboardShouldPersistTaps="handled">
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <CircBtn onPress={pop}>{Icons.arrowL({ size: 18, color: C.ink })}</CircBtn>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -245,14 +267,13 @@ export function AiPlanScreen() {
           {status === 'generating' ? (
             <Generating mmss={mmss} progressMsg={progressMsg} />
           ) : status === 'ready' && (edited || result) ? (
-            <ItineraryPreview it={(edited || result)!} onRemoveStop={removeStop} onOpenAdder={openAdder} />
+            <ItineraryPreview it={(edited || result)!} onRemoveStop={removeStop} onOpenAdder={openAdder} onRemoveDay={removeDay} onAddDay={addDay} />
           ) : status === 'error' ? (
             <ErrorState message={error} />
           ) : (
             <Idle text={text} setText={setText} profile={profile} place={place} />
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 14 }}>
         {status === 'idle' ? (
@@ -274,7 +295,7 @@ export function AiPlanScreen() {
 
       {/* Add-a-place search (Google Places) */}
       <Modal visible={addingDay != null} transparent animationType="slide" onRequestClose={() => setAddingDay(null)}>
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.45)', justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.45)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 16, paddingBottom: insets.bottom + 20, maxHeight: '80%' }}>
             <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 14 }} />
             <Text style={{ fontFamily: F.serif, fontSize: 22, letterSpacing: -0.5, color: C.ink, marginBottom: 12 }}>{t('ai.addStop')}</Text>
@@ -377,7 +398,7 @@ function ErrorState({ message }: { message: string | null }) {
   );
 }
 
-function ItineraryPreview({ it, onRemoveStop, onOpenAdder }: { it: Itinerary; onRemoveStop: (d: number, s: number) => void; onOpenAdder: (d: number) => void }) {
+function ItineraryPreview({ it, onRemoveStop, onOpenAdder, onRemoveDay, onAddDay }: { it: Itinerary; onRemoveStop: (d: number, s: number) => void; onOpenAdder: (d: number) => void; onRemoveDay: (d: number) => void; onAddDay: () => void }) {
   const { t } = useI18n();
   return (
     <View style={{ marginTop: 16 }}>
@@ -391,9 +412,16 @@ function ItineraryPreview({ it, onRemoveStop, onOpenAdder }: { it: Itinerary; on
         const date = dayDateLabel(it.startDate, d.day);
         return (
         <View key={d.day} style={{ marginTop: 18 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
             <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.ink }}>{d.label}</Text>
             {date ? <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: C.coralDk }}>{date}</Text> : null}
+            <View style={{ flex: 1 }} />
+            {it.days.length > 1 ? (
+              <Pressable onPress={() => onRemoveDay(di)} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {Icons.trash({ size: 13, color: C.ink3 })}
+                <Text style={{ fontFamily: F.semibold, fontSize: 12, color: C.ink3 }}>{t('ai.removeDay')}</Text>
+              </Pressable>
+            ) : null}
           </View>
           <View style={{ gap: 10 }}>
             {d.stops.map((s, i) => (
@@ -421,6 +449,11 @@ function ItineraryPreview({ it, onRemoveStop, onOpenAdder }: { it: Itinerary; on
         </View>
         );
       })}
+
+      <Pressable onPress={onAddDay} style={{ marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: R.lg, borderWidth: 1.5, borderColor: C.premium, borderStyle: 'dashed' }}>
+        {Icons.plus({ size: 16, color: C.premium })}
+        <Text style={{ fontFamily: F.bold, fontSize: 13.5, color: C.premium }}>{t('ai.addDay')}</Text>
+      </Pressable>
 
       {it.tips?.length ? (
         <View style={{ marginTop: 18, backgroundColor: C.sageLt, borderRadius: R.xl, padding: 16 }}>

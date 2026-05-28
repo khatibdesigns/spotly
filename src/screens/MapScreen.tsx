@@ -1,6 +1,6 @@
 // Spotly — Map. Real Apple map; toggle between nearby discovery and the
 // family's "places we've been" (from memories). Passport stats are real.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, Linking, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
@@ -11,7 +11,7 @@ import { useStore } from '../lib/store';
 import { usePlaces } from '../lib/placesStore';
 import { useMemories } from '../lib/memories';
 import { useI18n } from '../lib/i18n';
-import { Spot, formatDistance, getEvents, SpotEvent } from '../lib/places';
+import { Spot, formatDistance, getEvents, SpotEvent, getUserLocation } from '../lib/places';
 
 type Pin = { id: string; name: string; lat: number; lng: number; photoUrl?: string; tone?: string; sub: string; spot?: Spot; promoted?: boolean; visited?: boolean; publicEvent?: boolean };
 
@@ -60,6 +60,18 @@ export function MapScreen() {
   const [events, setEvents] = useState<SpotEvent[]>([]);
   const [activeEvent, setActiveEvent] = useState<SpotEvent | null>(null);
   const [mq, setMq] = useState('');
+  const mapRef = useRef<MapView>(null);
+
+  // Recenter the map on the user's real GPS position (the blue dot).
+  const goToMyLocation = async () => {
+    try {
+      const l = await getUserLocation();
+      if (l.granted) {
+        mapRef.current?.animateToRegion({ latitude: l.latitude, longitude: l.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 500);
+        setMovedTo(null);
+      }
+    } catch {}
+  };
 
   useEffect(() => {
     getEvents().then(setEvents).catch(() => {});
@@ -97,6 +109,7 @@ export function MapScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.ink }}>
       <MapView
+        ref={mapRef}
         style={{ flex: 1 }}
         initialRegion={region}
         showsUserLocation
@@ -154,12 +167,20 @@ export function MapScreen() {
       {mode === 'nearby' && movedTo ? (
         <Pressable
           onPress={() => { searchAt(movedTo.lat, movedTo.lng); setMovedTo(null); }}
-          style={[{ position: 'absolute', top: insets.top + 158, alignSelf: 'center', zIndex: 30, elevation: 12, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.ink, borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 11 }, SH.pop]}
+          style={[{ position: 'absolute', top: insets.top + 200, alignSelf: 'center', zIndex: 30, elevation: 12, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.ink, borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 11 }, SH.pop]}
         >
           {Icons.search({ size: 14, color: '#fff' })}
           <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 13 }}>{t('map.searchThisArea')}</Text>
         </Pressable>
       ) : null}
+
+      {/* Recenter on my location (blue dot) */}
+      <Pressable
+        onPress={goToMyLocation}
+        style={[{ position: 'absolute', right: 16, bottom: insets.bottom + 96, width: 46, height: 46, borderRadius: 23, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', zIndex: 25, elevation: 10 }, SH.pop]}
+      >
+        {Icons.compass({ size: 22, color: C.coral })}
+      </Pressable>
 
       {/* Top toggle */}
       <View style={{ position: 'absolute', top: insets.top + 6, left: 16, right: 16, flexDirection: 'row', gap: 10 }}>

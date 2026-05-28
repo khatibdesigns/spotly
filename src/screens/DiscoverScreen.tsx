@@ -1,6 +1,7 @@
 // Spotly — Discover. Real nearby places (Google Places + curated) with photos.
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Modal } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, F, R, SH } from '../lib/theme';
@@ -354,8 +355,9 @@ export function DiscoverScreen() {
 
       {/* Location picker — search any city/area, or use my location */}
       <Modal visible={locOpen} transparent animationType="slide" onRequestClose={() => setLocOpen(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.42)' }} onPress={() => setLocOpen(false)} />
-        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 22, paddingTop: 14, paddingBottom: insets.bottom + 22 }}>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,15,10,0.42)' }} onPress={() => setLocOpen(false)} />
+        <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 22, paddingTop: 14, paddingBottom: insets.bottom + 22 }}>
           <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 14 }} />
           <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, letterSpacing: -0.5, marginBottom: 12 }}>{t('discover.searchArea')}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.bg, borderRadius: R.pill, paddingHorizontal: 16, height: 46, borderWidth: 1, borderColor: C.line }}>
@@ -377,6 +379,7 @@ export function DiscoverScreen() {
             </Pressable>
           ))}
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

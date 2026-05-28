@@ -2,6 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import {
   useFonts,
   PlusJakartaSans_400Regular,
@@ -58,6 +59,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <KeyboardProvider>
       <I18nProvider>
         <AuthProvider>
           <FamilyProvider>
@@ -76,6 +78,7 @@ export default function App() {
           </FamilyProvider>
         </AuthProvider>
       </I18nProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

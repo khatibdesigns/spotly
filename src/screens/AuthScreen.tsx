@@ -1,6 +1,7 @@
 // Spotly — sign in / sign up (email, Google, Apple).
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { C, F, R, SH } from '../lib/theme';
@@ -42,8 +43,7 @@ export function AuthScreen({ onBack, initialMode = 'signup' }: { onBack?: () => 
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 28, paddingBottom: insets.bottom + 60 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive">
+      <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 28, paddingBottom: insets.bottom + 60 }} keyboardShouldPersistTaps="handled" bottomOffset={24} keyboardDismissMode="interactive">
           {onBack ? (
             <Pressable onPress={onBack} style={[{ width: 38, height: 38, borderRadius: 19, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }, SH.pill]}>
               {Icons.arrowL({ size: 18, color: C.ink })}
@@ -121,8 +121,7 @@ export function AuthScreen({ onBack, initialMode = 'signup' }: { onBack?: () => 
               <Text style={{ color: C.coralDk, fontFamily: F.bold }}>{mode === 'signup' ? t('auth.signIn') : t('auth.createLink')}</Text>
             </Text>
           </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

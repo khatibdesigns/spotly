@@ -15,7 +15,7 @@ import { storage } from '../lib/firebase';
 import { useMerchant } from '../lib/merchant';
 import { useI18n } from '../lib/i18n';
 import { getUserLocation, searchPlaces, PlaceSearchResult } from '../lib/places';
-import { useAndroidKeyboardPad } from '../lib/useKeyboard';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 // RN-reliable local-file → Blob upload (fetch().blob() is flaky in Hermes).
 async function uploadFile(uri: string, path: string, contentType: string): Promise<string> {
@@ -47,7 +47,6 @@ function Field({ label, ...props }: any) {
 
 export function MerchantSetupScreen() {
   const insets = useSafeAreaInsets();
-  const kbPad = useAndroidKeyboardPad();
   const { signOut } = useAuth();
   const { createMerchant } = useMerchant();
   const { t } = useI18n();
@@ -140,7 +139,7 @@ export function MerchantSetupScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 24, paddingBottom: insets.bottom + 120 + kbPad }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <KeyboardAwareScrollView contentContainerStyle={{ paddingTop: insets.top + 16, paddingHorizontal: 24, paddingBottom: insets.bottom + 120 }} keyboardShouldPersistTaps="handled" bottomOffset={24}>
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
           <Pressable onPress={signOut} hitSlop={8}><Text style={{ color: C.ink3, fontFamily: F.bold, fontSize: 13 }}>{t('profile.signOut')}</Text></Pressable>
         </View>
@@ -237,7 +236,7 @@ export function MerchantSetupScreen() {
             ))}
           </View>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 20 }}>
         <Btn kind="dark" size="lg" full onPress={submit}>{busy ? t('mset.submitting') : t('mset.submit')}</Btn>

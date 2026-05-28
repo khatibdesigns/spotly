@@ -1,6 +1,7 @@
 // Spotly — first-run profile setup (after auth, before tabs). Writes families/{uid}.
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, Text, Pressable, TextInput } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
@@ -9,7 +10,6 @@ import { useAuth } from '../lib/auth';
 import { useProfile, Kid, EMPTY_STATS } from '../lib/profile';
 import { useI18n } from '../lib/i18n';
 import { useStore } from '../lib/store';
-import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 
 const KID_COLORS = [C.sky, C.plum, C.sun, C.sage, C.coral];
 let _kidSeq = 0;
@@ -27,7 +27,6 @@ const INTERESTS = [
 
 export function SetupScreen() {
   const insets = useSafeAreaInsets();
-  const kbPad = useAndroidKeyboardPad();
   const { user } = useAuth();
   const { saveProfile } = useProfile();
   const { t } = useI18n();
@@ -68,7 +67,7 @@ export function SetupScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 24, paddingHorizontal: 28, paddingBottom: 200 + kbPad }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive">
+      <KeyboardAwareScrollView contentContainerStyle={{ paddingTop: insets.top + 24, paddingHorizontal: 28, paddingBottom: 200 }} keyboardShouldPersistTaps="handled" bottomOffset={24} keyboardDismissMode="interactive">
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {[0, 1].map((i) => (
             <View key={i} style={{ width: i === step ? 22 : 6, height: 6, borderRadius: 3, backgroundColor: i === step ? C.coral : C.line }} />
@@ -154,7 +153,7 @@ export function SetupScreen() {
             </View>
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 20 }}>
         {step === 0 ? (

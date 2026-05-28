@@ -14,7 +14,7 @@ import { useProfile } from '../lib/profile';
 import { useBookings } from '../lib/bookings';
 import { addBookingToCalendar } from '../lib/calendar';
 import { useI18n } from '../lib/i18n';
-import { useAndroidKeyboardPad } from '../lib/useKeyboard';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 function Label({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   return (
@@ -60,7 +60,6 @@ function nextDays(n: number) {
 
 export function BookingScreen() {
   const insets = useSafeAreaInsets();
-  const kbPad = useAndroidKeyboardPad();
   const { pop, push } = useStore();
   const { selected } = usePlaces();
   const { profile } = useProfile();
@@ -106,7 +105,7 @@ export function BookingScreen() {
       <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,15,10,0.4)' }} onPress={pop} />
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: insets.top + 40, backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
         <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginTop: 10, marginBottom: 4 }} />
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 22, paddingBottom: insets.bottom + 60 + kbPad }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive">
+        <KeyboardAwareScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 22, paddingBottom: insets.bottom + 60 }} keyboardShouldPersistTaps="handled" bottomOffset={24} keyboardDismissMode="interactive">
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 }}>
             <SpotImage photoUrl={place?.photoUrl} tone={place?.tone || 'sun'} height={54} radius={14} style={{ width: 54 }} />
             <View style={{ flex: 1 }}>
@@ -163,7 +162,7 @@ export function BookingScreen() {
           </View>
 
           <Btn kind="primary" size="lg" full style={{ marginTop: 16 }} onPress={confirm}>{busy ? t('bk.sending') : t('bk.requestBooking')}</Btn>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </View>
     </View>
   );

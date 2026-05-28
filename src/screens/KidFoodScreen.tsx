@@ -2,7 +2,8 @@
 // recommendations + the AI planner; "avoid" foods (allergies / not allowed) are
 // never suggested. Saved onto the child in families/{uid}.kids.
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, Pressable, TextInput, Alert } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
@@ -10,7 +11,6 @@ import { Chip, Btn, CircBtn } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useProfile, Kid } from '../lib/profile';
 import { useI18n } from '../lib/i18n';
-import { useAndroidKeyboardPad } from '../lib/useKeyboard';
 
 const LIKE_PRESETS = ['Pizza', 'Pasta', 'Burgers', 'Chicken', 'Rice', 'Noodles', 'Sushi', 'Sandwiches', 'Fruit', 'Pancakes', 'Ice cream', 'Cheese'];
 const AVOID_PRESETS = ['Nuts', 'Peanuts', 'Dairy', 'Gluten', 'Eggs', 'Shellfish', 'Pork', 'Soy', 'Spicy', 'Honey'];
@@ -23,7 +23,6 @@ function uniqMerge(presets: string[], picked: string[]): string[] {
 
 export function KidFoodScreen() {
   const insets = useSafeAreaInsets();
-  const kbPad = useAndroidKeyboardPad();
   const { pop, stack } = useStore();
   const { profile, saveProfile } = useProfile();
   const { t } = useI18n();
@@ -68,7 +67,7 @@ export function KidFoodScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <>
         <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <CircBtn onPress={pop}>{Icons.arrowL({ size: 18, color: C.ink })}</CircBtn>
           <View style={{ flex: 1 }}>
@@ -77,7 +76,7 @@ export function KidFoodScreen() {
           </View>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 + kbPad }}>
+        <KeyboardAwareScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bottomOffset={24} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
           {/* Loves */}
           <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.sage, letterSpacing: 1, textTransform: 'uppercase', marginTop: 10, marginBottom: 12 }}>{t('food.loves')}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -106,12 +105,12 @@ export function KidFoodScreen() {
             </View>
             <Btn kind="ghost" size="sm" onPress={() => addCustom(draftAvoid, avoid, setAvoid, () => setDraftAvoid(''))}>{t('common.add')}</Btn>
           </View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
 
         <View style={[{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 12 }, SH.pop]}>
           <Btn kind="primary" size="lg" full onPress={save}>{saving ? t('gallery.saving') : t('food.savePrefs')}</Btn>
         </View>
-      </KeyboardAvoidingView>
+      </>
     </View>
   );
 }
