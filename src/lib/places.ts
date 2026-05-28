@@ -96,10 +96,20 @@ const KID_NATURE_TYPES = [
   'zoo', 'aquarium', 'wildlife_park', 'wildlife_refuge',
   'tourist_attraction', 'observation_deck',
 ];
-const KID_FUN_TYPES = [
-  'amusement_park', 'water_park', 'roller_coaster', 'ferris_wheel',
+// FUN — split into 3 dedicated calls so each headline type gets guaranteed
+// slots. Without this, Google's popularity ranking inside one call lets a
+// single very-popular place hog all the amusement_park slots (e.g. Hawally
+// Park crowded out Pokiddo in Kuwait). Each dedicated call uses
+// rankPreference: DISTANCE so all nearby places of that type surface.
+const KID_FUN_THRILLS_TYPES = ['amusement_park', 'roller_coaster', 'ferris_wheel'];
+const KID_WATER_TYPES = ['water_park'];
+// NOTE: bare 'playground' and 'community_center' are deliberately excluded —
+// in practice they return football fields (ملعب) and diwaniyas/mosque halls
+// that crowd out real kid spots under DISTANCE ranking. 'indoor_playground'
+// is the type Google uses for actual kids' soft-play centres.
+const KID_PLAY_TYPES = [
   'amusement_center', 'video_arcade', 'bowling_alley',
-  'playground', 'ice_skating_rink', 'community_center',
+  'indoor_playground', 'ice_skating_rink',
 ];
 const KID_CULTURE_TYPES = [
   'museum', 'planetarium',
@@ -128,7 +138,8 @@ const TYPE_AMENITY: Record<string, string> = {
   amusement_park: 'funPark', roller_coaster: 'funPark', ferris_wheel: 'funPark',
   // Indoor play / arcades / soft play / community spaces
   amusement_center: 'playArea', video_arcade: 'playArea', bowling_alley: 'playArea',
-  playground: 'playArea', ice_skating_rink: 'playArea', community_center: 'playArea',
+  playground: 'playArea', indoor_playground: 'playArea',
+  ice_skating_rink: 'playArea', community_center: 'playArea',
   // Culture / museums (cinema folded in here for now)
   museum: 'museum', planetarium: 'museum',
   historical_landmark: 'museum', cultural_landmark: 'museum', monument: 'museum',
@@ -153,7 +164,8 @@ const TYPE_TONE: Record<string, string> = {
   amusement_park: 'plum', roller_coaster: 'plum', ferris_wheel: 'plum',
   // Indoor play → coral
   amusement_center: 'coral', video_arcade: 'coral', bowling_alley: 'coral',
-  playground: 'coral', ice_skating_rink: 'sky', community_center: 'sage',
+  playground: 'coral', indoor_playground: 'coral',
+  ice_skating_rink: 'sky', community_center: 'sage',
   // Museums / culture → warm
   museum: 'warm', planetarium: 'sky',
   historical_landmark: 'warm', cultural_landmark: 'warm', monument: 'warm',
@@ -220,25 +232,110 @@ function mapPlace(p: any, loc: UserLoc, kind: SpotKind, shopAmenity = false): Sp
 }
 
 // Nearby search by included types (activities, dining…).
-async function searchNearby(loc: UserLoc, includedTypes: string[], kind: SpotKind, max = 20): Promise<Spot[]> {
+// `rankPref='DISTANCE'` is the right call for niche/headline types (e.g.
+// amusement_park) where we want ALL nearby places of that type, not just the
+// most-reviewed one — otherwise Google's popularity ranking buries less-
+// reviewed but valid places (Pokiddo gets crowded out by Hawally Park).
+async function searchNearby(
+  loc: UserLoc,
+  includedTypes: string[],
+  kind: SpotKind,
+  max = 20,
+  rankPref: 'POPULARITY' | 'DISTANCE' = 'POPULARITY',
+  pages = 1,
+): Promise<Spot[]> {
   if (!KEY) return [];
-  try {
-    const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK },
-      body: JSON.stringify({
-        includedTypes,
-        maxResultCount: max,
-        rankPreference: 'POPULARITY',
-        locationRestriction: { circle: { center: { latitude: loc.latitude, longitude: loc.longitude }, radius: 15000 } },
-      }),
-    });
-    const data = await res.json();
-    if (!data?.places) return [];
-    return data.places.map((p: any) => mapPlace(p, loc, kind));
-  } catch {
-    return [];
+  const out: Spot[] = [];
+  let pageToken: string | undefined;
+  // Google caps maxResultCount at 20 per call. To get more (e.g. so Pokiddo
+  // surfaces even when 20 amusement_park spots sit between you and Salmiya)
+  // we follow nextPageToken up to `pages` times.
+  for (let i = 0; i < pages; i++) {
+    try {
+      const body: any = { includedTypes, maxResultCount: Math.min(20, max), rankPreference: rankPref };
+      if (pageToken) {
+        body.pageToken = pageToken;
+      } else {
+        body.locationRestriction = { circle: { center: { latitude: loc.latitude, longitude: loc.longitude }, radius: 25000 } };
+      }
+      const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+        method: 'POST',
+        // NOTE: searchNearby (New API) does NOT support nextPageToken — adding
+        // it to the field mask 400s the whole request. (That bug returned an
+        // empty activity feed in a sim test.) Pagination only works on
+        // searchText, handled separately in searchByText().
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!data?.places) break;
+      for (const p of data.places) out.push(mapPlace(p, loc, kind));
+      if (!data.nextPageToken || i + 1 >= pages) break;
+      pageToken = data.nextPageToken;
+      // Google asks for a short delay before pagination requests.
+      await new Promise((r) => setTimeout(r, 400));
+    } catch {
+      break;
+    }
   }
+  return out;
+}
+
+// Like searchNearby but uses places:searchText, which (unlike searchNearby)
+// supports pagination via nextPageToken — so we can pull >20 results for a
+// headline kid type. Used for the "Fun parks" search so e.g. Pokiddo surfaces
+// from anywhere in Kuwait, not just neighbourhoods within ~20 amusement_park
+// hops of the user.
+async function searchByText(
+  loc: UserLoc,
+  textQuery: string,
+  includedType: string | null,
+  kind: SpotKind,
+  pages = 1,
+  extraAmenities: string[] = [],
+): Promise<Spot[]> {
+  if (!KEY) return [];
+  const out: Spot[] = [];
+  let pageToken: string | undefined;
+  for (let i = 0; i < pages; i++) {
+    try {
+      const body: any = { pageSize: 20 };
+      if (pageToken) {
+        body.pageToken = pageToken;
+      } else {
+        body.textQuery = textQuery;
+        if (includedType) body.includedType = includedType;
+        body.locationBias = { circle: { center: { latitude: loc.latitude, longitude: loc.longitude }, radius: 50000 } };
+      }
+      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': KEY,
+          'X-Goog-FieldMask': FIELD_MASK + ',nextPageToken',
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!data?.places) break;
+      for (const p of data.places) {
+        const spot = mapPlace(p, loc, kind);
+        // Inject intent-based amenities the type map can't infer — e.g. a
+        // restaurant returned by "restaurant with kids play area" gets the
+        // 'eatPlay' tag so it's filterable even though Google has no such type.
+        if (extraAmenities.length) {
+          spot.amenities = Array.from(new Set([...extraAmenities, ...spot.amenities])).slice(0, 5);
+        }
+        out.push(spot);
+      }
+      if (!data.nextPageToken || i + 1 >= pages) break;
+      pageToken = data.nextPageToken;
+      await new Promise((r) => setTimeout(r, 400));
+    } catch {
+      break;
+    }
+  }
+  return out;
 }
 
 // Kids/baby shops via text search (toy_store/baby_store aren't reliable in the
@@ -430,19 +527,40 @@ export async function searchPlaces(text: string, near?: { latitude: number; long
 // Curated spots first (hand-picked), then Google activities + dining + shops,
 // de-duped by name and sorted by distance.
 export async function getSpots(loc: UserLoc): Promise<Spot[]> {
-  // Three parallel kid-activity searches (nature / fun / culture) so Google's
-  // ≈20-result cap doesn't drown any one theme. Hotels (stays) removed in #42
-  // — returns with the travel/packages release.
-  const [nature, fun, culture, dining, shops, halal, curated] = await Promise.all([
-    searchNearby(loc, KID_NATURE_TYPES, 'activity', 20),
-    searchNearby(loc, KID_FUN_TYPES, 'activity', 20),
-    searchNearby(loc, KID_CULTURE_TYPES, 'activity', 15),
-    searchNearby(loc, DINING_TYPES, 'dining', 15),
+  // Multiple parallel kid-activity searches so each headline theme gets
+  // guaranteed slots — a single big multi-type call lets popular places hog
+  // all 20 slots (which is why Pokiddo wasn't surfacing). Each niche call
+  // uses rankPreference: DISTANCE so all *nearby* matches surface, not just
+  // the most-reviewed. Hotels (stays) removed in #42.
+  // PROXIMITY FEED: every kid search is rankPreference='DISTANCE' (closest
+  // first — "what's around me"), and each headline theme gets its OWN narrow
+  // call so a flood of one type can't crowd out another. This is what makes
+  // a close-but-modestly-reviewed place like Pokiddo show — POPULARITY rank
+  // was burying it behind famous places kilometres away.
+  const [
+    nature, thrills, water, play, culture,
+    funText, playText, eatPlay,
+    dining, shops, halal, curated,
+  ] = await Promise.all([
+    searchNearby(loc, KID_NATURE_TYPES, 'activity', 20, 'DISTANCE'),
+    searchNearby(loc, KID_FUN_THRILLS_TYPES, 'activity', 20, 'DISTANCE'),
+    searchNearby(loc, KID_WATER_TYPES, 'activity', 10, 'DISTANCE'),
+    searchNearby(loc, KID_PLAY_TYPES, 'activity', 20, 'DISTANCE'),
+    searchNearby(loc, KID_CULTURE_TYPES, 'activity', 20, 'DISTANCE'),
+    // Coverage boosters: searchText paginates (~40 results) so dense areas
+    // like a big mall (The Avenues) aren't capped at the 20 a single
+    // searchNearby returns. Merged + de-duped + distance-sorted below.
+    searchByText(loc, 'amusement park kids entertainment center', 'amusement_park', 'activity', 2),
+    searchByText(loc, 'kids indoor play area soft play', null, 'activity', 2),
+    // Restaurants WITH a kids' play area — Google has no such type, so query
+    // by intent and tag eatPlay so the new "Eat & play" filter can find them.
+    searchByText(loc, 'family restaurant with kids play area', 'restaurant', 'dining', 2, ['eatPlay', 'foodOnSite']),
+    searchNearby(loc, DINING_TYPES, 'dining', 15, 'DISTANCE'),
     searchShops(loc),
     searchHalal(loc),
     fetchCurated(loc),
   ]);
-  const activities = [...nature, ...fun, ...culture];
+  const activities = [...nature, ...thrills, ...funText, ...water, ...play, ...playText, ...culture];
   const stays: Spot[] = []; // kept as an empty array so the merge loop below still typechecks
   // A curated doc may be a "claim record" linked to a Google place_id (the
   // merchant claimed their real listing). Match Google results to those claims
@@ -464,7 +582,9 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
   // Halal before dining so a halal-tagged restaurant isn't shadowed by its
   // untagged duplicate from the generic dining search.
   const google: Spot[] = [];
-  for (const g of [...activities, ...halal, ...dining, ...shops, ...stays]) {
+  // eatPlay (tagged) before generic dining so a restaurant that's in both
+  // lists keeps its 'eatPlay' tag when de-duped by place_id.
+  for (const g of [...activities, ...eatPlay, ...halal, ...dining, ...shops, ...stays]) {
     if (seenIds.has(g.id)) continue; // same place returned by multiple type searches
     seenIds.add(g.id);
     const claim = claimByPlaceId.get(g.id);

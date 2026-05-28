@@ -26,6 +26,7 @@ export function filterHasResults(id: string, spots: Spot[]): boolean {
 const PRED: Record<string, (s: Spot) => boolean> = {
   playArea: (s) => s.amenities.includes('playArea'),
   funPark: (s) => s.amenities.includes('funPark'),
+  eatPlay: (s) => s.amenities.includes('eatPlay'),
   indoor: (s) => s.amenities.includes('indoor'),
   outdoor: (s) => s.amenities.includes('outdoor'),
   water: (s) => s.amenities.includes('water'),

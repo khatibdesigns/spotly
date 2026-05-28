@@ -87,6 +87,8 @@ const CATEGORIES = [
   { id: 'animals', ic: Icons.animals, color: C.sun, key: 'cat.zoos' },
   { id: 'water', ic: Icons.water, color: C.sky, key: 'cat.water' },
   { id: 'museum', ic: Icons.museum, color: C.ink2, key: 'cat.museums' },
+  // Restaurants with a kids' play area (the foodOnSite icon = food w/ play).
+  { id: 'eatPlay', ic: Icons.foodOnSite, color: C.coralDk, key: 'cat.eatPlay' },
   { id: 'dining', ic: Icons.dining, color: C.coralDk, key: 'cat.dining' },
   { id: 'shop', ic: Icons.shop, color: C.plum, key: 'cat.kidsShops' },
   // 'stay' (Hotels) removed for now — comes back with the travel/packages release.

@@ -27,6 +27,7 @@ const KINDS = [
 const AMENITIES = [
   { id: 'playArea', label: 'Play area', ic: Icons.playArea },
   { id: 'funPark', label: 'Fun parks', ic: Icons.sparkle },
+  { id: 'eatPlay', label: 'Eat & play', ic: Icons.foodOnSite },
   { id: 'indoor', label: 'Indoor', ic: Icons.indoor },
   { id: 'outdoor', label: 'Outdoor', ic: Icons.outdoor },
   { id: 'foodOnSite', label: 'Food on site', ic: Icons.foodOnSite },
