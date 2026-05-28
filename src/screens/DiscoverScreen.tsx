@@ -1,12 +1,12 @@
 // Spotly — Discover. Real nearby places (Google Places + curated) with photos.
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Modal } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Modal, AppState } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
-import { Chip, Btn, SpotImage, Stars } from '../components/ui';
+import { Btn, SpotImage, Stars } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useProfile, myFirstName, kidNames, familyFood } from '../lib/profile';
 import { useAuth } from '../lib/auth';
@@ -74,20 +74,9 @@ function CatTile({ ic, color, label, active, onPress }: { ic: (p: any) => React.
   );
 }
 
-// Top-level "what are you looking for" kinds (OR-filtered).
-const KINDS = [
-  { id: 'activity', key: 'kind.activity' },
-  { id: 'dining', key: 'kind.dining' },
-  { id: 'shop', key: 'kind.shop' },
-  { id: 'stay', key: 'kind.stay' },
-];
-const FILTER_CHIPS = [
-  { id: 'playArea', key: 'filter.playArea' },
-  { id: 'halal', key: 'filter.halal' },
-  { id: 'openNow', key: 'filter.openNow' },
-  { id: 'free', key: 'filter.free' },
-  { id: 'indoor', key: 'filter.indoor' },
-];
+// (Earlier KINDS / FILTER_CHIPS chip row removed in #34 — it duplicated the
+// CATEGORIES tile row below. Amenity filters (Halal, Open now, …) live in the
+// Filters sheet, reachable from the filter button next to the cart.)
 const CATEGORIES = [
   { id: 'outdoor', ic: Icons.outdoor, color: C.sage, key: 'cat.parks' },
   { id: 'playArea', ic: Icons.playArea, color: C.coral, key: 'cat.indoorPlay' },
@@ -175,8 +164,21 @@ export function DiscoverScreen() {
   };
   const useMyLocation = () => { reload(); setLocOpen(false); setLocQuery(''); setLocResults([]); };
   const [weather, setWeather] = useState<Weather | null>(null);
+  // Weather was being fetched only once on mount, so the temp would go stale
+  // after a few hours (#33: 31° while it was actually 40° in Kuwait).
+  // Refetch on mount, every 15 minutes, and whenever the app comes to the
+  // foreground.
   useEffect(() => {
-    if (loc?.latitude != null) getWeather(loc.latitude, loc.longitude).then(setWeather).catch(() => {});
+    if (loc?.latitude == null) return;
+    const refresh = () => {
+      getWeather(loc.latitude, loc.longitude).then(setWeather).catch(() => {});
+    };
+    refresh();
+    const id = setInterval(refresh, 15 * 60 * 1000);
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') refresh();
+    });
+    return () => { clearInterval(id); sub.remove(); };
   }, [loc?.latitude, loc?.longitude]);
   const { t } = useI18n();
   const { user } = useAuth();
@@ -259,6 +261,15 @@ export function DiscoverScreen() {
             />
             {q.length ? <Pressable onPress={() => setQ('')} hitSlop={8}>{Icons.close({ size: 16, color: C.ink3 })}</Pressable> : null}
           </View>
+          {/* Filters — amenity/price/etc. (the kind tiles below cover categories) */}
+          <Pressable onPress={() => push('filters')} style={[{ width: 46, height: 46, borderRadius: 23, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }, SH.pill]}>
+            {Icons.filter({ size: 19, color: C.ink })}
+            {filters.size > 0 ? (
+              <View style={{ position: 'absolute', top: -3, right: -3, minWidth: 19, height: 19, paddingHorizontal: 5, borderRadius: 10, backgroundColor: C.coral, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg }}>
+                <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 10 }}>{filters.size}</Text>
+              </View>
+            ) : null}
+          </Pressable>
           {/* Global cart — buy vouchers from multiple places */}
           <Pressable onPress={() => push('cart')} style={[{ width: 46, height: 46, borderRadius: 23, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }, SH.pill]}>
             {Icons.bag({ size: 19, color: C.ink })}
@@ -285,18 +296,6 @@ export function DiscoverScreen() {
               <Pressable onPress={reload}><Text style={{ color: C.coralDk, fontFamily: F.bold, fontSize: 12.5 }}>{t('discover.enable')}</Text></Pressable>
             </View>
           ) : null}
-
-          {/* One filter row: Filters button + kinds + quick filters (single-select).
-              Hides options with no results. */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
-            <Chip icon={Icons.filter({ size: 13, color: C.ink })} onPress={() => push('filters')}>{t('discover.filters')}</Chip>
-            {KINDS.filter((k) => filters.has(k.id) || filterHasResults(k.id, spots)).map((k) => (
-              <Chip key={k.id} active={filters.has(k.id)} onPress={() => setOnlyFilter(k.id)}>{t(k.key)}</Chip>
-            ))}
-            {FILTER_CHIPS.filter((f) => filters.has(f.id) || filterHasResults(f.id, spots)).map((f) => (
-              <Chip key={f.id} active={filters.has(f.id)} onPress={() => setOnlyFilter(f.id)}>{t(f.key)}</Chip>
-            ))}
-          </ScrollView>
 
           {/* Where to today — promoted places only; whole section hides if none */}
           {heroes.length ? (
