@@ -11,6 +11,7 @@ import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { useProfile } from '../lib/profile';
 import { useFamily, buildInviteUrl } from '../lib/family';
+import { getPushDiagnostics, registerPush } from '../lib/push';
 import { useI18n } from '../lib/i18n';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useMemories } from '../lib/memories';
@@ -151,6 +152,34 @@ export function ProfileScreen() {
     } finally {
       setSavingKid(false);
     }
+  };
+
+  // Notifications diagnostics — surfaces what's actually on this device so we
+  // can tell whether FCM/APNs is working without having to scrape Firestore.
+  const onNotificationsDiag = async () => {
+    const d = await getPushDiagnostics();
+    if (!d.nativeLinked) {
+      Alert.alert('Notifications', 'The native FCM module is not linked in this build.');
+      return;
+    }
+    const fcmPrev = d.fcmToken ? `${d.fcmToken.slice(0, 16)}…${d.fcmToken.slice(-6)}` : 'none';
+    const apnsPrev = d.apnsToken ? `${d.apnsToken.slice(0, 16)}…${d.apnsToken.slice(-6)}` : (Platform.OS === 'ios' ? 'NOT REGISTERED' : '—');
+    const lines = [
+      `Permission: ${d.permissionStatus}`,
+      Platform.OS === 'ios' ? `APNs token: ${apnsPrev}` : null,
+      `FCM token: ${fcmPrev}`,
+      d.error ? `Error: ${d.error}` : null,
+    ].filter(Boolean);
+    Alert.alert(
+      'Notifications',
+      lines.join('\n'),
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Re-register', onPress: () => { if (user?.uid) registerPush(user.uid).catch(() => {}); } },
+        d.fcmToken ? { text: 'Share token', onPress: () => Share.share({ message: d.fcmToken! }).catch(() => {}) } : null,
+        { text: 'Open Settings', onPress: () => Linking.openSettings().catch(() => {}) },
+      ].filter(Boolean) as any,
+    );
   };
 
   const onInvite = async () => {
@@ -308,7 +337,7 @@ export function ProfileScreen() {
           <Row icon={<IconBox ic={Icons.pin} c={C.ink2} />} title={t('profile.homeLoc')} det={profile?.homeCity || t('common.set')} onPress={editHome} />
           <Row icon={<IconBox ic={Icons.globe} c={C.ink2} />} title={t('profile.language')} det={lang === 'ar' ? 'العربية' : 'English'} onPress={pickLanguage} />
           <Row icon={<IconBox ic={Icons.lock} c={C.ink2} />} title={t('profile.privacy')} sub={user?.email || 'Photos are private by default'} onPress={() => openURL('https://meetspotly.com/privacy.html')} />
-          <Row icon={<IconBox ic={Icons.sparkle} c={C.ink2} />} title={t('profile.notifications')} onPress={() => Linking.openSettings().catch(() => {})} last />
+          <Row icon={<IconBox ic={Icons.sparkle} c={C.ink2} />} title={t('profile.notifications')} onPress={onNotificationsDiag} last />
         </View>
 
         {/* Sign out */}
