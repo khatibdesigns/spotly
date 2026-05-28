@@ -164,22 +164,31 @@ export function DiscoverScreen() {
   };
   const useMyLocation = () => { reload(); setLocOpen(false); setLocQuery(''); setLocResults([]); };
   const [weather, setWeather] = useState<Weather | null>(null);
-  // Weather was being fetched only once on mount, so the temp would go stale
-  // after a few hours (#33: 31° while it was actually 40° in Kuwait).
-  // Refetch on mount, every 15 minutes, and whenever the app comes to the
-  // foreground.
+  // Weather refresh:
+  //   - Only fetch once we actually have the user's real location (granted=true).
+  //     placesStore seeds `loc` with a Kuwait default + granted:false on mount,
+  //     so without this guard we'd flash Kuwait's temp (~39°) and then
+  //     overwrite with the real GPS temp (#34: 39 → 31 jump).
+  //   - Re-fetch every 15 minutes and whenever the app returns from background
+  //     so the temp doesn't go stale during a long session.
+  //   - Race-protect: if `loc` changes while a fetch is in flight, the stale
+  //     result must not overwrite the fresh one.
   useEffect(() => {
-    if (loc?.latitude == null) return;
-    const refresh = () => {
-      getWeather(loc.latitude, loc.longitude).then(setWeather).catch(() => {});
+    if (!loc?.granted || loc?.latitude == null) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const w = await getWeather(loc.latitude, loc.longitude);
+        if (!cancelled) setWeather(w);
+      } catch {}
     };
     refresh();
     const id = setInterval(refresh, 15 * 60 * 1000);
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') refresh();
     });
-    return () => { clearInterval(id); sub.remove(); };
-  }, [loc?.latitude, loc?.longitude]);
+    return () => { cancelled = true; clearInterval(id); sub.remove(); };
+  }, [loc?.granted, loc?.latitude, loc?.longitude]);
   const { t } = useI18n();
   const { user } = useAuth();
   const [showLocBanner, setShowLocBanner] = useState(true);
