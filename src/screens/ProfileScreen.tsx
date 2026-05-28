@@ -95,6 +95,11 @@ export function ProfileScreen() {
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
+  // Add-a-child sheet (also available at sign-up).
+  const [addKidOpen, setAddKidOpen] = useState(false);
+  const [kidName, setKidName] = useState('');
+  const [kidAge, setKidAge] = useState(4);
+  const [savingKid, setSavingKid] = useState(false);
   // Which avatar is mid-upload: 'family', a member uid, or a kid id.
   const [photoBusy, setPhotoBusy] = useState<string | null>(null);
 
@@ -131,6 +136,22 @@ export function ProfileScreen() {
       await saveProfile({ kids: (profile?.kids || []).map((k) => (k.id === kidId ? { ...k, photoUrl: url } : k)) });
     } catch (e: any) { Alert.alert(t('common.error'), e?.message || t('common.tryAgain')); }
     finally { setPhotoBusy(null); }
+  };
+
+  const onAddKid = async () => {
+    const name = kidName.trim();
+    if (!name) return;
+    setSavingKid(true);
+    try {
+      await saveProfile({ kids: [...(profile?.kids || []), { id: `k${Date.now()}`, name, age: kidAge }] });
+      setAddKidOpen(false);
+      setKidName('');
+      setKidAge(4);
+    } catch (e: any) {
+      Alert.alert(t('common.error'), e?.message || t('common.tryAgain'));
+    } finally {
+      setSavingKid(false);
+    }
   };
 
   const onInvite = async () => {
@@ -248,11 +269,11 @@ export function ProfileScreen() {
                 icon={<EditableAvatar letter={initial(k.name, '?')} color={KID_COLORS[i % KID_COLORS.length]} photoUrl={k.photoUrl} busy={photoBusy === k.id} onPress={() => setKidPhoto(k.id)} />}
                 title={k.name || `Child ${i + 1}`}
                 sub={`${t('profile.ageFmt', { age: k.age })} · ${foodSub}`}
-                last={i === kids.length - 1}
                 onPress={() => push('kidFood', { kidId: k.id })}
               />
             );
           })}
+          <Row icon={<IconBox ic={Icons.plus} c={C.sage} />} title={t('setup.addChild')} sub={t('profile.addChildSub')} onPress={() => setAddKidOpen(true)} last />
         </View>
 
         {/* Invite / join family */}
@@ -318,6 +339,39 @@ export function ProfileScreen() {
               <Btn kind="primary" style={{ flex: 1.6 }} onPress={onJoin}>{joining ? t('family.joining') : t('family.joinBtn')}</Btn>
             </View>
             {joining ? <ActivityIndicator color={C.coral} style={{ marginTop: 12 }} /> : null}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add a child — name + age */}
+      <Modal visible={addKidOpen} transparent animationType="slide" onRequestClose={() => setAddKidOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.45)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: insets.bottom + 22 + kbPad }}>
+            <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 16 }} />
+            <Text style={{ fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>{t('setup.addChild')}</Text>
+            <TextInput
+              value={kidName}
+              onChangeText={setKidName}
+              placeholder={t('setup.childNameHint')}
+              placeholderTextColor={C.ink3}
+              autoCorrect={false}
+              autoFocus
+              style={{ marginTop: 16, backgroundColor: C.surface, borderRadius: R.lg, paddingHorizontal: 16, height: 54, fontFamily: F.medium, fontSize: 17, color: C.ink, borderWidth: 1, borderColor: C.line }}
+            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 16 }}>
+              <Text style={{ fontFamily: F.semibold, fontSize: 14, color: C.ink2, flex: 1 }}>{t('setup.age')}</Text>
+              <Pressable onPress={() => setKidAge((a) => Math.max(0, a - 1))} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontFamily: F.extrabold, fontSize: 20, color: C.ink }}>−</Text>
+              </Pressable>
+              <Text style={{ fontFamily: F.extrabold, fontSize: 18, color: C.ink, minWidth: 28, textAlign: 'center' }}>{kidAge}</Text>
+              <Pressable onPress={() => setKidAge((a) => Math.min(17, a + 1))} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.coral, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontFamily: F.extrabold, fontSize: 20, color: '#fff' }}>+</Text>
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+              <Btn kind="ghost" style={{ flex: 1 }} onPress={() => setAddKidOpen(false)}>{t('common.cancel')}</Btn>
+              <Btn kind="primary" style={{ flex: 1.6 }} onPress={onAddKid}>{savingKid ? t('gallery.saving') : t('setup.addChild')}</Btn>
+            </View>
           </View>
         </View>
       </Modal>
