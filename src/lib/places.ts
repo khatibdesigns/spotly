@@ -1,7 +1,7 @@
 // Spotly — places service. Real nearby spots from Google Places API (New),
 // merged with admin-curated places from Firestore. Photos are real.
 import * as Location from 'expo-location';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where, documentId } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { Voucher } from './currency';
 
@@ -43,7 +43,21 @@ export type Spot = {
   vouchers?: Voucher[]; // prepaid vouchers/offers the place sells
   googlePlaceId?: string; // Google place_id this curated/claim record links to
   publicEvent?: boolean; // marked as a public event → yellow map pin
+  primaryType?: string; // Google machine primaryType (e.g. 'cafe') — used to
+                        // curate out non-kid-friendly places (shisha = 'cafe').
+  goodForChildren?: boolean; // Google Atmosphere signal (food searches only)
+  menuForChildren?: boolean; // Google Atmosphere signal — has a kids' menu
 };
+
+// Google primary types we refuse to show — they defeat the "kid/family-friendly
+// outings" focus. Shisha/hookah lounges come back as primaryType 'cafe', which
+// is why cafes/coffee shops are blocked wholesale. Applied to GOOGLE results
+// only (a merchant who claims their place is always kept).
+export const EXCLUDE_PRIMARY_TYPES = new Set<string>([
+  'cafe', 'coffee_shop', 'internet_cafe',
+  'bar', 'pub', 'wine_bar', 'bar_and_grill', 'night_club', 'liquor_store',
+  'hookah_bar', 'smoking_area', 'casino', 'cigar_lounge',
+]);
 
 export type UserLoc = { latitude: number; longitude: number; granted: boolean };
 
@@ -117,8 +131,9 @@ const KID_CULTURE_TYPES = [
   'historical_landmark', 'cultural_landmark', 'monument',
   'movie_theater',
 ];
-// Family dining (valid Table A types).
-const DINING_TYPES = ['restaurant', 'cafe', 'bakery', 'ice_cream_shop'];
+// Family dining (valid Table A types). 'cafe' deliberately excluded — Google
+// tags shisha/hookah lounges as cafe, and cafes/coffee shops aren't the focus.
+const DINING_TYPES = ['restaurant', 'bakery', 'ice_cream_shop'];
 
 // Type → amenity tag. The amenity tag is what `CATEGORIES` tiles + the
 // Filters sheet check against, so every kid-relevant type MUST map to one.
@@ -200,7 +215,10 @@ export function photoUrl(name: string, w = 800): string {
 }
 
 const FIELD_MASK =
-  'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.types,places.primaryTypeDisplayName,places.photos,places.currentOpeningHours.openNow';
+  'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.types,places.primaryType,places.primaryTypeDisplayName,places.photos,places.currentOpeningHours.openNow';
+// Pricier "Atmosphere/Enterprise" fields — appended ONLY for food searches so
+// parks/museums calls stay on the cheaper SKU.
+const ATMOSPHERE_FIELDS = ',places.goodForChildren,places.menuForChildren';
 
 function mapPlace(p: any, loc: UserLoc, kind: SpotKind, shopAmenity = false): Spot {
   const lat = p.location?.latitude;
@@ -208,6 +226,7 @@ function mapPlace(p: any, loc: UserLoc, kind: SpotKind, shopAmenity = false): Sp
   const types: string[] = p.types || [];
   const amenities = amenitiesFromTypes(types);
   if (shopAmenity && !amenities.includes('shop')) amenities.unshift('shop');
+  if (p.menuForChildren && !amenities.includes('kidsMenu')) amenities.unshift('kidsMenu');
   return {
     id: p.id,
     source: 'google',
@@ -228,6 +247,9 @@ function mapPlace(p: any, loc: UserLoc, kind: SpotKind, shopAmenity = false): Sp
     openNow: p.currentOpeningHours?.openNow,
     address: p.formattedAddress,
     tone: kind === 'shop' ? 'plum' : toneFromTypes(types),
+    primaryType: p.primaryType,
+    goodForChildren: p.goodForChildren,
+    menuForChildren: p.menuForChildren,
   };
 }
 
@@ -243,6 +265,7 @@ async function searchNearby(
   max = 20,
   rankPref: 'POPULARITY' | 'DISTANCE' = 'POPULARITY',
   pages = 1,
+  extraFields = '',
 ): Promise<Spot[]> {
   if (!KEY) return [];
   const out: Spot[] = [];
@@ -264,7 +287,7 @@ async function searchNearby(
         // it to the field mask 400s the whole request. (That bug returned an
         // empty activity feed in a sim test.) Pagination only works on
         // searchText, handled separately in searchByText().
-        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK },
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK + extraFields },
         body: JSON.stringify(body),
       });
       const data = await res.json();
@@ -293,6 +316,7 @@ async function searchByText(
   kind: SpotKind,
   pages = 1,
   extraAmenities: string[] = [],
+  extraFields = '',
 ): Promise<Spot[]> {
   if (!KEY) return [];
   const out: Spot[] = [];
@@ -312,7 +336,7 @@ async function searchByText(
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': KEY,
-          'X-Goog-FieldMask': FIELD_MASK + ',nextPageToken',
+          'X-Goog-FieldMask': FIELD_MASK + ',nextPageToken' + extraFields,
         },
         body: JSON.stringify(body),
       });
@@ -367,7 +391,7 @@ async function searchHalal(loc: UserLoc): Promise<Spot[]> {
   try {
     const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK },
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK + ATMOSPHERE_FIELDS },
       body: JSON.stringify({
         textQuery: 'halal family restaurant',
         maxResultCount: 15,
@@ -554,8 +578,9 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
     searchByText(loc, 'kids indoor play area soft play', null, 'activity', 2),
     // Restaurants WITH a kids' play area — Google has no such type, so query
     // by intent and tag eatPlay so the new "Eat & play" filter can find them.
-    searchByText(loc, 'family restaurant with kids play area', 'restaurant', 'dining', 2, ['eatPlay', 'foodOnSite']),
-    searchNearby(loc, DINING_TYPES, 'dining', 15, 'DISTANCE'),
+    // Atmosphere fields requested so we can drop goodForChildren=false places.
+    searchByText(loc, 'family restaurant with kids play area', 'restaurant', 'dining', 2, ['eatPlay', 'foodOnSite'], ATMOSPHERE_FIELDS),
+    searchNearby(loc, DINING_TYPES, 'dining', 15, 'DISTANCE', 1, ATMOSPHERE_FIELDS),
     searchShops(loc),
     searchHalal(loc),
     fetchCurated(loc),
@@ -588,6 +613,13 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
     if (seenIds.has(g.id)) continue; // same place returned by multiple type searches
     seenIds.add(g.id);
     const claim = claimByPlaceId.get(g.id);
+    // Curate OUT non-kid-friendly Google places (shisha/cafe/bar/etc.) — but a
+    // merchant who claimed their listing is always kept (they opted in).
+    if (!claim && g.primaryType && EXCLUDE_PRIMARY_TYPES.has(g.primaryType)) continue;
+    // Drop food places Google explicitly flags as NOT good for children
+    // (goodForChildren is only requested on food searches; activities are
+    // undefined and never dropped here). Claimed places bypass this too.
+    if (!claim && g.kind === 'dining' && g.goodForChildren === false) continue;
     if (claim) {
       // Keep the claim's identity (id/source/owner/vouchers) but show the live
       // Google display fields where present.
@@ -650,6 +682,51 @@ export type SpotEvent = {
   endsAt?: number;
   tone: string;
 };
+
+// ---- AI screening (kid-friendly curation) ---------------------------------
+// Each Google place is screened ONCE by Claude on EC2 (/screen) and the verdict
+// cached in Firestore `screenedPlaces/{id}`. The app reads the cache to hide
+// non-kid-friendly places (fish-only restaurants, shisha cafes, gyms…) and
+// sends never-seen places to the screener in the background.
+const SCREEN_API = (process.env.EXPO_PUBLIC_PLAN_API_URL || 'http://16.16.79.251:8090').replace(/\/$/, '') + '/screen';
+
+// id -> keep(boolean). Absent from the map = not yet screened.
+export async function getScreenVerdicts(ids: string[]): Promise<Map<string, boolean>> {
+  const out = new Map<string, boolean>();
+  if (!firestore || !ids.length) return out;
+  try {
+    for (let i = 0; i < ids.length; i += 30) {
+      const chunk = ids.slice(i, i + 30);
+      const snap = await getDocs(query(collection(firestore, 'screenedPlaces'), where(documentId(), 'in', chunk)));
+      snap.forEach((d) => { out.set(d.id, (d.data() as any)?.keep === true); });
+    }
+  } catch {}
+  return out;
+}
+
+// Send uncached places to the EC2 screener (it classifies + persists verdicts).
+// Returns a verdict map id -> keep(boolean) for everything it screened.
+export async function requestScreen(places: Spot[]): Promise<Map<string, boolean>> {
+  const verdicts = new Map<string, boolean>();
+  const items = places.slice(0, 60).filter((p) => p.id);
+  if (!items.length) return verdicts;
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 130000);
+    const res = await fetch(SCREEN_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        places: items.map((p) => ({ id: p.id, name: p.name, primaryType: p.primaryType, category: p.category, address: p.address })),
+      }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(to);
+    const data = await res.json();
+    for (const r of data?.results || []) if (r && r.id) verdicts.set(r.id, r.keep === true);
+  } catch {}
+  return verdicts;
+}
 
 export async function getEvents(): Promise<SpotEvent[]> {
   if (!firestore) return [];

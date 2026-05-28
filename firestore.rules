@@ -98,6 +98,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // AI-screening cache: which Google places are kid/family-friendly. The app
+    // READS this to filter/curate results; writes come only from the EC2
+    // /screen worker via the Admin SDK (which bypasses these rules), so client
+    // writes are denied to keep the vetted DB clean.
+    match /screenedPlaces/{placeId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
     // Bookings: a customer creates/reads their own. The merchant who owns the
     // place can read + update (confirm / mark redeemed). Admins read all.
     match /bookings/{id} {

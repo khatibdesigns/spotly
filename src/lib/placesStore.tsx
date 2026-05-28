@@ -1,7 +1,7 @@
 // Spotly — shared nearby-places state (location + spots + filters), used by
 // Discover, Map, and Place detail. Loads once when the authed app mounts.
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
-import { getUserLocation, getSpots, KUWAIT_CITY, Spot, UserLoc } from './places';
+import { getUserLocation, getSpots, getScreenVerdicts, requestScreen, KUWAIT_CITY, Spot, UserLoc } from './places';
 
 // Kind filters (activity / dining / shop / stay) — OR among themselves.
 const KIND_OF: Record<string, Spot['kind']> = {
@@ -27,6 +27,7 @@ const PRED: Record<string, (s: Spot) => boolean> = {
   playArea: (s) => s.amenities.includes('playArea'),
   funPark: (s) => s.amenities.includes('funPark'),
   eatPlay: (s) => s.amenities.includes('eatPlay'),
+  kidsMenu: (s) => s.amenities.includes('kidsMenu'),
   indoor: (s) => s.amenities.includes('indoor'),
   outdoor: (s) => s.amenities.includes('outdoor'),
   water: (s) => s.amenities.includes('water'),
@@ -47,6 +48,7 @@ type PlacesState = {
   spots: Spot[];
   filtered: Spot[];
   loading: boolean;
+  screening: boolean; // AI is screening newly-seen places in the background
   locationGranted: boolean;
   reload: () => void;
   // Load places centered on an arbitrary point (map "search this area" + the
@@ -67,9 +69,37 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
   const [loc, setLoc] = useState<UserLoc>({ ...KUWAIT_CITY, granted: false });
   const [spots, setSpots] = useState<Spot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [screening, setScreening] = useState(false);
   const [selected, setSelected] = useState<Spot | null>(null);
   const [filters, setFilters] = useState<Set<string>>(new Set());
   const [areaLabel, setAreaLabel] = useState<string | null>(null);
+
+  // AI-screening curation (STRICT): a Google place is only shown once Claude
+  // has approved it. Curated/merchant-claimed places (they opted in) always
+  // show and are never screened. Verdicts are cached in Firestore forever, so
+  // each place is screened once — over time the cache becomes a full vetted DB
+  // and screening rarely runs.
+  const screenable = (x: Spot) => x.source === 'google' && !x.ownerUid && !!x.id;
+  const applyAndScreen = useCallback(async (raw: Spot[]) => {
+    const ids = raw.filter(screenable).map((x) => x.id);
+    const verdicts = await getScreenVerdicts(ids); // cached id -> keep
+    const approved = new Set<string>();
+    for (const [id, keep] of verdicts) if (keep) approved.add(id);
+    // STRICT: show non-screenable (curated/claimed) + cached-approved only.
+    setSpots(raw.filter((x) => !screenable(x) || approved.has(x.id)));
+    const unseen = raw.filter((x) => screenable(x) && !verdicts.has(x.id));
+    if (unseen.length) {
+      setScreening(true);
+      requestScreen(unseen)
+        .then((res) => {
+          for (const [id, keep] of res) if (keep) approved.add(id);
+          // Re-derive from raw so order (distance/promoted) is preserved.
+          setSpots(raw.filter((x) => !screenable(x) || approved.has(x.id)));
+        })
+        .catch(() => {})
+        .finally(() => setScreening(false));
+    }
+  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -77,9 +107,9 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
     setLoc(l);
     setAreaLabel(null); // back on the user's own location
     const s = await getSpots(l);
-    setSpots(s);
+    await applyAndScreen(s);
     setLoading(false);
-  }, []);
+  }, [applyAndScreen]);
 
   // Re-centre the search on a chosen point (a city, a map region…).
   const searchAt = useCallback(async (latitude: number, longitude: number, label?: string) => {
@@ -88,9 +118,9 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
     setLoc(l);
     setAreaLabel(label ?? null);
     const s = await getSpots(l);
-    setSpots(s);
+    await applyAndScreen(s);
     setLoading(false);
-  }, []);
+  }, [applyAndScreen]);
 
   useEffect(() => {
     reload();
@@ -122,7 +152,7 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
   }, [spots, filters]);
 
   return (
-    <Ctx.Provider value={{ loc, spots, filtered, loading, locationGranted: loc.granted, reload, searchAt, areaLabel, selected, setSelected, filters, toggleFilter, setOnlyFilter, clearFilters }}>
+    <Ctx.Provider value={{ loc, spots, filtered, loading, screening, locationGranted: loc.granted, reload, searchAt, areaLabel, selected, setSelected, filters, toggleFilter, setOnlyFilter, clearFilters }}>
       {children}
     </Ctx.Provider>
   );

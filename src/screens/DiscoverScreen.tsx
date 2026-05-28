@@ -145,7 +145,7 @@ export function DiscoverScreen() {
   const { push } = useStore();
   const { profile } = useProfile();
   const { cartCount } = useVouchers();
-  const { spots, filtered, loading, locationGranted, reload, searchAt, areaLabel, setSelected, filters, setOnlyFilter, clearFilters, loc } = usePlaces();
+  const { spots, filtered, loading, screening, locationGranted, reload, searchAt, areaLabel, setSelected, filters, setOnlyFilter, clearFilters, loc } = usePlaces();
   // Location picker (search any city/area, or use my location).
   const [locOpen, setLocOpen] = useState(false);
   const [locQuery, setLocQuery] = useState('');
@@ -303,6 +303,13 @@ export function DiscoverScreen() {
         </View>
       ) : (
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
+          {/* Strict AI screening of newly-seen places (first visit to an area). */}
+          {screening ? (
+            <View style={{ marginHorizontal: 20, marginBottom: 6, padding: 12, borderRadius: R.lg, backgroundColor: C.surface, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <ActivityIndicator color={C.coral} />
+              <Text style={{ flex: 1, fontSize: 12.5, color: C.ink2, fontFamily: F.semibold }}>{t('discover.screening')}</Text>
+            </View>
+          ) : null}
           {!locationGranted && showLocBanner ? (
             <View style={{ marginHorizontal: 20, marginBottom: 6, padding: 14, borderRadius: R.lg, backgroundColor: C.coralLt, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               {Icons.pin({ size: 18, color: C.coralDk, filled: true })}
