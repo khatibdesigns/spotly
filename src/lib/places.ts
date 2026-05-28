@@ -323,14 +323,17 @@ async function searchByText(
   let pageToken: string | undefined;
   for (let i = 0; i < pages; i++) {
     try {
-      const body: any = { pageSize: 20 };
-      if (pageToken) {
-        body.pageToken = pageToken;
-      } else {
-        body.textQuery = textQuery;
-        if (includedType) body.includedType = includedType;
-        body.locationBias = { circle: { center: { latitude: loc.latitude, longitude: loc.longitude }, radius: 50000 } };
-      }
+      // The New Places API requires paging requests to REPEAT the original
+      // params and just append pageToken — sending pageToken alone 400s with
+      // "Empty text_query" (so prior page-2+ fetches silently failed and the
+      // pagination "boost" was a no-op).
+      const body: any = {
+        pageSize: 20,
+        textQuery,
+        locationBias: { circle: { center: { latitude: loc.latitude, longitude: loc.longitude }, radius: 50000 } },
+      };
+      if (includedType) body.includedType = includedType;
+      if (pageToken) body.pageToken = pageToken;
       const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
         method: 'POST',
         headers: {
@@ -563,29 +566,34 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
   // was burying it behind famous places kilometres away.
   const [
     nature, thrills, water, play, culture,
-    funText, playText, eatPlay,
-    dining, shops, halal, curated,
+    funText, playText, eatPlay, natureText,
+    dining, diningText, shops, halal, curated,
   ] = await Promise.all([
     searchNearby(loc, KID_NATURE_TYPES, 'activity', 20, 'DISTANCE'),
     searchNearby(loc, KID_FUN_THRILLS_TYPES, 'activity', 20, 'DISTANCE'),
     searchNearby(loc, KID_WATER_TYPES, 'activity', 10, 'DISTANCE'),
     searchNearby(loc, KID_PLAY_TYPES, 'activity', 20, 'DISTANCE'),
     searchNearby(loc, KID_CULTURE_TYPES, 'activity', 20, 'DISTANCE'),
-    // Coverage boosters: searchText paginates (~40 results) so dense areas
-    // like a big mall (The Avenues) aren't capped at the 20 a single
+    // Coverage boosters: searchText paginates (3 pages ≈ 60 results) so dense
+    // areas like a big mall (The Avenues) aren't capped at the 20 a single
     // searchNearby returns. Merged + de-duped + distance-sorted below.
-    searchByText(loc, 'amusement park kids entertainment center', 'amusement_park', 'activity', 2),
-    searchByText(loc, 'kids indoor play area soft play', null, 'activity', 2),
+    searchByText(loc, 'amusement park kids entertainment center', 'amusement_park', 'activity', 3),
+    searchByText(loc, 'kids indoor play area soft play', null, 'activity', 3),
     // Restaurants WITH a kids' play area — Google has no such type, so query
     // by intent and tag eatPlay so the new "Eat & play" filter can find them.
     // Atmosphere fields requested so we can drop goodForChildren=false places.
-    searchByText(loc, 'family restaurant with kids play area', 'restaurant', 'dining', 2, ['eatPlay', 'foodOnSite'], ATMOSPHERE_FIELDS),
+    searchByText(loc, 'family restaurant with kids play area', 'restaurant', 'dining', 3, ['eatPlay', 'foodOnSite'], ATMOSPHERE_FIELDS),
+    // Outdoor booster — parks/gardens/playgrounds beyond the 20-cap nearby call.
+    searchByText(loc, 'family park garden playground', null, 'activity', 2),
     searchNearby(loc, DINING_TYPES, 'dining', 15, 'DISTANCE', 1, ATMOSPHERE_FIELDS),
+    // Dining booster — more sit-down family restaurants than the 20-cap nearby
+    // call returns. Atmosphere fields so goodForChildren=false gets dropped.
+    searchByText(loc, 'family restaurant kids friendly', 'restaurant', 'dining', 2, ['foodOnSite'], ATMOSPHERE_FIELDS),
     searchShops(loc),
     searchHalal(loc),
     fetchCurated(loc),
   ]);
-  const activities = [...nature, ...thrills, ...funText, ...water, ...play, ...playText, ...culture];
+  const activities = [...nature, ...thrills, ...funText, ...water, ...play, ...playText, ...culture, ...natureText];
   const stays: Spot[] = []; // kept as an empty array so the merge loop below still typechecks
   // A curated doc may be a "claim record" linked to a Google place_id (the
   // merchant claimed their real listing). Match Google results to those claims
@@ -609,7 +617,7 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
   const google: Spot[] = [];
   // eatPlay (tagged) before generic dining so a restaurant that's in both
   // lists keeps its 'eatPlay' tag when de-duped by place_id.
-  for (const g of [...activities, ...eatPlay, ...halal, ...dining, ...shops, ...stays]) {
+  for (const g of [...activities, ...eatPlay, ...halal, ...dining, ...diningText, ...shops, ...stays]) {
     if (seenIds.has(g.id)) continue; // same place returned by multiple type searches
     seenIds.add(g.id);
     const claim = claimByPlaceId.get(g.id);
@@ -717,7 +725,10 @@ export async function requestScreen(places: Spot[]): Promise<Map<string, boolean
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        places: items.map((p) => ({ id: p.id, name: p.name, primaryType: p.primaryType, category: p.category, address: p.address })),
+        places: items.map((p) => ({
+          id: p.id, name: p.name, primaryType: p.primaryType, category: p.category,
+          rating: p.rating, reviews: p.reviews, address: p.address,
+        })),
       }),
       signal: ctrl.signal,
     });
