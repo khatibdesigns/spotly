@@ -97,6 +97,7 @@
       <button data-view="places"><span class="ico">◎</span><span class="lbl">Places</span></button>
       <button data-view="bookings"><span class="ico">◷</span><span class="lbl">Bookings</span></button>
       <button data-view="vouchers"><span class="ico">🎟</span><span class="lbl">Vouchers</span></button>
+      <button data-view="team" data-team="1"><span class="ico">👥</span><span class="lbl">Team</span></button>
       <button data-view="orders" data-admin="1"><span class="ico">▤</span><span class="lbl">Orders</span></button>
       <button data-view="campaigns" data-admin="1"><span class="ico">✦</span><span class="lbl">Campaigns</span></button>
       <button data-view="events" data-admin="1"><span class="ico">✸</span><span class="lbl">Hotspots</span></button>
@@ -132,7 +133,7 @@
 
       <!-- PLACES -->
       <section id="view-places" class="hide">
-        <div class="toolbar"><div class="spacer"></div><button class="btn" id="claimPlaceBtn">🔎 Claim a Google place</button><button class="btn sage" id="addPlaceBtn" data-admin="1">+ Add place</button></div>
+        <div class="toolbar"><div class="spacer"></div><button class="btn" id="claimPlaceBtn">🔎 Claim a Google place</button><button class="btn sage" id="addPlaceBtn">+ Add a branch</button></div>
         <div class="panel" style="padding:6px 6px 0"><div id="placesTable"></div></div>
       </section>
 
@@ -152,6 +153,14 @@
           <div class="spacer"></div>
         </div>
         <div class="panel" style="padding:6px 6px 0"><div id="vouchersTable"></div></div>
+      </section>
+
+      <!-- TEAM -->
+      <section id="view-team" class="hide">
+        <p class="muted-note" id="teamIntro" style="margin:0 0 6px"></p>
+        <div class="toolbar"><div class="spacer"></div><button class="btn sage" id="inviteBtn">+ Invite a manager</button></div>
+        <div class="panel"><h2>Team members</h2><div id="teamTable"></div></div>
+        <div class="panel"><h2>Pending invites</h2><div id="invitesTable"></div></div>
       </section>
 
       <!-- ORDERS -->
@@ -225,48 +234,109 @@ const esc = (s) => (s == null ? '' : String(s).replace(/[&<>"]/g, (c) => ({ '&':
 const fmtDate = (ts) => { try { return ts?.toDate ? ts.toDate().toLocaleDateString() : ''; } catch { return ''; } };
 const AMENITIES = ['playArea','foodOnSite','parking','animals','indoor','outdoor','water','arts','restroom','changing','shade','museum'];
 
-// in-memory caches for reports
-let cache = { places: [], bookings: [], orders: [], campaigns: [], vouchers: [] };
+// Countries a brand can operate in (code → label). A place's `country` drives
+// country-manager scope, so keep these codes stable.
+const COUNTRIES = [
+  ['KW','Kuwait'],['SA','Saudi Arabia'],['AE','UAE'],['QA','Qatar'],['BH','Bahrain'],
+  ['OM','Oman'],['JO','Jordan'],['EG','Egypt'],['GB','United Kingdom'],['US','United States'],
+];
+const COUNTRY_LABEL = (c) => (COUNTRIES.find(([code]) => code === c) || [, c || '—'])[1];
+const roleLabel = (r) => ({ admin:'Super admin', owner:'Owner', country_manager:'Country manager', branch_manager:'Branch manager' }[r] || r || '');
 
-// Who's signed in + their role. Admins (admins/{uid}) see everything; merchants
-// (merchants/{uid}) see only their own places, bookings and voucher sales.
-let me = { uid: null, isAdmin: false, isMerchant: false, businessName: '' };
+// in-memory caches for reports
+let cache = { places: [], bookings: [], orders: [], campaigns: [], vouchers: [], team: [], invites: [] };
+
+// Who's signed in + their role/scope. Super-admin (admins/{uid}) sees everything.
+// Otherwise a merchant member: role owner | country_manager | branch_manager,
+// orgId = the brand they belong to, scope = { countries:[] } or { placeIds:[] }.
+let me = { uid:null, email:'', isAdmin:false, isMerchant:false, role:'', orgId:'', scope:{}, businessName:'' };
+const myCountries = () => (me.scope && me.scope.countries) || [];
+const myPlaceIdScope = () => (me.scope && me.scope.placeIds) || [];
+// A place's org defaults to its ownerUid for legacy docs (mirrors the rules).
+const effOrg = (p) => p.orgId || p.ownerUid || '';
+// Places this member is allowed to manage (admin = all). Mirrors firestore.rules
+// scopesPlace() so the UI shows exactly what the rules will permit.
+function visiblePlaces(all) {
+  if (me.isAdmin) return all;
+  if (me.role === 'owner') return all.filter((p) => effOrg(p) === me.orgId);
+  if (me.role === 'country_manager') return all.filter((p) => effOrg(p) === me.orgId && myCountries().includes(p.country || ''));
+  if (me.role === 'branch_manager') return all.filter((p) => myPlaceIdScope().includes(p.id));
+  return [];
+}
 
 // ---------- Auth ----------
 onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    $('login').classList.add('hide');
-    $('app').classList.remove('hide');
-    $('who').textContent = user.email || user.uid;
-    $('whoFoot').textContent = user.email || user.uid;
-    // Resolve role before rendering so we scope data + hide admin-only tools.
-    let isAdmin = false, isMerchant = false, businessName = '';
-    try { isAdmin = (await getDoc(doc(db, 'admins', user.uid))).exists(); } catch {}
-    try { const m = await getDoc(doc(db, 'merchants', user.uid)); isMerchant = m.exists(); businessName = m.data()?.businessName || ''; } catch {}
-    me = { uid: user.uid, isAdmin, isMerchant, businessName };
-    if (!isAdmin && !isMerchant) {
-      $('app').innerHTML = `<div style="max-width:520px;margin:120px auto;text-align:center;font-family:system-ui">
-        <h1 style="font-size:24px">This account isn't a business</h1>
-        <p style="color:#666;margin:12px 0 22px">Sign up as a business in the Spotly app to manage your place and offers here.</p>
-        <button class="btn ghost" id="naSignout">Sign out</button></div>`;
-      document.getElementById('naSignout').onclick = () => signOut(auth);
-      return;
-    }
-    applyRole();
-    if (businessName) $('whoFoot').textContent = businessName;
-    show('dashboard');
-  } else {
-    $('login').classList.remove('hide');
-    $('app').classList.add('hide');
+  if (!user) { $('login').classList.remove('hide'); $('app').classList.add('hide'); return; }
+  $('login').classList.add('hide');
+  $('app').classList.remove('hide');
+  $('who').textContent = user.email || user.uid;
+  $('whoFoot').textContent = user.email || user.uid;
+  const email = (user.email || '').toLowerCase();
+
+  let isAdmin = false;
+  try { isAdmin = (await getDoc(doc(db, 'admins', user.uid))).exists(); } catch {}
+
+  // Resolve merchant membership — provisioning from a pending email invite if needed.
+  let mdoc = null;
+  try { const m = await getDoc(doc(db, 'merchants', user.uid)); if (m.exists()) mdoc = m.data(); } catch {}
+  if (!mdoc && !isAdmin && email) {
+    try {
+      const invSnap = await getDoc(doc(db, 'merchantInvites', email));
+      if (invSnap.exists()) {
+        const d = invSnap.data();
+        await setDoc(doc(db, 'merchants', user.uid), {
+          businessName: d.businessName || '', name: user.displayName || '', email,
+          role: d.role, orgId: d.orgId, scope: d.scope || {}, createdAt: serverTimestamp(),
+        }, { merge: true });
+        try { await updateDoc(doc(db, 'merchantInvites', email), { status: 'accepted', acceptedUid: user.uid, acceptedAt: serverTimestamp() }); } catch {}
+        mdoc = { businessName: d.businessName || '', role: d.role, orgId: d.orgId, scope: d.scope || {} };
+      }
+    } catch (e) { console.warn('invite accept failed', e); }
   }
+
+  // Normalize a legacy owner doc (pre-hierarchy) so org-scoped queries include
+  // them and the app port sees consistent fields.
+  if (mdoc && !isAdmin && (!mdoc.role || !mdoc.orgId)) {
+    try {
+      await updateDoc(doc(db, 'merchants', user.uid), { role: mdoc.role || 'owner', orgId: mdoc.orgId || user.uid });
+      mdoc.role = mdoc.role || 'owner'; mdoc.orgId = mdoc.orgId || user.uid;
+    } catch (e) {}
+  }
+
+  const isMerchant = !!mdoc;
+  me = {
+    uid: user.uid, email, isAdmin, isMerchant,
+    role: isAdmin ? 'admin' : (mdoc?.role || (isMerchant ? 'owner' : '')),
+    orgId: mdoc?.orgId || user.uid,
+    scope: mdoc?.scope || {},
+    businessName: mdoc?.businessName || '',
+  };
+
+  if (!isAdmin && !isMerchant) {
+    $('app').innerHTML = `<div style="max-width:520px;margin:120px auto;text-align:center;font-family:system-ui">
+      <h1 style="font-size:24px">This account isn't on a team yet</h1>
+      <p style="color:#666;margin:12px 0 22px">Ask your brand owner to invite <b>${esc(user.email||'')}</b>, or sign up as a business in the Spotly app.</p>
+      <button class="btn ghost" id="naSignout">Sign out</button></div>`;
+    document.getElementById('naSignout').onclick = () => signOut(auth);
+    return;
+  }
+  myPlacesCache = null;
+  applyRole();
+  show('dashboard');
 });
 
-// Show/hide admin-only nav + tools based on role.
+// Show/hide nav + tools based on role.
 function applyRole() {
-  const merchantOnly = me.isMerchant && !me.isAdmin;
   document.querySelectorAll('[data-admin]').forEach((el) => el.classList.toggle('hide', !me.isAdmin));
-  // Add-place is admin-only (merchants claim places in the app, with verification).
-  const addBtn = $('addPlaceBtn'); if (addBtn) addBtn.classList.toggle('hide', !me.isAdmin);
+  // Team management is for the super-admin, owners and country managers.
+  const canTeam = me.isAdmin || me.role === 'owner' || me.role === 'country_manager';
+  document.querySelectorAll('[data-team]').forEach((el) => el.classList.toggle('hide', !canTeam));
+  // Owners + admin can add a branch/place; managers cannot.
+  const canAddPlace = me.isAdmin || me.role === 'owner';
+  const addBtn = $('addPlaceBtn'); if (addBtn) addBtn.classList.toggle('hide', !canAddPlace);
+  const claimBtn = $('claimPlaceBtn'); if (claimBtn) claimBtn.classList.toggle('hide', !canAddPlace);
+  $('who').textContent = (me.businessName ? me.businessName + ' · ' : '') + roleLabel(me.role);
+  if (me.businessName) $('whoFoot').textContent = me.businessName;
 }
 const isMerchantOnly = () => me.isMerchant && !me.isAdmin;
 $('loginBtn').onclick = async () => {
@@ -277,11 +347,13 @@ $('loginBtn').onclick = async () => {
 $('signout').onclick = () => signOut(auth);
 
 // ---------- Navigation ----------
-const TITLES = { dashboard:'Dashboard', places:'Places', bookings:'Bookings', vouchers:'Voucher sales', orders:'Album orders', campaigns:'Campaigns', events:'Hotspots', reports:'Reports' };
+const TITLES = { dashboard:'Dashboard', places:'Places', bookings:'Bookings', vouchers:'Voucher sales', team:'Team', orders:'Album orders', campaigns:'Campaigns', events:'Hotspots', reports:'Reports' };
 $('nav').addEventListener('click', (e) => { const b = e.target.closest('button[data-view]'); if (b) show(b.dataset.view); });
 function show(view) {
-  // Guard: merchants can't open admin-only views even via stale state.
+  // Guards: non-admins can't open admin-only views; only owner/country/admin see Team.
   if (!me.isAdmin && ['orders','campaigns','events','reports'].includes(view)) view = 'dashboard';
+  const canTeam = me.isAdmin || me.role === 'owner' || me.role === 'country_manager';
+  if (view === 'team' && !canTeam) view = 'dashboard';
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.content > section').forEach((s) => s.classList.add('hide'));
   $('view-' + view).classList.remove('hide');
@@ -290,6 +362,7 @@ function show(view) {
   if (view === 'places') loadPlaces();
   if (view === 'bookings') loadBookings();
   if (view === 'vouchers') loadVouchers();
+  if (view === 'team') loadTeam();
   if (view === 'orders') loadOrders();
   if (view === 'campaigns') loadCampaigns();
   if (view === 'events') loadEvents();
@@ -315,20 +388,50 @@ async function fetchAll(name, withOrder = true) {
   }
 }
 
+// Places this member is allowed to manage (places are world-readable; we read
+// all and filter to the member's scope — the security boundary is on writes +
+// the bookings/voucher reads below). Cached per session.
+let myPlacesCache = null;
+async function getMyPlaces(force) {
+  if (myPlacesCache && !force) return myPlacesCache;
+  const all = await fetchAll('places', false);
+  myPlacesCache = visiblePlaces(all);
+  return myPlacesCache;
+}
+// Fetch docs of `name` whose placeId is one of `placeIds` (chunked — `in` caps
+// at 30). Used so a country/branch manager only pulls sales for their branches.
+async function fetchByPlaceIds(name, placeIds) {
+  if (!placeIds || !placeIds.length) return [];
+  const out = [];
+  for (let i = 0; i < placeIds.length; i += 30) {
+    const chunk = placeIds.slice(i, i + 30);
+    try { const snap = await getDocs(query(collection(db, name), where('placeId', 'in', chunk))); out.push(...snap.docs.map((d) => ({ id: d.id, ...d.data() }))); } catch (e) {}
+  }
+  return out;
+}
+// Bookings / voucher orders visible to the signed-in member: admin = all; owner
+// = everything routed to them (placeOwnerUid); country/branch = scoped by their
+// places. (Rules enforce the same — this just shapes an allowed query.)
+async function fetchScopedSales(name) {
+  if (me.isAdmin) return fetchAll(name);
+  if (me.role === 'owner') return fetchMine(name, 'placeOwnerUid');
+  const places = await getMyPlaces();
+  return fetchByPlaceIds(name, places.map((p) => p.id));
+}
+
 // ---------- Dashboard ----------
 let chartB, chartS;
 async function loadDashboard() {
   let places, bookings, orders, campaigns, vouchers;
-  if (isMerchantOnly()) {
-    // Scoped reads only — rules deny full-collection access to merchants.
-    const all = await fetchAll('places');
-    places = all.filter((p) => p.ownerUid === me.uid);
-    [bookings, vouchers] = await Promise.all([fetchMine('bookings','placeOwnerUid'), fetchMine('voucherOrders','placeOwnerUid')]);
-    orders = []; campaigns = [];
-  } else {
+  if (me.isAdmin) {
     [places, bookings, orders, campaigns, vouchers] = await Promise.all([fetchAll('places'), fetchAll('bookings'), fetchAll('orders'), fetchAll('campaigns'), fetchAll('voucherOrders')]);
+  } else {
+    // Role-scoped: owner = whole org; country = their countries; branch = their branches.
+    places = await getMyPlaces(true);
+    [bookings, vouchers] = await Promise.all([fetchScopedSales('bookings'), fetchScopedSales('voucherOrders')]);
+    orders = []; campaigns = [];
   }
-  cache = { places, bookings, orders, campaigns, vouchers };
+  cache = { ...cache, places, bookings, orders, campaigns, vouchers };
 
   // Relabel KPIs for merchants (their own data; revenue instead of campaigns).
   const k3 = $('kpiOrders'), k4 = $('kpiCampaigns');
@@ -404,24 +507,33 @@ function placePromoteCell(p){
   return `<button class="btn ghost sm" data-reqpromo="${p.id}">Request promotion</button>`;
 }
 async function loadPlaces() {
-  let places = await fetchAll('places');
-  if (isMerchantOnly()) places = places.filter((p) => p.ownerUid === me.uid || p.pendingOwnerUid === me.uid);
+  let places;
+  if (me.isAdmin) {
+    places = await fetchAll('places');
+  } else {
+    const all = await fetchAll('places', false);
+    myPlacesCache = visiblePlaces(all);
+    // Also show places I personally claimed that are awaiting approval.
+    const pend = all.filter((p) => p.pendingOwnerUid === me.uid && !myPlacesCache.some((x) => x.id === p.id));
+    places = [...myPlacesCache, ...pend];
+  }
   cache.places = places;
   // Sort: pending first (need action), then promoted, then the rest.
   places.sort((a,b)=>{ const r=(x)=> x.status==='pending'?0:(x.promoted?1:2); return r(a)-r(b); });
-  const empty = isMerchantOnly() ? 'No places yet. Claim your place in the Spotly app to manage it here.' : 'No places yet. Add your first curated place.';
+  const empty = isMerchantOnly() ? 'No branches yet. Add a branch or claim your place to manage it here.' : 'No places yet. Add your first curated place.';
   $('placesTable').innerHTML = places.length ? table(
     ['', 'Name','Category','Status','Promotion',''],
     places.map((p)=>[
       p.photoUrl?`<img src="${esc(p.photoUrl)}" onerror="this.style.visibility='hidden'"/>`:'',
-      `<b>${esc(p.name)}</b>${(me.isAdmin&&p.ownerUid)?' <span style="color:var(--ink3);font-size:11px">· merchant</span>':''}`,
+      `<b>${esc(p.name)}</b>${p.branchLabel?` <span style="color:var(--ink3);font-size:11px">· ${esc(p.branchLabel)}</span>`:''}${p.country?` <span class="pill muted" style="font-size:10px;padding:2px 7px">${esc(COUNTRY_LABEL(p.country))}</span>`:''}${(me.isAdmin&&p.ownerUid)?' <span style="color:var(--ink3);font-size:11px">· claimed</span>':''}`,
       esc(p.category||''),
       placeStatusCell(p) + claimCell(p),
       placePromoteCell(p),
-      `<button class="btn ghost sm" data-offers="${p.id}">🎟 Offers${(p.vouchers&&p.vouchers.length)?` (${p.vouchers.length})`:''}</button>${me.isAdmin?` <button class="btn ghost sm" data-pubev="${p.id}" data-on="${p.publicEvent?1:0}" style="${p.publicEvent?'background:#fbf0d0;border-color:#eebc4a':''}">🎪 ${p.publicEvent?'Public event ✓':'Public event'}</button> <button class="danger" data-del-place="${p.id}">Delete</button>`:''}`
+      `<button class="btn ghost sm" data-offers="${p.id}">🎟 Offers${(p.vouchers&&p.vouchers.length)?` (${p.vouchers.length})`:''}</button>${(me.isAdmin||me.role==='owner')?` <button class="btn ghost sm" data-editbranch="${p.id}">✎ Branch</button>`:''}${me.isAdmin?` <button class="btn ghost sm" data-pubev="${p.id}" data-on="${p.publicEvent?1:0}" style="${p.publicEvent?'background:#fbf0d0;border-color:#eebc4a':''}">🎪 ${p.publicEvent?'Public event ✓':'Public event'}</button> <button class="danger" data-del-place="${p.id}">Delete</button>`:''}`
     ])
   ) : `<div class="muted-note">${empty}</div>`;
   $('placesTable').querySelectorAll('[data-offers]').forEach((b)=> b.onclick = ()=> openVouchersModal(b.dataset.offers));
+  $('placesTable').querySelectorAll('[data-editbranch]').forEach((b)=> b.onclick = ()=> openBranchEditModal(b.dataset.editbranch));
   $('placesTable').querySelectorAll('[data-pubev]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'places',b.dataset.pubev),{ publicEvent: b.dataset.on!=='1' }); loadPlaces(); });
   $('placesTable').querySelectorAll('[data-approveown]').forEach((b)=> b.onclick = async ()=>{ const p=(cache.places||[]).find(x=>x.id===b.dataset.approveown); await updateDoc(doc(db,'places',b.dataset.approveown),{ ownerUid: p.pendingOwnerUid, pendingOwnerUid: null, status:'approved' }); loadPlaces(); });
   $('placesTable').querySelectorAll('[data-del-place]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Delete this place?')){ await deleteDoc(doc(db,'places',b.dataset.delPlace)); loadPlaces(); } });
@@ -516,12 +628,15 @@ function openClaimModal() {
   $('cl_q').addEventListener('keydown', (e)=>{ if(e.key==='Enter') run(); });
 }
 function openPlaceModal() {
+  const owner = me.role === 'owner' && !me.isAdmin;
   $('modalRoot').innerHTML = `
   <div class="modal-bg"><div class="modal">
-    <h2>Add a place</h2>
+    <h2>${owner ? 'Add a branch' : 'Add a place'}</h2>
     <div class="form-grid">
       <div class="full"><label class="fld">Name *</label><input id="p_name" placeholder="The Scientific Center"/></div>
       <div><label class="fld">Category *</label><input id="p_cat" placeholder="Aquarium · Indoor"/></div>
+      <div><label class="fld">Branch label</label><input id="p_branch" placeholder="e.g. Avenues branch"/></div>
+      <div><label class="fld">Country</label><select id="p_country">${COUNTRIES.map(([c,n])=>`<option value="${c}">${n}</option>`).join('')}</select></div>
       <div><label class="fld">City</label><input id="p_city" placeholder="Kuwait City"/></div>
       <div><label class="fld">Latitude *</label><input id="p_lat" type="number" step="any" placeholder="29.3759"/></div>
       <div><label class="fld">Longitude *</label><input id="p_lng" type="number" step="any" placeholder="47.9774"/></div>
@@ -535,7 +650,7 @@ function openPlaceModal() {
     <p id="p_err" class="err"></p>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
       <button class="btn ghost" id="p_cancel">Cancel</button>
-      <button class="btn sage" id="p_save">Add place</button>
+      <button class="btn sage" id="p_save">${owner ? 'Add branch' : 'Add place'}</button>
     </div>
   </div></div>`;
   $('p_cancel').onclick = () => $('modalRoot').innerHTML='';
@@ -543,8 +658,12 @@ function openPlaceModal() {
     const name=$('p_name').value.trim(), lat=parseFloat($('p_lat').value), lng=parseFloat($('p_lng').value);
     if(!name||isNaN(lat)||isNaN(lng)){ $('p_err').textContent='Name, latitude and longitude are required.'; return; }
     const amenities=[...$('p_amen').querySelectorAll('input:checked')].map(i=>i.value);
+    // Owner-added branches belong to their org + go live; admin-added are curated.
+    const orgFields = owner
+      ? { orgId: me.orgId, ownerUid: me.uid, status: 'approved' }
+      : { status: 'approved' };
     try{
-      await addDoc(collection(db,'places'),{ name, category:$('p_cat').value.trim(), city:$('p_city').value.trim(), lat, lng, price:$('p_price').value||null, ages:$('p_ages').value.trim()||null, photoUrl:$('p_photo').value.trim()||null, address:$('p_addr').value.trim()||null, amenities, bookable:$('p_book').checked, tone:'sun', createdAt:serverTimestamp() });
+      await addDoc(collection(db,'places'),{ name, category:$('p_cat').value.trim(), branchLabel:$('p_branch').value.trim()||null, country:$('p_country').value, city:$('p_city').value.trim(), lat, lng, price:$('p_price').value||null, ages:$('p_ages').value.trim()||null, photoUrl:$('p_photo').value.trim()||null, address:$('p_addr').value.trim()||null, amenities, bookable:$('p_book').checked, tone:'sun', ...orgFields, createdAt:serverTimestamp() });
       $('modalRoot').innerHTML=''; loadPlaces();
     }catch(e){ $('p_err').textContent=e.message.replace('Firebase: ',''); }
   };
@@ -604,10 +723,193 @@ function openVouchersModal(placeId){
   };
 }
 
+// ── Branch details (label + country) ──────────────────────────────
+function openBranchEditModal(placeId){
+  const p = (cache.places||[]).find(x=>x.id===placeId) || {};
+  $('modalRoot').innerHTML = `
+  <div class="modal-bg"><div class="modal">
+    <h2>Branch details — ${esc(p.name||'')}</h2>
+    <label class="fld">Branch label</label>
+    <input id="b_label" value="${esc(p.branchLabel||'')}" placeholder="e.g. Avenues branch"/>
+    <label class="fld">Country</label>
+    <select id="b_country">${COUNTRIES.map(([c,n])=>`<option value="${c}" ${(p.country||'')===c?'selected':''}>${n}</option>`).join('')}</select>
+    <p class="muted-note" style="margin:8px 0 0">Country decides which country manager can see and manage this branch.</p>
+    <p id="b_err" class="err"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn ghost" id="b_cancel">Cancel</button>
+      <button class="btn sage" id="b_save">Save</button>
+    </div>
+  </div></div>`;
+  $('b_cancel').onclick = ()=> $('modalRoot').innerHTML='';
+  $('b_save').onclick = async ()=>{
+    try{
+      await updateDoc(doc(db,'places',placeId), { branchLabel:$('b_label').value.trim()||null, country:$('b_country').value });
+      $('modalRoot').innerHTML=''; myPlacesCache=null; loadPlaces();
+    }catch(e){ $('b_err').textContent=e.message.replace('Firebase: ',''); }
+  };
+}
+
+// ---------- Team (org → country → branch) ----------
+$('inviteBtn').onclick = ()=> openInviteModal();
+
+async function loadTeam(){
+  const canManageMembers = me.isAdmin || me.role==='owner';
+  $('teamIntro').textContent = me.isAdmin
+    ? 'All business team members across every brand.'
+    : (me.role==='owner'
+        ? 'Invite country managers (scoped to countries) and branch managers (scoped to branches). They sign in with the invited email and get access automatically.'
+        : 'Invite branch managers for branches in your country. They sign in with the invited email and get access automatically.');
+
+  const places = await getMyPlaces();
+  cache.places = places; // so the invite/edit branch picker has the scoped list
+  const placeName = (id)=> { const p=places.find(x=>x.id===id); return p ? (p.name + (p.branchLabel?(' · '+p.branchLabel):'')) : id; };
+
+  // Members in the org (admins see everyone).
+  let members = [];
+  try {
+    if (me.isAdmin) members = await fetchAll('merchants', false);
+    else { const snap = await getDocs(query(collection(db,'merchants'), where('orgId','==',me.orgId))); members = snap.docs.map(d=>({id:d.id,...d.data()})); }
+  } catch(e){ console.warn('team members', e); }
+  // A country manager only sees branch managers inside their countries.
+  if (me.role==='country_manager') members = members.filter(m=> m.role==='branch_manager' && (m.scope?.placeIds||[]).some(pid=> places.some(p=>p.id===pid)));
+  cache.team = members;
+
+  const scopeText = (m)=>{
+    if (m.role==='owner') return 'All branches';
+    if (m.role==='country_manager') return (m.scope?.countries||[]).map(COUNTRY_LABEL).join(', ') || '—';
+    if (m.role==='branch_manager') return (m.scope?.placeIds||[]).map(placeName).join(', ') || '—';
+    return '—';
+  };
+  $('teamTable').innerHTML = members.length ? table(
+    ['Member','Role','Scope', ...(canManageMembers?['']:[])],
+    members.map(m=>[
+      `<b>${esc(m.name||m.email||m.id)}</b>${m.id===me.uid?' <span style="color:var(--ink3);font-size:11px">· you</span>':''}<br/><span style="color:var(--ink3);font-size:12px">${esc(m.email||'')}</span>`,
+      `<span class="pill ${m.role==='owner'?'ok':'muted'}">${esc(roleLabel(m.role))}</span>`,
+      esc(scopeText(m)),
+      ...(canManageMembers?[ (m.role==='owner'||m.id===me.uid) ? '' : `<button class="btn ghost sm" data-editmem="${m.id}">Edit</button> <button class="danger" data-delmem="${m.id}">Remove</button>` ]:[])
+    ])
+  ) : '<div class="muted-note">No team members yet — invite your first manager.</div>';
+  if (canManageMembers){
+    $('teamTable').querySelectorAll('[data-delmem]').forEach(b=> b.onclick=async()=>{ if(confirm('Remove this team member? They lose access immediately.')){ try{ await deleteDoc(doc(db,'merchants',b.dataset.delmem)); loadTeam(); }catch(e){ alert(e.message); } } });
+    $('teamTable').querySelectorAll('[data-editmem]').forEach(b=> b.onclick=()=> openMemberEditModal((cache.team||[]).find(x=>x.id===b.dataset.editmem)));
+  }
+
+  // Pending invites.
+  let invites=[];
+  try {
+    if (me.isAdmin) invites = await fetchAll('merchantInvites', false);
+    else { const snap = await getDocs(query(collection(db,'merchantInvites'), where('orgId','==',me.orgId))); invites = snap.docs.map(d=>({id:d.id,...d.data()})); }
+  } catch(e){ console.warn('team invites', e); }
+  invites = invites.filter(i=> (i.status||'pending')!=='accepted');
+  if (me.role==='country_manager') invites = invites.filter(i=> i.role==='branch_manager');
+  cache.invites = invites;
+  $('invitesTable').innerHTML = invites.length ? table(
+    ['Email','Role','Scope','Invited',''],
+    invites.map(i=>[
+      `<b>${esc(i.id)}</b>`, esc(roleLabel(i.role)),
+      esc(i.role==='country_manager' ? ((i.scope?.countries||[]).map(COUNTRY_LABEL).join(', ')) : ((i.scope?.placeIds||[]).map(placeName).join(', '))) || '—',
+      fmtDate(i.createdAt),
+      `<button class="danger" data-revoke="${i.id}">Revoke</button>`
+    ])
+  ) : '<div class="muted-note">No pending invites.</div>';
+  $('invitesTable').querySelectorAll('[data-revoke]').forEach(b=> b.onclick=async()=>{ try{ await deleteDoc(doc(db,'merchantInvites',b.dataset.revoke)); loadTeam(); }catch(e){ alert(e.message); } });
+}
+
+// Shared scope picker (countries for a country mgr, branches for a branch mgr).
+function scopePickerHtml(places, preCountries, prePlaceIds){
+  const cset = new Set(preCountries||[]); const pset = new Set(prePlaceIds||[]);
+  return `
+    <div id="sp_country_wrap" style="margin-top:10px;display:none">
+      <label class="fld">Countries</label>
+      <div class="amen">${COUNTRIES.map(([c,n])=>`<label><input type="checkbox" class="sp_c" value="${c}" ${cset.has(c)?'checked':''}> ${n}</label>`).join('')}</div>
+    </div>
+    <div id="sp_branch_wrap" style="margin-top:10px;display:none">
+      <label class="fld">Branches</label>
+      <div class="amen">${places.length ? places.map(p=>`<label><input type="checkbox" class="sp_b" value="${esc(p.id)}" ${pset.has(p.id)?'checked':''}> ${esc(p.name)}${p.branchLabel?(' · '+esc(p.branchLabel)):''}</label>`).join('') : '<span class="muted-note">No branches available.</span>'}</div>
+    </div>`;
+}
+function syncScopePicker(role){
+  $('sp_country_wrap').style.display = role==='country_manager' ? 'block':'none';
+  $('sp_branch_wrap').style.display = role==='branch_manager' ? 'block':'none';
+}
+function readScope(role){
+  if (role==='country_manager'){ const cs=[...document.querySelectorAll('.sp_c:checked')].map(i=>i.value); return cs.length?{countries:cs}:null; }
+  if (role==='branch_manager'){ const bs=[...document.querySelectorAll('.sp_b:checked')].map(i=>i.value); return bs.length?{placeIds:bs}:null; }
+  return {};
+}
+
+function openInviteModal(){
+  const ownerInviting = me.isAdmin || me.role==='owner';
+  const places = (cache.places && cache.places.length) ? cache.places : [];
+  const roleOpts = ownerInviting
+    ? `<option value="country_manager">Country manager</option><option value="branch_manager">Branch manager</option>`
+    : `<option value="branch_manager">Branch manager</option>`;
+  $('modalRoot').innerHTML = `
+  <div class="modal-bg"><div class="modal">
+    <h2>Invite a manager</h2>
+    <label class="fld">Email *</label>
+    <input id="iv_email" type="email" placeholder="manager@email.com"/>
+    <label class="fld">Role</label>
+    <select id="iv_role">${roleOpts}</select>
+    ${scopePickerHtml(places)}
+    <p class="muted-note" style="margin:10px 0 0">They sign in with this email (CRM now, app later) and are linked to their role automatically.</p>
+    <p id="iv_err" class="err"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn ghost" id="iv_cancel">Cancel</button>
+      <button class="btn sage" id="iv_save">Send invite</button>
+    </div>
+  </div></div>`;
+  const roleSel = $('iv_role');
+  roleSel.onchange = ()=> syncScopePicker(roleSel.value);
+  syncScopePicker(roleSel.value);
+  $('iv_cancel').onclick = ()=> $('modalRoot').innerHTML='';
+  $('iv_save').onclick = async ()=>{
+    const email = $('iv_email').value.trim().toLowerCase();
+    const role = roleSel.value;
+    if(!/.+@.+\..+/.test(email)){ $('iv_err').textContent='Enter a valid email.'; return; }
+    const scope = readScope(role);
+    if(scope===null){ $('iv_err').textContent = role==='country_manager'?'Pick at least one country.':'Pick at least one branch.'; return; }
+    try{
+      await setDoc(doc(db,'merchantInvites',email), { orgId: me.orgId, role, scope, businessName: me.businessName||'', invitedBy: me.uid, invitedByEmail: me.email, status:'pending', createdAt: serverTimestamp() }, { merge:true });
+      $('modalRoot').innerHTML=''; loadTeam();
+    }catch(e){ $('iv_err').textContent = e.message.replace('Firebase: ',''); }
+  };
+}
+
+function openMemberEditModal(m){
+  if(!m) return;
+  const places = (cache.places && cache.places.length) ? cache.places : [];
+  $('modalRoot').innerHTML = `
+  <div class="modal-bg"><div class="modal">
+    <h2>Edit ${esc(m.name||m.email||'member')}</h2>
+    <label class="fld">Role</label>
+    <select id="iv_role"><option value="country_manager" ${m.role==='country_manager'?'selected':''}>Country manager</option><option value="branch_manager" ${m.role==='branch_manager'?'selected':''}>Branch manager</option></select>
+    ${scopePickerHtml(places, m.scope?.countries, m.scope?.placeIds)}
+    <p id="iv_err" class="err"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn ghost" id="iv_cancel">Cancel</button>
+      <button class="btn sage" id="iv_save">Save</button>
+    </div>
+  </div></div>`;
+  const roleSel = $('iv_role');
+  roleSel.onchange = ()=> syncScopePicker(roleSel.value);
+  syncScopePicker(roleSel.value);
+  $('iv_cancel').onclick = ()=> $('modalRoot').innerHTML='';
+  $('iv_save').onclick = async ()=>{
+    const role = roleSel.value;
+    const scope = readScope(role);
+    if(scope===null){ $('iv_err').textContent = role==='country_manager'?'Pick at least one country.':'Pick at least one branch.'; return; }
+    try{
+      await updateDoc(doc(db,'merchants',m.id), { role, scope });
+      $('modalRoot').innerHTML=''; loadTeam();
+    }catch(e){ $('iv_err').textContent = e.message.replace('Firebase: ',''); }
+  };
+}
+
 // ---------- Bookings ----------
 const BSTAT = ['requested','confirmed','declined','completed'];
 async function loadBookings() {
-  const bookings = isMerchantOnly() ? await fetchMine('bookings','placeOwnerUid') : await fetchAll('bookings');
+  const bookings = await fetchScopedSales('bookings');
   bookings.sort((a,b)=> (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
   cache.bookings = bookings;
   const filt = $('bookingFilter').value;
@@ -628,7 +930,7 @@ $('bookingFilter').onchange = loadBookings;
 
 // ---------- Voucher sales ----------
 async function loadVouchers() {
-  const sales = isMerchantOnly() ? await fetchMine('voucherOrders','placeOwnerUid') : await fetchAll('voucherOrders');
+  const sales = await fetchScopedSales('voucherOrders');
   sales.sort((a,b)=> (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
   cache.vouchers = sales;
   const filt = $('voucherFilter').value;
