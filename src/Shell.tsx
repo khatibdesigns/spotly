@@ -38,6 +38,8 @@ import { CartScreen } from './screens/CartScreen';
 import { VoucherPassScreen } from './screens/VoucherPassScreen';
 import { MerchantVouchersScreen } from './screens/MerchantVouchersScreen';
 import { PurchasesScreen } from './screens/PurchasesScreen';
+import { MerchantTeamScreen } from './screens/MerchantTeamScreen';
+import { MerchantClaimScreen } from './screens/MerchantClaimScreen';
 
 const OVERLAYS: Record<RouteName, React.ComponentType> = {
   place: PlaceScreen,
@@ -54,6 +56,8 @@ const OVERLAYS: Record<RouteName, React.ComponentType> = {
   cart: CartScreen,
   voucherPass: VoucherPassScreen,
   merchantVouchers: MerchantVouchersScreen,
+  merchantTeam: MerchantTeamScreen,
+  merchantClaim: MerchantClaimScreen,
   purchases: PurchasesScreen,
 };
 

@@ -29,7 +29,7 @@ function StatTile({ n, label, color }: { n: number; label: string; color: string
   );
 }
 
-function PlaceCard({ place, count, views, clicks, onPromote, onManageOffers }: { place: MerchantPlace; count: number; views: number; clicks: number; onPromote: () => void; onManageOffers: () => void }) {
+function PlaceCard({ place, count, views, clicks, canPromote = true, onPromote, onManageOffers }: { place: MerchantPlace; count: number; views: number; clicks: number; canPromote?: boolean; onPromote: () => void; onManageOffers: () => void }) {
   const { t } = useI18n();
   const st = statusMeta(place.status, t);
   const promotedActive = place.promoted;
@@ -68,7 +68,7 @@ function PlaceCard({ place, count, views, clicks, onPromote, onManageOffers }: {
               </View>
             ) : null}
           </Pressable>
-          {!promotedActive ? (
+          {!promotedActive && canPromote ? (
             place.promotionRequested ? (
               <Text style={{ fontSize: 12, color: C.premium, fontFamily: F.bold }}>{t('mh.promoteRequested')}</Text>
             ) : (
@@ -158,9 +158,19 @@ function BookingCard({ b, onConfirm, onRedeem }: { b: MerchantBooking; onConfirm
 export function MerchantHomeScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
-  const { merchant, places, pendingPlaces, bookings, voucherSales, stats, requestPromotion, markRedeemed, confirmBooking, markVoucherRedeemed } = useMerchant();
+  const { merchant, role, places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, requestPromotion, markRedeemed, confirmBooking, markVoucherRedeemed, approveClaim, rejectClaim } = useMerchant();
   const { t, lang, setLang } = useI18n();
   const { push } = useStore();
+  const roleLabel = role === 'owner' ? t('mh.roleOwner') : role === 'country_manager' ? t('mh.roleCountry') : role === 'branch_manager' ? t('mh.roleBranch') : '';
+  const canManageTeam = role === 'owner' || role === 'country_manager';
+  const canPromote = role !== 'branch_manager';
+  const approveBranch = (p: MerchantPlace) => {
+    Alert.alert(t('mh.approveClaimTitle'), p.name, [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('mh.reject'), style: 'destructive', onPress: () => rejectClaim(p.id) },
+      { text: t('mh.approve'), onPress: () => approveClaim(p.id) },
+    ]);
+  };
 
   const totals = {
     views: places.reduce((a, p) => a + (stats[p.id]?.views || 0), 0),
@@ -201,10 +211,18 @@ export function MerchantHomeScreen() {
             <View style={{ flex: 1 }}>
               <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontFamily: F.semibold }}>{t('mh.welcome')}</Text>
               <Text style={{ color: '#fff', fontSize: 24, fontFamily: F.extrabold, marginTop: 2 }}>{merchant?.businessName || 'Spotly Business'}</Text>
+              {roleLabel ? <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, fontFamily: F.bold, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.6 }}>{roleLabel}</Text> : null}
             </View>
-            <Pressable onPress={pickLanguage} hitSlop={8} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' }}>
-              {Icons.globe({ size: 18, color: '#fff' })}
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {canManageTeam ? (
+                <Pressable onPress={() => push('merchantTeam')} hitSlop={8} style={{ height: 38, borderRadius: 19, paddingHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 13 }}>{t('mh.team')}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable onPress={pickLanguage} hitSlop={8} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' }}>
+                {Icons.globe({ size: 18, color: '#fff' })}
+              </Pressable>
+            </View>
           </View>
 
           {/* Overview analytics */}
@@ -223,16 +241,47 @@ export function MerchantHomeScreen() {
           ) : null}
         </LinearGradient>
 
+        {/* Branch claims awaiting approval (owner / country manager) */}
+        {pendingApprovals.length ? (
+          <View style={{ paddingHorizontal: 20, marginTop: 18 }}>
+            <Text style={{ fontFamily: F.serif, fontSize: 20, color: C.ink, letterSpacing: -0.4 }}>{t('mh.claimsToApprove')}</Text>
+            <View style={{ gap: 10, marginTop: 12 }}>
+              {pendingApprovals.map((p) => (
+                <View key={p.id} style={[{ backgroundColor: C.surface, borderRadius: R.xl, padding: 14, borderWidth: 1.5, borderColor: C.premium }, SH.card]}>
+                  <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                    <SpotImage photoUrl={p.photoUrl} tone="plum" height={48} radius={12} style={{ width: 48 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={{ fontFamily: F.extrabold, fontSize: 15, color: C.ink }}>{p.name}</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{p.branchLabel || p.category}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.surface2, paddingHorizontal: 9, paddingVertical: 5, borderRadius: R.pill }}>
+                      {Icons.clock({ size: 12, color: C.ink2 })}
+                      <Text style={{ fontSize: 10.5, fontFamily: F.extrabold, color: C.ink2 }}>{t('mh.awaitingApproval')}</Text>
+                    </View>
+                    <Btn kind="dark" size="sm" onPress={() => approveBranch(p)}>{t('mh.reviewClaim')}</Btn>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         {/* Places */}
         <View style={{ paddingHorizontal: 20, marginTop: 18 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontFamily: F.serif, fontSize: 20, color: C.ink, letterSpacing: -0.4 }}>{t('mh.places')}</Text>
+            <Text style={{ fontFamily: F.serif, fontSize: 20, color: C.ink, letterSpacing: -0.4, flex: 1 }}>{t('mh.places')}</Text>
+            <Pressable onPress={() => push('merchantClaim')} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              {Icons.plus({ size: 15, color: C.coralDk })}
+              <Text style={{ color: C.coralDk, fontFamily: F.bold, fontSize: 13 }}>{role === 'branch_manager' ? t('mh.claimBranch') : t('mh.addBranch')}</Text>
+            </Pressable>
           </View>
           <View style={{ gap: 12, marginTop: 12 }}>
             {places.length === 0 && pendingPlaces.length === 0 ? (
-              <Text style={{ color: C.ink3, fontFamily: F.regular, fontSize: 14 }}>{t('mh.noPlaces')}</Text>
+              <Text style={{ color: C.ink3, fontFamily: F.regular, fontSize: 14 }}>{role === 'branch_manager' ? t('mh.noBranchYet') : t('mh.noPlaces')}</Text>
             ) : (
-              places.map((p) => <PlaceCard key={p.id} place={p} count={countFor(p.id)} views={stats[p.id]?.views || 0} clicks={stats[p.id]?.clicks || 0} onPromote={() => promote(p)} onManageOffers={() => push('merchantVouchers', { placeId: p.id })} />)
+              places.map((p) => <PlaceCard key={p.id} place={p} count={countFor(p.id)} views={stats[p.id]?.views || 0} clicks={stats[p.id]?.clicks || 0} canPromote={canPromote} onPromote={() => promote(p)} onManageOffers={() => push('merchantVouchers', { placeId: p.id })} />)
             )}
             {/* Pending ownership claims — locked until an admin approves. */}
             {pendingPlaces.map((p) => (

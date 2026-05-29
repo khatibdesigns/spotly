@@ -20,6 +20,8 @@ export type RouteName =
   | 'cart'
   | 'voucherPass'
   | 'merchantVouchers'
+  | 'merchantTeam'
+  | 'merchantClaim'
   | 'purchases';
 
 export type Route = { name: RouteName; params?: any };
