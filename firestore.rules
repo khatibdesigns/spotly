@@ -41,31 +41,37 @@ service cloud.firestore {
     // The org a place belongs to (defaults to its ownerUid for legacy places).
     function placeOrg(p) { return p.get('orgId', p.get('ownerUid', '')); }
 
-    // Does the signed-in business user have MANAGEMENT scope over this place?
-    // owner → any place in their org; country manager → places whose country is
-    // in their scope; branch manager → only their explicitly-assigned place ids.
-    // NOTE: every clause that touches meMerchant() is guarded by amMerchant()
-    // first and uses short-circuit && — so non-merchant users (customers, fresh
-    // claimers) never trigger a get() on a missing merchants doc (which would
-    // error and wrongly deny their own reads/claims).
-    function scopesPlace(p, placeId) {
-      return amMerchant()
-        && placeOrg(p) != ''
-        && meMerchant().get('orgId', request.auth.uid) == placeOrg(p)
-        && (
-          meMerchant().get('role', 'owner') == 'owner'
-          || (meMerchant().get('role', 'owner') == 'country_manager'
-              && (p.get('country', '') in meMerchant().get('scope', {}).get('countries', [])))
-          || (meMerchant().get('role', 'owner') == 'branch_manager'
-              && (placeId in meMerchant().get('scope', {}).get('placeIds', [])))
-        );
+    function memberCountries() { return amMerchant() ? meMerchant().get('scope', {}).get('countries', []) : []; }
+
+    // Branch-manager assignment lives ON THE PLACE so a manager can self-claim a
+    // branch (attach themselves) without ever editing their own permissions:
+    //   ownerUid / orgId  = the BRAND (orgId == owner uid) — the brand always owns
+    //   branchManagerUids = approved branch managers for this branch
+    //   pendingManagerUids = self-claimed managers awaiting owner/country approval
+    //
+    // NOTE: every clause touching meMerchant() is guarded by amMerchant() and
+    // short-circuit && — non-merchant users never trigger a get() on a missing
+    // merchants doc (which would error and wrongly deny their own reads/claims).
+
+    // Owner or country manager who manages this place's brand/country: full
+    // branch management (assign/approve managers, go-live, edit, offers).
+    function isOrgManagerOf(p) {
+      return amMerchant() && placeOrg(p) != '' && myOrg() == placeOrg(p) && (
+        myRole() == 'owner'
+        || (myRole() == 'country_manager' && (p.get('country', '') in memberCountries()))
+      );
     }
-    // Same check, but fetch the place by id (for bookings/voucher orders that
-    // reference a placeId). Returns false if the place no longer exists.
+    // A branch manager APPROVED on this place (uid listed in branchManagerUids).
+    function isBranchManagerOf(p) {
+      return amMerchant() && (request.auth.uid in p.get('branchManagerUids', []));
+    }
+    // Anyone with read/management scope over the place.
+    function scopesPlace(p) { return isOrgManagerOf(p) || isBranchManagerOf(p); }
+    // Same, fetched by id (for bookings/voucher orders referencing a placeId).
     function scopesPlaceById(pid) {
       return amMerchant() && pid != ''
         && exists(/databases/$(database)/documents/places/$(pid))
-        && scopesPlace(get(/databases/$(database)/documents/places/$(pid)).data, pid);
+        && scopesPlace(get(/databases/$(database)/documents/places/$(pid)).data);
     }
 
     // An invite for the signed-in user's email (doc id = lowercased email), used
@@ -165,16 +171,30 @@ service cloud.firestore {
     }
 
     // Places: any signed-in user can read (the app needs to discover them).
-    // Writes are scoped by role. Ownership/approval/promotion stay admin-gated.
+    // Writes are scoped by role. The BRAND always owns (ownerUid == orgId == owner
+    // uid); branch managers are assigned via branchManagerUids on the place.
     match /places/{id} {
       allow read: if isSignedIn();
 
       allow create: if isAdmin()
-        // Owner adds a branch to their own org.
+        // Owner adds/claims a branch into their own org (goes live).
         || (amMerchant() && myRole() == 'owner'
             && request.resource.data.get('orgId','') == myOrg()
-            && request.resource.data.get('ownerUid','') == request.auth.uid)
-        // A business claims an unowned place (pending admin approval).
+            && request.resource.data.get('ownerUid','') == myOrg())
+        // Country manager adds/claims a branch in one of their countries.
+        || (amMerchant() && myRole() == 'country_manager'
+            && request.resource.data.get('orgId','') == myOrg()
+            && request.resource.data.get('ownerUid','') == myOrg()
+            && (request.resource.data.get('country','') in memberCountries()))
+        // Branch manager self-claims a NEW branch into their org → PENDING, with
+        // only themselves as a pending manager (owner/country manager approves).
+        || (amMerchant() && myRole() == 'branch_manager'
+            && request.resource.data.get('orgId','') == myOrg()
+            && request.resource.data.get('ownerUid','') == myOrg()
+            && request.resource.data.get('status','') == 'pending'
+            && request.resource.data.get('pendingManagerUids', []) == [request.auth.uid]
+            && request.resource.data.get('branchManagerUids', []) == [])
+        // Legacy: an independent business claims an unowned place (pending admin).
         || (isSignedIn()
             && request.resource.data.get('ownerUid', null) == null
             && request.resource.data.pendingOwnerUid == request.auth.uid
@@ -182,18 +202,28 @@ service cloud.firestore {
             && request.resource.data.promoted == false);
 
       allow update: if isAdmin()
-        // A scoped manager edits descriptive fields + offers + requests
-        // promotion — but cannot change ownership, org, country, approval or the
-        // live promotion flag (those stay with the owner-via-admin / admin).
-        || (scopesPlace(resource.data, id)
+        // Owner / country manager: full branch management — approve pending
+        // managers, assign/remove branch managers, set live, edit, offers — but
+        // never change ownership, the brand, or live promotion (admin-only).
+        // (Only the owner may reassign a branch's country.)
+        || (isOrgManagerOf(resource.data)
             && request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null)
             && placeOrg(request.resource.data) == placeOrg(resource.data)
-            // Only the owner may (re)assign a branch's country; managers can't.
             && (request.resource.data.get('country','') == resource.data.get('country','') || myRole() == 'owner')
-            && request.resource.data.get('status','approved') == resource.data.get('status','approved')
             && request.resource.data.get('promoted', false) == resource.data.get('promoted', false)
             && request.resource.data.get('promotedUntil', null) == resource.data.get('promotedUntil', null))
-        // Request a claim: set pendingOwnerUid to self on an unowned place.
+        // Branch manager: edit content + offers + request promotion only — cannot
+        // touch ownership, org, country, approval, promotion or the manager lists.
+        || (isBranchManagerOf(resource.data)
+            && request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null)
+            && placeOrg(request.resource.data) == placeOrg(resource.data)
+            && request.resource.data.get('country','') == resource.data.get('country','')
+            && request.resource.data.get('status','approved') == resource.data.get('status','approved')
+            && request.resource.data.get('promoted', false) == resource.data.get('promoted', false)
+            && request.resource.data.get('promotedUntil', null) == resource.data.get('promotedUntil', null)
+            && request.resource.data.get('branchManagerUids', []) == resource.data.get('branchManagerUids', [])
+            && request.resource.data.get('pendingManagerUids', []) == resource.data.get('pendingManagerUids', []))
+        // Legacy claim: set pendingOwnerUid to self on an unowned place.
         || (isSignedIn()
             && resource.data.get('ownerUid', null) == null
             && request.resource.data.get('ownerUid', null) == null
@@ -203,7 +233,7 @@ service cloud.firestore {
             && request.resource.data.get('promoted', false) == resource.data.get('promoted', false));
 
       allow delete: if isAdmin()
-        || (amMerchant() && myRole() == 'owner' && scopesPlace(resource.data, id));
+        || (amMerchant() && myRole() == 'owner' && isOrgManagerOf(resource.data));
     }
 
     // Promotion requests: a merchant logs a request for their place; admins manage.
