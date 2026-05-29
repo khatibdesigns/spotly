@@ -2,157 +2,279 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // A user is an admin if there's a doc at admins/{their-uid}.
+    function isSignedIn() { return request.auth != null; }
+
+    // A user is an admin (Spotly super-admin) if there's a doc at admins/{uid}.
     function isAdmin() {
-      return request.auth != null
+      return isSignedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     // The family this user belongs to. Defaults to their own uid (solo family);
     // if they've joined another family, users/{uid}.familyId points to it.
     function myFamilyId() {
-      return (request.auth != null
+      return (isSignedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid)))
         ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId
-        : (request.auth != null ? request.auth.uid : '');
+        : (isSignedIn() ? request.auth.uid : '');
+    }
+
+    // ---- Merchant hierarchy (org → country → branch) ----------------------
+    // A business-side user is marked by merchants/{uid}. The doc carries:
+    //   role:  'owner' | 'country_manager' | 'branch_manager'
+    //   orgId: the brand they belong to (the owner's uid)
+    //   scope: { countries: [..] }  for a country manager
+    //          { placeIds: [..] }   for a branch manager
+    // Legacy docs (pre-hierarchy) have none of these → treated as an OWNER whose
+    // orgId is their own uid, so existing single-merchant accounts keep working
+    // with NO data migration.
+    function amMerchant() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/merchants/$(request.auth.uid));
+    }
+    function meMerchant() {
+      return get(/databases/$(database)/documents/merchants/$(request.auth.uid)).data;
+    }
+    function myOrg() { return amMerchant() ? meMerchant().get('orgId', request.auth.uid) : ''; }
+    function myRole() { return amMerchant() ? meMerchant().get('role', 'owner') : ''; }
+
+    // The org a place belongs to (defaults to its ownerUid for legacy places).
+    function placeOrg(p) { return p.get('orgId', p.get('ownerUid', '')); }
+
+    // Does the signed-in business user have MANAGEMENT scope over this place?
+    // owner → any place in their org; country manager → places whose country is
+    // in their scope; branch manager → only their explicitly-assigned place ids.
+    // NOTE: every clause that touches meMerchant() is guarded by amMerchant()
+    // first and uses short-circuit && — so non-merchant users (customers, fresh
+    // claimers) never trigger a get() on a missing merchants doc (which would
+    // error and wrongly deny their own reads/claims).
+    function scopesPlace(p, placeId) {
+      return amMerchant()
+        && placeOrg(p) != ''
+        && meMerchant().get('orgId', request.auth.uid) == placeOrg(p)
+        && (
+          meMerchant().get('role', 'owner') == 'owner'
+          || (meMerchant().get('role', 'owner') == 'country_manager'
+              && (p.get('country', '') in meMerchant().get('scope', {}).get('countries', [])))
+          || (meMerchant().get('role', 'owner') == 'branch_manager'
+              && (placeId in meMerchant().get('scope', {}).get('placeIds', [])))
+        );
+    }
+    // Same check, but fetch the place by id (for bookings/voucher orders that
+    // reference a placeId). Returns false if the place no longer exists.
+    function scopesPlaceById(pid) {
+      return amMerchant() && pid != ''
+        && exists(/databases/$(database)/documents/places/$(pid))
+        && scopesPlace(get(/databases/$(database)/documents/places/$(pid)).data, pid);
+    }
+
+    // An invite for the signed-in user's email (doc id = lowercased email), used
+    // to securely self-provision a merchant member doc from an owner's invite.
+    function myInvite() {
+      return get(/databases/$(database)/documents/merchantInvites/$(request.auth.token.email)).data;
+    }
+    function hasInvite() {
+      return isSignedIn() && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/merchantInvites/$(request.auth.token.email));
     }
 
     // users/{uid}: the membership pointer; the owner reads/writes only their own.
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
     // Family invites: creator makes one; anyone signed in who has the code can
     // read it (the code is the secret) and mark it accepted when joining.
     match /familyInvites/{code} {
-      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
-      allow read, update: if request.auth != null;
-      allow delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow read, update: if isSignedIn();
+      allow delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
     }
 
     // Family data (profile + plans/memories/saved subcollections). Accessible to
     // the founder (uid == familyId) OR any member whose users doc points here.
-    // {document=**} wildcard required to cover subcollections.
     match /families/{familyId}/{document=**} {
-      allow read, write: if request.auth != null
+      allow read, write: if isSignedIn()
         && (request.auth.uid == familyId || myFamilyId() == familyId);
     }
 
-    // A merchant account is marked by a doc at merchants/{their-uid}.
-    function isMerchant() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/merchants/$(request.auth.uid));
-    }
-
-    // Merchant profile: the owner reads/writes their own.
+    // Merchant member docs.
     match /merchants/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      // Read: self, admin, or a teammate in the same org (so owners + country
+      // managers can list/see their team).
+      allow read: if isSignedIn() && (
+           request.auth.uid == uid
+        || isAdmin()
+        || (amMerchant() && resource.data.get('orgId', uid) == myOrg() && myOrg() != '')
+      );
+
+      // Create:
+      //  (a) admin;
+      //  (b) self as a brand-new OWNER (orgId == own uid) — the business sign-up;
+      //  (c) self provisioning from a valid email invite (role/org from the invite);
+      //  (d) an owner of the same org seeding a member doc.
+      allow create: if isAdmin()
+        || (request.auth.uid == uid
+            && request.resource.data.get('role','owner') == 'owner'
+            && request.resource.data.get('orgId', uid) == uid)
+        || (request.auth.uid == uid && hasInvite()
+            && request.resource.data.role == myInvite().role
+            && request.resource.data.orgId == myInvite().orgId
+            && request.resource.data.get('scope', {}) == myInvite().get('scope', {}))
+        || (amMerchant() && myRole() == 'owner'
+            && request.resource.data.get('orgId','') == myOrg());
+
+      // Update:
+      //  - self: edit profile fields only — role/orgId/scope are LOCKED (no
+      //    self-escalation);
+      //  - admin: anything;
+      //  - owner of the same org: assign/revise a teammate's role + scope.
+      allow update: if isAdmin()
+        || (request.auth.uid == uid
+            && request.resource.data.get('role', resource.data.get('role','owner')) == resource.data.get('role','owner')
+            && request.resource.data.get('orgId', resource.data.get('orgId',uid)) == resource.data.get('orgId',uid)
+            && request.resource.data.get('scope', resource.data.get('scope',{})) == resource.data.get('scope',{}))
+        || (amMerchant() && myRole() == 'owner'
+            && resource.data.get('orgId','') == myOrg()
+            && request.resource.data.get('orgId','') == myOrg());
+
+      // Delete (remove from team): admin or the org owner.
+      allow delete: if isAdmin()
+        || (amMerchant() && myRole() == 'owner' && resource.data.get('orgId','') == myOrg());
     }
 
-    // Places: any signed-in user can read. Admins write anything. A merchant may
-    // create a place (as a pending, unowned claim) and edit its descriptive
-    // fields once they OWN it — but NOT self-approve, self-promote, or grant
-    // themselves ownership (ownerUid/status/promoted are admin-controlled).
-    // Ownership flow: merchant sets pendingOwnerUid (claim) → admin sets ownerUid
-    // (approve). Orders route to ownerUid, so they only flow after approval.
+    // Merchant team invites — doc id is the invitee's lowercased email so a
+    // newly-signed-in user can look up their own invite and self-provision.
+    match /merchantInvites/{email} {
+      allow read: if isSignedIn() && (
+           request.auth.token.email == email
+        || isAdmin()
+        || (amMerchant() && resource.data.get('orgId','') == myOrg())
+      );
+      // An owner or a country manager of the org issues invites; the orgId must
+      // be their own org. Country managers can only invite branch managers.
+      allow create, update: if isAdmin()
+        || (amMerchant() && request.resource.data.orgId == myOrg()
+            && (myRole() == 'owner'
+                || (myRole() == 'country_manager' && request.resource.data.role == 'branch_manager')))
+        // The invitee marks their own invite accepted on provisioning.
+        || (isSignedIn() && request.auth.token.email == email);
+      allow delete: if isAdmin()
+        || (amMerchant() && resource.data.get('orgId','') == myOrg()
+            && (myRole() == 'owner' || myRole() == 'country_manager'));
+    }
+
+    // Places: any signed-in user can read (the app needs to discover them).
+    // Writes are scoped by role. Ownership/approval/promotion stay admin-gated.
     match /places/{id} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
+
       allow create: if isAdmin()
-        || (request.auth != null
+        // Owner adds a branch to their own org.
+        || (amMerchant() && myRole() == 'owner'
+            && request.resource.data.get('orgId','') == myOrg()
+            && request.resource.data.get('ownerUid','') == request.auth.uid)
+        // A business claims an unowned place (pending admin approval).
+        || (isSignedIn()
             && request.resource.data.get('ownerUid', null) == null
             && request.resource.data.pendingOwnerUid == request.auth.uid
             && request.resource.data.status == 'pending'
             && request.resource.data.promoted == false);
+
       allow update: if isAdmin()
-        // The owner edits their own place (can't self-approve/promote or
-        // reassign ownership).
-        || (request.auth != null
-            && resource.data.ownerUid == request.auth.uid
-            && request.resource.data.ownerUid == request.auth.uid
-            && request.resource.data.status == resource.data.status
-            && request.resource.data.promoted == resource.data.promoted
+        // A scoped manager edits descriptive fields + offers + requests
+        // promotion — but cannot change ownership, org, country, approval or the
+        // live promotion flag (those stay with the owner-via-admin / admin).
+        || (scopesPlace(resource.data, id)
+            && request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null)
+            && placeOrg(request.resource.data) == placeOrg(resource.data)
+            // Only the owner may (re)assign a branch's country; managers can't.
+            && (request.resource.data.get('country','') == resource.data.get('country','') || myRole() == 'owner')
+            && request.resource.data.get('status','approved') == resource.data.get('status','approved')
+            && request.resource.data.get('promoted', false) == resource.data.get('promoted', false)
             && request.resource.data.get('promotedUntil', null) == resource.data.get('promotedUntil', null))
-        // Request a claim: set pendingOwnerUid to self on an unowned place with
-        // no other pending claim. Cannot touch ownerUid/status/promotion — the
-        // admin grants ownership by setting ownerUid.
-        || (request.auth != null
+        // Request a claim: set pendingOwnerUid to self on an unowned place.
+        || (isSignedIn()
             && resource.data.get('ownerUid', null) == null
             && request.resource.data.get('ownerUid', null) == null
             && request.resource.data.pendingOwnerUid == request.auth.uid
             && resource.data.get('pendingOwnerUid', null) in [null, request.auth.uid]
             && request.resource.data.status == resource.data.status
             && request.resource.data.get('promoted', false) == resource.data.get('promoted', false));
-      allow delete: if isAdmin();
+
+      allow delete: if isAdmin()
+        || (amMerchant() && myRole() == 'owner' && scopesPlace(resource.data, id));
     }
 
     // Promotion requests: a merchant logs a request for their place; admins manage.
     match /promotionRequests/{id} {
-      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
-      allow read: if request.auth != null && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow read: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
       allow update, delete: if isAdmin();
     }
 
     // Hot events / collabs: any signed-in user reads; only admins write.
     match /events/{id} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
-    // AI-screening cache: which Google places are kid/family-friendly. The app
-    // READS this to filter/curate results; writes come only from the EC2
-    // /screen worker via the Admin SDK (which bypasses these rules), so client
-    // writes are denied to keep the vetted DB clean.
+    // AI-screening cache: written only by the EC2 worker via the Admin SDK
+    // (bypasses rules); clients read to curate. Client writes denied.
     match /screenedPlaces/{placeId} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
-    // Bookings: a customer creates/reads their own. The merchant who owns the
-    // place can read + update (confirm / mark redeemed). Admins read all.
+    // Bookings: a customer creates/reads their own. The org owner (placeOwnerUid)
+    // and any scoped manager of the booking's place can read + update. Admins all.
     match /bookings/{id} {
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
-      allow read: if request.auth != null && (
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.uid;
+      allow read: if isSignedIn() && (
         resource.data.uid == request.auth.uid
         || resource.data.get('familyId', '') == myFamilyId()
         || resource.data.get('placeOwnerUid', '') == request.auth.uid
         || isAdmin()
+        || scopesPlaceById(resource.data.get('placeId', ''))
       );
       allow update: if isAdmin()
-        || (request.auth != null && resource.data.get('placeOwnerUid', '') == request.auth.uid);
+        || (isSignedIn() && resource.data.get('placeOwnerUid', '') == request.auth.uid)
+        || scopesPlaceById(resource.data.get('placeId', ''));
       allow delete: if isAdmin();
     }
+
     match /orders/{id} {
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
-      allow read: if request.auth != null && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.uid;
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow update, delete: if isAdmin();
     }
 
-    // Voucher orders: a customer buys a voucher (creates/reads their own + the
-    // family's). The merchant who owns the place reads + updates (mark redeemed).
-    // Admins read all. Mirrors the bookings rules.
+    // Voucher orders: mirrors bookings — customer owns it; org owner + scoped
+    // managers of the place read + update (mark redeemed). Admins all.
     match /voucherOrders/{id} {
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
-      allow read: if request.auth != null && (
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.uid;
+      allow read: if isSignedIn() && (
         resource.data.uid == request.auth.uid
         || resource.data.get('familyId', '') == myFamilyId()
         || resource.data.get('placeOwnerUid', '') == request.auth.uid
         || isAdmin()
+        || scopesPlaceById(resource.data.get('placeId', ''))
       );
       allow update: if isAdmin()
-        || (request.auth != null && resource.data.get('placeOwnerUid', '') == request.auth.uid);
+        || (isSignedIn() && resource.data.get('placeOwnerUid', '') == request.auth.uid)
+        || scopesPlaceById(resource.data.get('placeId', ''));
       allow delete: if isAdmin();
     }
 
-    // Marketing campaigns: any signed-in user can read (app may surface them);
-    // only admins write.
+    // Marketing campaigns: any signed-in user can read; only admins write.
     match /campaigns/{id} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
     // Admin allowlist: readable by the owner, managed only in the console.
     match /admins/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
+      allow read: if isSignedIn() && request.auth.uid == uid;
       allow write: if false;
     }
   }
