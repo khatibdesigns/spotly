@@ -43,6 +43,7 @@ export type Spot = {
   vouchers?: Voucher[]; // prepaid vouchers/offers the place sells
   googlePlaceId?: string; // Google place_id this curated/claim record links to
   publicEvent?: boolean; // marked as a public event → yellow map pin
+  live?: boolean; // merchant can take a branch offline (live===false → hidden)
   primaryType?: string; // Google machine primaryType (e.g. 'cafe') — used to
                         // curate out non-kid-friendly places (shisha = 'cafe').
   goodForChildren?: boolean; // Google Atmosphere signal (food searches only)
@@ -457,6 +458,7 @@ async function fetchCurated(loc: UserLoc): Promise<Spot[]> {
             : undefined,
           googlePlaceId: v.googlePlaceId || undefined,
           publicEvent: !!v.publicEvent,
+          live: v.live,
         };
       });
   } catch {
@@ -609,6 +611,8 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
     if (better) claimByPlaceId.set(c.googlePlaceId, c);
   }
 
+  // Branches the merchant set Not Live → hide them (and any Google match).
+  const hiddenGoogleIds = new Set(curated.filter((c) => c.live === false && c.googlePlaceId).map((c) => c.googlePlaceId as string));
   const consumed = new Set<string>(); // place_ids merged into a Google result
   const seenNames = new Set(curated.map((c) => c.name.toLowerCase()));
   const seenIds = new Set<string>(); // guard: a place can appear in >1 search list
@@ -620,6 +624,7 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
   for (const g of [...activities, ...eatPlay, ...halal, ...dining, ...diningText, ...shops, ...stays]) {
     if (seenIds.has(g.id)) continue; // same place returned by multiple type searches
     seenIds.add(g.id);
+    if (hiddenGoogleIds.has(g.id)) continue; // merchant took this branch offline
     const claim = claimByPlaceId.get(g.id);
     // Curate OUT non-kid-friendly Google places (shisha/cafe/bar/etc.) — but a
     // merchant who claimed their listing is always kept (they opted in).
@@ -659,6 +664,7 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
   const standaloneCurated: Spot[] = [];
   const addedPlaceIds = new Set<string>();
   for (const c of curated) {
+    if (c.live === false) continue; // not-live branch — hidden from customers
     if (c.googlePlaceId) {
       if (consumed.has(c.googlePlaceId) || addedPlaceIds.has(c.googlePlaceId)) continue;
       addedPlaceIds.add(c.googlePlaceId);

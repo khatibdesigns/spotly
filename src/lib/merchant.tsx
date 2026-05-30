@@ -39,6 +39,7 @@ export type MerchantPlace = {
   ownerUid?: string;
   branchManagerUids?: string[];
   pendingManagerUids?: string[];
+  live?: boolean; // false → branch taken offline (hidden from customers)
   currency?: string;
   vouchers?: Voucher[];
 };
@@ -82,6 +83,7 @@ type MerchantState = {
   confirmBooking: (bookingId: string) => Promise<void>;
   setPlaceVouchers: (placeId: string, currency: string, vouchers: Voucher[]) => Promise<void>;
   markVoucherRedeemed: (orderId: string) => Promise<void>;
+  setLive: (placeId: string, live: boolean) => Promise<void>;
   approveClaim: (placeId: string) => Promise<void>;
   rejectClaim: (placeId: string) => Promise<void>;
   inviteManager: (email: string, role: MerchantRole, scope: any) => Promise<void>;
@@ -271,6 +273,7 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
   const markRedeemed = useCallback(async (bookingId: string) => { if (firestore) await updateDoc(doc(firestore, 'bookings', bookingId), { status: 'redeemed', redeemedAt: serverTimestamp() }); }, []);
   const confirmBooking = useCallback(async (bookingId: string) => { if (firestore) await updateDoc(doc(firestore, 'bookings', bookingId), { status: 'confirmed' }); }, []);
   const markVoucherRedeemed = useCallback(async (orderId: string) => { if (firestore) await updateDoc(doc(firestore, 'voucherOrders', orderId), { status: 'redeemed', redeemedAt: serverTimestamp() }); }, []);
+  const setLive = useCallback(async (placeId: string, live: boolean) => { if (firestore) await updateDoc(doc(firestore, 'places', placeId), { live }); }, []);
 
   const setPlaceVouchers = useCallback(async (placeId: string, currency: string, vouchers: Voucher[]) => {
     if (!firestore) return;
@@ -305,8 +308,8 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<MerchantState>(() => ({
     merchant, isMerchant: !!merchant, loading, role, orgId, scope,
     places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, members, invites,
-    createMerchant, claimBranch, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed, approveClaim, rejectClaim, inviteManager, removeMember,
-  }), [merchant, loading, role, orgId, scope, places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, members, invites, createMerchant, claimBranch, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed, approveClaim, rejectClaim, inviteManager, removeMember]);
+    createMerchant, claimBranch, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed, setLive, approveClaim, rejectClaim, inviteManager, removeMember,
+  }), [merchant, loading, role, orgId, scope, places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, members, invites, createMerchant, claimBranch, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed, setLive, approveClaim, rejectClaim, inviteManager, removeMember]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

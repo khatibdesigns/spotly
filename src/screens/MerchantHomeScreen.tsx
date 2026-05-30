@@ -29,7 +29,7 @@ function StatTile({ n, label, color }: { n: number; label: string; color: string
   );
 }
 
-function PlaceCard({ place, count, views, clicks, canPromote = true, onPromote, onManageOffers }: { place: MerchantPlace; count: number; views: number; clicks: number; canPromote?: boolean; onPromote: () => void; onManageOffers: () => void }) {
+function PlaceCard({ place, count, views, clicks, canPromote = true, onPromote, onManageOffers, onToggleLive }: { place: MerchantPlace; count: number; views: number; clicks: number; canPromote?: boolean; onPromote: () => void; onManageOffers: () => void; onToggleLive: () => void }) {
   const { t } = useI18n();
   const st = statusMeta(place.status, t);
   const promotedActive = place.promoted;
@@ -44,6 +44,7 @@ function PlaceCard({ place, count, views, clicks, canPromote = true, onPromote, 
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <Text style={{ fontSize: 10, fontFamily: F.extrabold, color: st.c, backgroundColor: st.bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: R.pill, overflow: 'hidden', letterSpacing: 0.4 }}>{st.label}</Text>
+          {place.live === false ? <Text style={{ fontSize: 10, fontFamily: F.extrabold, color: C.coralDk, backgroundColor: C.coralLt, paddingHorizontal: 8, paddingVertical: 4, borderRadius: R.pill, overflow: 'hidden', letterSpacing: 0.4 }}>{t('mh.notLive')}</Text> : null}
           {promotedActive ? <Text style={{ fontSize: 10, fontFamily: F.extrabold, color: '#fff', backgroundColor: C.premium, paddingHorizontal: 8, paddingVertical: 4, borderRadius: R.pill, overflow: 'hidden', letterSpacing: 0.4 }}>{t('mh.promotedTag')}</Text> : null}
         </View>
       </View>
@@ -58,8 +59,8 @@ function PlaceCard({ place, count, views, clicks, canPromote = true, onPromote, 
       </View>
       {/* Actions row: manage offers + promote (only when approved) */}
       {place.status === 'approved' ? (
-        <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Pressable onPress={onManageOffers} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+        <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 12, flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Pressable onPress={onManageOffers} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {Icons.bag({ size: 16, color: C.coralDk })}
             <Text style={{ fontSize: 13, fontFamily: F.bold, color: C.ink }}>{t('mh.manageOffers')}</Text>
             {voucherCount > 0 ? (
@@ -68,6 +69,7 @@ function PlaceCard({ place, count, views, clicks, canPromote = true, onPromote, 
               </View>
             ) : null}
           </Pressable>
+          <View style={{ flex: 1 }} />
           {!promotedActive && canPromote ? (
             place.promotionRequested ? (
               <Text style={{ fontSize: 12, color: C.premium, fontFamily: F.bold }}>{t('mh.promoteRequested')}</Text>
@@ -75,6 +77,9 @@ function PlaceCard({ place, count, views, clicks, canPromote = true, onPromote, 
               <Btn kind="premium" size="sm" icon={Icons.sparkle({ size: 13, color: '#fff' })} onPress={onPromote}>{t('mh.promote')}</Btn>
             )
           ) : null}
+          <Pressable onPress={onToggleLive} hitSlop={6}>
+            <Text style={{ fontSize: 12.5, fontFamily: F.bold, color: place.live === false ? C.sage : C.ink3 }}>{place.live === false ? t('mh.setLive') : t('mh.setNotLive')}</Text>
+          </Pressable>
         </View>
       ) : null}
     </View>
@@ -158,7 +163,7 @@ function BookingCard({ b, onConfirm, onRedeem }: { b: MerchantBooking; onConfirm
 export function MerchantHomeScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
-  const { merchant, role, places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, requestPromotion, markRedeemed, confirmBooking, markVoucherRedeemed, approveClaim, rejectClaim } = useMerchant();
+  const { merchant, role, places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, requestPromotion, markRedeemed, confirmBooking, markVoucherRedeemed, setLive, approveClaim, rejectClaim } = useMerchant();
   const { t, lang, setLang } = useI18n();
   const { push } = useStore();
   const roleLabel = role === 'owner' ? t('mh.roleOwner') : role === 'country_manager' ? t('mh.roleCountry') : role === 'branch_manager' ? t('mh.roleBranch') : '';
@@ -169,6 +174,13 @@ export function MerchantHomeScreen() {
       { text: t('common.cancel'), style: 'cancel' },
       { text: t('mh.reject'), style: 'destructive', onPress: () => rejectClaim(p.id) },
       { text: t('mh.approve'), onPress: () => approveClaim(p.id) },
+    ]);
+  };
+  const toggleLive = (p: MerchantPlace) => {
+    const goOffline = p.live !== false; // currently live → take offline
+    Alert.alert(goOffline ? t('mh.setNotLive') : t('mh.setLive'), p.name, [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: goOffline ? t('mh.setNotLive') : t('mh.setLive'), style: goOffline ? 'destructive' : 'default', onPress: () => setLive(p.id, !goOffline) },
     ]);
   };
 
@@ -241,6 +253,11 @@ export function MerchantHomeScreen() {
           ) : null}
         </LinearGradient>
 
+        {/* Scan a customer's QR to redeem at the branch */}
+        <View style={{ paddingHorizontal: 20, marginTop: 18 }}>
+          <Btn kind="primary" full size="lg" icon={Icons.camera({ size: 18, color: '#fff' })} onPress={() => push('merchantScan')}>{t('mh.scan')}</Btn>
+        </View>
+
         {/* Branch claims awaiting approval (owner / country manager) */}
         {pendingApprovals.length ? (
           <View style={{ paddingHorizontal: 20, marginTop: 18 }}>
@@ -281,7 +298,7 @@ export function MerchantHomeScreen() {
             {places.length === 0 && pendingPlaces.length === 0 ? (
               <Text style={{ color: C.ink3, fontFamily: F.regular, fontSize: 14 }}>{role === 'branch_manager' ? t('mh.noBranchYet') : t('mh.noPlaces')}</Text>
             ) : (
-              places.map((p) => <PlaceCard key={p.id} place={p} count={countFor(p.id)} views={stats[p.id]?.views || 0} clicks={stats[p.id]?.clicks || 0} canPromote={canPromote} onPromote={() => promote(p)} onManageOffers={() => push('merchantVouchers', { placeId: p.id })} />)
+              places.map((p) => <PlaceCard key={p.id} place={p} count={countFor(p.id)} views={stats[p.id]?.views || 0} clicks={stats[p.id]?.clicks || 0} canPromote={canPromote} onPromote={() => promote(p)} onManageOffers={() => push('merchantVouchers', { placeId: p.id })} onToggleLive={() => toggleLive(p)} />)
             )}
             {/* Pending ownership claims — locked until an admin approves. */}
             {pendingPlaces.map((p) => (

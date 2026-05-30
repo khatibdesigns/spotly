@@ -256,6 +256,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Place analytics counters (views / direction clicks). Any signed-in
+    // customer increments them; merchants read them in the dashboard.
+    match /placeStats/{placeId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     // Bookings: a customer creates/reads their own. The org owner (placeOwnerUid)
     // and any scoped manager of the booking's place can read + update. Admins all.
     match /bookings/{id} {
