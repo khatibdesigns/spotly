@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root{--coral:#fa7959;--coral-dk:#c94c2d;--sage:#398b77;--ink:#1f1915;--ink2:#47413c;--ink3:#7f7974;--line:#e7e3dd;--bg:#f6f4ef;--surface:#fff;--sun:#eebc4a;--sky:#54aad1;--plum:#9c5eaa;}
   *{box-sizing:border-box}
@@ -97,6 +98,7 @@
       <button data-view="places"><span class="ico">◎</span><span class="lbl">Places</span></button>
       <button data-view="bookings"><span class="ico">◷</span><span class="lbl">Bookings</span></button>
       <button data-view="vouchers"><span class="ico">🎟</span><span class="lbl">Vouchers</span></button>
+      <button data-view="redeem"><span class="ico">✅</span><span class="lbl">Redeem</span></button>
       <button data-view="team" data-team="1"><span class="ico">👥</span><span class="lbl">Team</span></button>
       <button data-view="orders" data-admin="1"><span class="ico">▤</span><span class="lbl">Orders</span></button>
       <button data-view="campaigns" data-admin="1"><span class="ico">✦</span><span class="lbl">Campaigns</span></button>
@@ -153,6 +155,22 @@
           <div class="spacer"></div>
         </div>
         <div class="panel" style="padding:6px 6px 0"><div id="vouchersTable"></div></div>
+      </section>
+
+      <!-- REDEEM -->
+      <section id="view-redeem" class="hide">
+        <div class="panel" style="max-width:540px">
+          <h2>Scan or enter a code to redeem</h2>
+          <p class="muted-note" style="margin:0 0 12px">Scan the customer's QR with your camera, use a USB scanner, or type the code (e.g. SPOT-XXXXXX). Redeems their booking or voucher for your branch.</p>
+          <div style="display:flex;gap:8px">
+            <input id="rd_code" placeholder="SPOT-XXXXXX or scan…" style="flex:1;font-family:monospace" autocomplete="off"/>
+            <button class="btn" id="rd_find">Find</button>
+          </div>
+          <div style="margin-top:10px"><button class="btn ghost sm" id="rd_scan">📷 Scan with camera</button></div>
+          <div id="rd_reader" style="margin-top:12px;max-width:360px;border-radius:12px;overflow:hidden"></div>
+          <div id="rd_result" style="margin-top:14px"></div>
+          <p id="rd_err" class="err"></p>
+        </div>
       </section>
 
       <!-- TEAM -->
@@ -359,7 +377,7 @@ $('loginBtn').onclick = async () => {
 $('signout').onclick = () => signOut(auth);
 
 // ---------- Navigation ----------
-const TITLES = { dashboard:'Dashboard', places:'Places', bookings:'Bookings', vouchers:'Voucher sales', team:'Team', orders:'Album orders', campaigns:'Campaigns', events:'Hotspots', reports:'Reports' };
+const TITLES = { dashboard:'Dashboard', places:'Places', bookings:'Bookings', vouchers:'Voucher sales', redeem:'Redeem', team:'Team', orders:'Album orders', campaigns:'Campaigns', events:'Hotspots', reports:'Reports' };
 $('nav').addEventListener('click', (e) => { const b = e.target.closest('button[data-view]'); if (b) show(b.dataset.view); });
 function show(view) {
   // Guards: non-admins can't open admin-only views; only owner/country/admin see Team.
@@ -374,6 +392,7 @@ function show(view) {
   if (view === 'places') loadPlaces();
   if (view === 'bookings') loadBookings();
   if (view === 'vouchers') loadVouchers();
+  if (view === 'redeem') loadRedeem();
   if (view === 'team') loadTeam();
   if (view === 'orders') loadOrders();
   if (view === 'campaigns') loadCampaigns();
@@ -554,11 +573,12 @@ async function loadPlaces() {
       esc(p.category||''),
       placeStatusCell(p) + claimCell(p) + pendingManagerCell(p),
       placePromoteCell(p),
-      `<button class="btn ghost sm" data-offers="${p.id}">🎟 Offers${(p.vouchers&&p.vouchers.length)?` (${p.vouchers.length})`:''}</button>${(me.isAdmin||me.role==='owner'||me.role==='country_manager')?` <button class="btn ghost sm" data-editbranch="${p.id}">✎ Branch</button>`:''}${me.isAdmin?` <button class="btn ghost sm" data-pubev="${p.id}" data-on="${p.publicEvent?1:0}" style="${p.publicEvent?'background:#fbf0d0;border-color:#eebc4a':''}">🎪 ${p.publicEvent?'Public event ✓':'Public event'}</button> <button class="danger" data-del-place="${p.id}">Delete</button>`:''}`
+      `<button class="btn ghost sm" data-offers="${p.id}">🎟 Offers${(p.vouchers&&p.vouchers.length)?` (${p.vouchers.length})`:''}</button>${p.status!=='pending'?` <button class="btn ghost sm" data-togglelive="${p.id}" data-live="${p.live===false?0:1}" style="${p.live===false?'color:#b3261e;border-color:#f3c0bb':'color:#1c7a52'}">${p.live===false?'○ Set live':'● Live'}</button>`:''}${(me.isAdmin||me.role==='owner'||me.role==='country_manager')?` <button class="btn ghost sm" data-editbranch="${p.id}">✎ Branch</button>`:''}${me.isAdmin?` <button class="btn ghost sm" data-pubev="${p.id}" data-on="${p.publicEvent?1:0}" style="${p.publicEvent?'background:#fbf0d0;border-color:#eebc4a':''}">🎪 ${p.publicEvent?'Public event ✓':'Public event'}</button> <button class="danger" data-del-place="${p.id}">Delete</button>`:''}`
     ])
   ) : `<div class="muted-note">${empty}</div>`;
   $('placesTable').querySelectorAll('[data-offers]').forEach((b)=> b.onclick = ()=> openVouchersModal(b.dataset.offers));
   $('placesTable').querySelectorAll('[data-editbranch]').forEach((b)=> b.onclick = ()=> openBranchEditModal(b.dataset.editbranch));
+  $('placesTable').querySelectorAll('[data-togglelive]').forEach((b)=> b.onclick = async ()=>{ try{ await updateDoc(doc(db,'places',b.dataset.togglelive),{ live: b.dataset.live!=='1' }); loadPlaces(); }catch(e){ alert(e.message); } });
   $('placesTable').querySelectorAll('[data-pubev]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'places',b.dataset.pubev),{ publicEvent: b.dataset.on!=='1' }); loadPlaces(); });
   $('placesTable').querySelectorAll('[data-approveown]').forEach((b)=> b.onclick = async ()=>{ const p=(cache.places||[]).find(x=>x.id===b.dataset.approveown); await updateDoc(doc(db,'places',b.dataset.approveown),{ ownerUid: p.pendingOwnerUid, pendingOwnerUid: null, status:'approved' }); loadPlaces(); });
   $('placesTable').querySelectorAll('[data-del-place]').forEach((b)=> b.onclick = async ()=>{ if(confirm('Delete this place?')){ await deleteDoc(doc(db,'places',b.dataset.delPlace)); loadPlaces(); } });
@@ -1025,6 +1045,54 @@ async function loadVouchers() {
   $('vouchersTable').querySelectorAll('[data-redeem]').forEach((b)=> b.onclick = async ()=>{ await updateDoc(doc(db,'voucherOrders',b.dataset.redeem),{status:'redeemed'}); loadVouchers(); });
 }
 $('voucherFilter').onchange = loadVouchers;
+
+// ---------- Redeem (scan / USB scanner / manual code) ----------
+function rdMoney(n,c){ const s={KWD:'KD',BHD:'BD',OMR:'OMR',SAR:'SAR',AED:'AED',QAR:'QAR',USD:'$',EUR:'€',GBP:'£'}[c]||c||''; return ['$','€','£'].includes(s)?`${s}${n}`:`${n} ${s}`; }
+async function rdFindByCode(coll, code){
+  try { const snap = await getDocs(query(collection(db, coll), where('code','==',code))); return snap.docs[0] ? { id:snap.docs[0].id, ...snap.docs[0].data() } : null; } catch(e){ return null; }
+}
+async function doRedeemLookup(raw){
+  const s=(raw||'').trim(); $('rd_err').textContent='';
+  if(!s){ $('rd_result').innerHTML=''; return; }
+  $('rd_result').innerHTML='Looking up…';
+  const parts=s.split(':');
+  try{
+    let kind=null, found=null;
+    if(s.startsWith('SPOTLY-V:')){ const d=await getDoc(doc(db,'voucherOrders',parts[1]||'')); if(d.exists()){ kind='voucher'; found={id:d.id,...d.data()}; } }
+    else if(s.startsWith('SPOTLY:')){ const d=await getDoc(doc(db,'bookings',parts[1]||'')); if(d.exists()){ kind='booking'; found={id:d.id,...d.data()}; } }
+    else { const code=s.toUpperCase(); const v=await rdFindByCode('voucherOrders',code); if(v){ kind='voucher'; found=v; } else { const b=await rdFindByCode('bookings',code); if(b){ kind='booking'; found=b; } } }
+    if(!found){ $('rd_result').innerHTML='<div class="muted-note">No matching booking or voucher for your branch.</div>'; return; }
+    renderRedeem(kind, found);
+  }catch(e){ $('rd_result').innerHTML=''; $('rd_err').textContent='Not found, or not one of your branches.'; }
+}
+function renderRedeem(kind, x){
+  const redeemed = x.status==='redeemed';
+  const title = kind==='voucher' ? (x.label||x.placeName||'Voucher') : (x.familyName||x.placeName||'Booking');
+  const sub = kind==='voucher' ? `${rdMoney(x.price,x.currencyCode)} → ${rdMoney(x.value,x.currencyCode)} · ${esc(x.placeName||'')}` : `${esc(x.placeName||'')} · ${esc(x.date||'')} ${esc(x.time||'')}`;
+  $('rd_result').innerHTML = `<div class="panel" style="margin-top:0;border:1px solid var(--line)">
+    <div style="font-weight:800;font-size:16px">${esc(title)} <span class="pill ${kind==='voucher'?'ok':'req'}" style="font-size:10px">${kind}</span></div>
+    <div style="color:var(--ink3);font-size:13px;margin-top:4px">${sub}</div>
+    <div style="margin-top:6px;font-family:monospace;color:var(--ink2)">${esc(x.code||'')}</div>
+    <div style="margin-top:12px">${redeemed?'<span class="pill ok" style="font-size:13px;padding:6px 12px">Already redeemed</span>':`<button class="btn sage" data-dorx="${kind}:${esc(x.id)}">✓ Mark redeemed</button>`}</div>
+  </div>`;
+  const btn=$('rd_result').querySelector('[data-dorx]');
+  if(btn) btn.onclick=async()=>{ const i=btn.dataset.dorx.indexOf(':'); const k=btn.dataset.dorx.slice(0,i); const id=btn.dataset.dorx.slice(i+1); try{ await updateDoc(doc(db, k==='voucher'?'voucherOrders':'bookings', id), { status:'redeemed', redeemedAt: serverTimestamp() }); $('rd_result').innerHTML='<div class="pill ok" style="font-size:15px;padding:10px 16px">✓ Redeemed</div>'; $('rd_code').value=''; setTimeout(()=>$('rd_code')&&$('rd_code').focus(),50); }catch(e){ $('rd_err').textContent=e.message.replace('Firebase: ',''); } };
+}
+let rdScanner=null;
+async function startRdScan(){
+  $('rd_err').textContent='';
+  if(!window.Html5Qrcode){ $('rd_err').textContent='Scanner not loaded — type or use a USB scanner.'; return; }
+  if(rdScanner){ try{ await rdScanner.stop(); }catch{} rdScanner=null; $('rd_reader').innerHTML=''; $('rd_scan').textContent='📷 Scan with camera'; return; }
+  try{
+    rdScanner = new Html5Qrcode('rd_reader');
+    $('rd_scan').textContent='✕ Stop camera';
+    await rdScanner.start({ facingMode:'environment' }, { fps:10, qrbox:240 }, async (decoded)=>{ try{ await rdScanner.stop(); }catch{} rdScanner=null; $('rd_reader').innerHTML=''; $('rd_scan').textContent='📷 Scan with camera'; $('rd_code').value=decoded; doRedeemLookup(decoded); }, ()=>{});
+  }catch(e){ $('rd_err').textContent='Camera error: '+(e.message||e); rdScanner=null; $('rd_scan').textContent='📷 Scan with camera'; }
+}
+function loadRedeem(){ $('rd_result').innerHTML=''; $('rd_err').textContent=''; const c=$('rd_code'); if(c){ c.value=''; setTimeout(()=>c.focus(),60); } }
+$('rd_find').onclick=()=> doRedeemLookup($('rd_code').value);
+$('rd_code').addEventListener('keydown',(e)=>{ if(e.key==='Enter') doRedeemLookup($('rd_code').value); });
+$('rd_scan').onclick=startRdScan;
 
 // ---------- Orders ----------
 const OSTAT = ['received','in_production','shipped','delivered','cancelled'];
