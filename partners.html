@@ -113,6 +113,7 @@
       <h1 id="pageTitle">Dashboard</h1>
       <div style="display:flex;align-items:center;gap:16px">
         <span class="who" id="who"></span>
+        <button class="btn ghost sm" id="refreshBtn" title="Refresh">↻ Refresh</button>
         <button class="btn ghost sm" id="signout">Sign out</button>
       </div>
     </div>
@@ -378,12 +379,15 @@ $('signout').onclick = () => signOut(auth);
 
 // ---------- Navigation ----------
 const TITLES = { dashboard:'Dashboard', places:'Places', bookings:'Bookings', vouchers:'Voucher sales', redeem:'Redeem', team:'Team', orders:'Album orders', campaigns:'Campaigns', events:'Hotspots', reports:'Reports' };
+let currentView = 'dashboard';
 $('nav').addEventListener('click', (e) => { const b = e.target.closest('button[data-view]'); if (b) show(b.dataset.view); });
+$('refreshBtn').onclick = () => show(currentView);
 function show(view) {
   // Guards: non-admins can't open admin-only views; only owner/country/admin see Team.
   if (!me.isAdmin && ['orders','campaigns','events','reports'].includes(view)) view = 'dashboard';
   const canTeam = me.isAdmin || me.role === 'owner' || me.role === 'country_manager';
   if (view === 'team' && !canTeam) view = 'dashboard';
+  currentView = view;
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.content > section').forEach((s) => s.classList.add('hide'));
   $('view-' + view).classList.remove('hide');
