@@ -249,7 +249,7 @@ export function MerchantHomeScreen() {
             <StatTile n={totals.clicks} label={t('mh.statClicks')} color={C.sun} onPress={() => push('merchantInsights', { metric: 'clicks' })} />
             <StatTile n={totals.bookings} label={t('mh.statBookings')} color={C.coral} onPress={() => push('merchantInsights', { metric: 'bookings' })} />
             <StatTile n={totals.sold} label={t('mh.statVouchers')} color={C.sun} onPress={() => push('merchantInsights', { metric: 'vouchers' })} />
-            <StatTile n={totals.clients} label={t('mh.statClients')} color={C.plum} />
+            <StatTile n={totals.clients} label={t('mh.statClients')} color={C.plum} onPress={() => push('merchantInsights', { metric: 'clients' })} />
           </View>
           {revenueLabel ? (
             <Pressable onPress={() => push('merchantInsights', { metric: 'revenue' })} style={{ marginTop: 12, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

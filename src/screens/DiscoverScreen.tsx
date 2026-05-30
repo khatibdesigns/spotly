@@ -203,6 +203,11 @@ export function DiscoverScreen() {
   const feedY = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = () => { setRefreshing(true); Promise.resolve(reload()).finally(() => setRefreshing(false)); };
+  // Lazy-render the feed in chunks (Android jank with 100s of cards) + a
+  // scroll-to-top button once scrolled down. Both setState calls bail out when
+  // the value is unchanged, so they're cheap on every scroll event.
+  const [feedLimit, setFeedLimit] = useState(12);
+  const [showTop, setShowTop] = useState(false);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t('discover.morning') : hour < 18 ? t('discover.afternoon') : t('discover.evening');
 
@@ -235,6 +240,15 @@ export function DiscoverScreen() {
     };
     return [...dining].sort((a, b) => Number(matches(b)) - Number(matches(a))).slice(0, 8);
   })();
+
+  // Reset how many feed cards are mounted when the result set changes.
+  useEffect(() => { setFeedLimit(12); }, [q, filters, searched.length]);
+  const onMainScroll = (e: any) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const y = contentOffset.y;
+    setShowTop(y > 700);
+    if (contentSize.height - (y + layoutMeasurement.height) < 900) setFeedLimit((l) => (l < feed.length ? l + 12 : l));
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -304,7 +318,7 @@ export function DiscoverScreen() {
           <Text style={{ marginTop: 12, color: C.ink3, fontFamily: F.semibold }}>{t('discover.finding')}</Text>
         </View>
       ) : (
-        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.coral} colors={[C.coral]} />}>
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }} onScroll={onMainScroll} scrollEventThrottle={32} removeClippedSubviews refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.coral} colors={[C.coral]} />}>
           {/* Strict AI screening of newly-seen places (first visit to an area). */}
           {screening ? (
             <View style={{ marginHorizontal: 20, marginBottom: 6, padding: 12, borderRadius: R.lg, backgroundColor: C.surface, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -367,13 +381,25 @@ export function DiscoverScreen() {
           {feed.length ? (
             <View style={{ paddingHorizontal: 20, gap: 14 }} onLayout={(e) => { feedY.current = e.nativeEvent.layout.y; }}>
               <Text style={{ fontFamily: F.serif, fontSize: 22, color: C.ink, letterSpacing: -0.5 }}>{t('discover.pickedFor', { names: kidNames(profile) })}</Text>
-              {feed.map((s) => <FeedCard key={s.id} spot={s} onPress={() => open(s)} />)}
+              {feed.slice(0, feedLimit).map((s) => <FeedCard key={s.id} spot={s} onPress={() => open(s)} />)}
+              {feed.length > feedLimit ? (
+                <Pressable onPress={() => setFeedLimit((l) => l + 12)} style={{ alignItems: 'center', paddingVertical: 14 }}>
+                  <Text style={{ color: C.coralDk, fontFamily: F.bold, fontSize: 13.5 }}>{t('discover.showMore')}</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : (
             <Empty hasFilters={filters.size > 0} onClear={clearFilters} onRetry={reload} />
           )}
         </ScrollView>
       )}
+
+      {/* Scroll to top */}
+      {!loading && showTop ? (
+        <Pressable onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })} style={{ position: 'absolute', right: 18, bottom: insets.bottom + 92, width: 46, height: 46, borderRadius: 23, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 5 }}>
+          <Text style={{ color: '#fff', fontSize: 20, lineHeight: 22, fontFamily: F.bold }}>↑</Text>
+        </Pressable>
+      ) : null}
 
       {/* Location picker — search any city/area, or use my location */}
       <Modal visible={locOpen} transparent animationType="slide" onRequestClose={() => setLocOpen(false)}>

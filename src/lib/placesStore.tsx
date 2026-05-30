@@ -1,7 +1,13 @@
 // Spotly — shared nearby-places state (location + spots + filters), used by
 // Discover, Map, and Place detail. Loads once when the authed app mounts.
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserLocation, getSpots, getScreenVerdicts, requestScreen, KUWAIT_CITY, Spot, UserLoc } from './places';
+
+// Short-lived local cache of the last shown spots so reopening the app paints
+// instantly while a fresh fetch runs in the background. Only the small display
+// snapshot is cached; verdicts/screening still come from Firestore.
+const SPOTS_CACHE_KEY = 'spotly.spots.v1';
 
 // Kind filters (activity / dining / shop / stay) — OR among themselves.
 const KIND_OF: Record<string, Spot['kind']> = {
@@ -79,14 +85,23 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
   // show and are never screened. Verdicts are cached in Firestore forever, so
   // each place is screened once — over time the cache becomes a full vetted DB
   // and screening rarely runs.
+  // Mirror of `spots` so callbacks can read the current list without re-creating.
+  const spotsRef = useRef<Spot[]>([]);
+  const applySpots = useCallback((list: Spot[]) => { spotsRef.current = list; setSpots(list); }, []);
+  const cacheSpots = (list: Spot[], l: UserLoc) => {
+    AsyncStorage.setItem(SPOTS_CACHE_KEY, JSON.stringify({ spots: list.slice(0, 80), loc: l, ts: Date.now() })).catch(() => {});
+  };
+
   const screenable = (x: Spot) => x.source === 'google' && !x.ownerUid && !!x.id;
-  const applyAndScreen = useCallback(async (raw: Spot[]) => {
+  const applyAndScreen = useCallback(async (raw: Spot[], l: UserLoc) => {
     const ids = raw.filter(screenable).map((x) => x.id);
     const verdicts = await getScreenVerdicts(ids); // cached id -> keep
     const approved = new Set<string>();
     for (const [id, keep] of verdicts) if (keep) approved.add(id);
     // STRICT: show non-screenable (curated/claimed) + cached-approved only.
-    setSpots(raw.filter((x) => !screenable(x) || approved.has(x.id)));
+    const initial = raw.filter((x) => !screenable(x) || approved.has(x.id));
+    applySpots(initial);
+    cacheSpots(initial, l);
     const unseen = raw.filter((x) => screenable(x) && !verdicts.has(x.id));
     if (unseen.length) {
       setScreening(true);
@@ -94,20 +109,22 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
         .then((res) => {
           for (const [id, keep] of res) if (keep) approved.add(id);
           // Re-derive from raw so order (distance/promoted) is preserved.
-          setSpots(raw.filter((x) => !screenable(x) || approved.has(x.id)));
+          const next = raw.filter((x) => !screenable(x) || approved.has(x.id));
+          applySpots(next);
+          cacheSpots(next, l);
         })
         .catch(() => {})
         .finally(() => setScreening(false));
     }
-  }, []);
+  }, [applySpots]);
 
   const reload = useCallback(async () => {
-    setLoading(true);
+    if (!spotsRef.current.length) setLoading(true); // only the cold, cache-less load shows the full spinner
     const l = await getUserLocation();
     setLoc(l);
     setAreaLabel(null); // back on the user's own location
     const s = await getSpots(l);
-    await applyAndScreen(s);
+    await applyAndScreen(s, l);
     setLoading(false);
   }, [applyAndScreen]);
 
@@ -118,13 +135,27 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
     setLoc(l);
     setAreaLabel(label ?? null);
     const s = await getSpots(l);
-    await applyAndScreen(s);
+    await applyAndScreen(s, l);
     setLoading(false);
   }, [applyAndScreen]);
 
+  // On launch: paint the cached spots instantly (if any), then refresh in the
+  // background. Reopening the app therefore shows places immediately instead of
+  // waiting ~10s for GPS + the Google calls + screening.
   useEffect(() => {
-    reload();
-  }, [reload]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const rawC = await AsyncStorage.getItem(SPOTS_CACHE_KEY);
+        if (!cancelled && rawC) {
+          const c = JSON.parse(rawC);
+          if (Array.isArray(c?.spots) && c.spots.length) { applySpots(c.spots); if (c.loc) setLoc(c.loc); setLoading(false); }
+        }
+      } catch {}
+      if (!cancelled) reload(); // spotsRef is now populated → reload won't flash the spinner
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const toggleFilter = useCallback((id: string) => {
     setFilters((prev) => {

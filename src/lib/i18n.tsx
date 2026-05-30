@@ -562,6 +562,9 @@ const EN: Record<string, string> = {
   'insights.next7': 'Projected next 7 days',
   'insights.estimate': 'Estimate based on your recent trend.',
   'insights.byBranch': 'By branch',
+  'insights.guest': 'Guest',
+  'insights.clientStats': '{b} bookings · {v} vouchers',
+  'discover.showMore': 'Show more',
   // discover promoted badge
   'discover.promoted': 'PROMOTED',
   // QR / booking pass

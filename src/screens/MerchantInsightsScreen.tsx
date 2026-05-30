@@ -11,15 +11,16 @@ import { useStore } from '../lib/store';
 import { useI18n } from '../lib/i18n';
 import { useMerchant } from '../lib/merchant';
 import { formatMoney } from '../lib/currency';
-import { Metric, Point, buildSeries, forecast, sumSeries, trendPct, perBranch } from '../lib/insights';
+import { Metric, Point, ClientRow, buildSeries, forecast, sumSeries, trendPct, perBranch, clientList } from '../lib/insights';
 
 const DAYS = 30;
-const META: Record<Metric, { title: string; list: 'bookings' | 'vouchers' | null }> = {
+const META: Record<Metric, { title: string; list: 'bookings' | 'vouchers' | 'clients' | null }> = {
   views: { title: 'Views', list: null },
   clicks: { title: 'Direction clicks', list: null },
   bookings: { title: 'Bookings', list: 'bookings' },
   vouchers: { title: 'Vouchers sold', list: 'vouchers' },
   revenue: { title: 'Voucher revenue', list: 'vouchers' },
+  clients: { title: 'Clients', list: 'clients' },
 };
 
 function TrendChart({ history, fc }: { history: Point[]; fc: Point[] }) {
@@ -56,7 +57,8 @@ export function MerchantInsightsScreen() {
 
   const series = useMemo(() => buildSeries(metric, { days: DAYS, placeIds, bookings, vouchers: voucherSales, stats }), [metric, placeIds, bookings, voucherSales, stats]);
   const fc = useMemo(() => forecast(series, 7), [series]);
-  const total = sumSeries(series);
+  const clients = useMemo(() => (metric === 'clients' ? clientList({ placeIds, bookings, vouchers: voucherSales }) : []), [metric, placeIds, bookings, voucherSales]);
+  const total = metric === 'clients' ? clients.length : sumSeries(series);
   const pct = trendPct(series);
   const fcTotal = sumSeries(fc);
   const branches = useMemo(() => (places.length > 1 ? perBranch(metric, { days: DAYS, places, bookings, vouchers: voucherSales, stats }) : []), [metric, places, bookings, voucherSales, stats]);
@@ -66,6 +68,8 @@ export function MerchantInsightsScreen() {
     ? [...bookings].filter((b) => !b.placeId || placeIds.includes(b.placeId)).slice(0, 40)
     : meta.list === 'vouchers'
     ? [...voucherSales].filter((v) => !v.placeId || placeIds.includes(v.placeId)).slice(0, 40)
+    : meta.list === 'clients'
+    ? clients.slice(0, 80)
     : [];
 
   return (
@@ -130,7 +134,7 @@ export function MerchantInsightsScreen() {
         {/* Underlying list */}
         {meta.list && listRows.length ? (
           <View style={{ paddingHorizontal: 20, marginTop: 22 }}>
-            <Text style={{ fontFamily: F.serif, fontSize: 19, color: C.ink, letterSpacing: -0.3 }}>{meta.list === 'bookings' ? t('mh.bookings') : t('mh.voucherSales')}</Text>
+            <Text style={{ fontFamily: F.serif, fontSize: 19, color: C.ink, letterSpacing: -0.3 }}>{meta.list === 'bookings' ? t('mh.bookings') : meta.list === 'clients' ? t('mh.statClients') : t('mh.voucherSales')}</Text>
             <View style={{ gap: 8, marginTop: 12 }}>
               {meta.list === 'bookings'
                 ? (listRows as any[]).map((b) => (
@@ -140,6 +144,19 @@ export function MerchantInsightsScreen() {
                         <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{b.placeName} · {b.date} · {b.time}</Text>
                       </View>
                       <Text style={{ fontSize: 11, fontFamily: F.bold, color: b.status === 'redeemed' ? C.sage : b.status === 'confirmed' ? C.sky : C.ink3 }}>{b.status}</Text>
+                    </View>
+                  ))
+                : meta.list === 'clients'
+                ? (listRows as ClientRow[]).map((c) => (
+                    <View key={c.uid} style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 13, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, SH.card]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.ink }}>{c.name || t('insights.guest')}</Text>
+                        <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{t('insights.clientStats', { b: c.bookings, v: c.vouchers } as any)}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        {c.spend > 0 ? <Text style={{ fontFamily: F.extrabold, fontSize: 14, color: C.ink }}>{formatMoney(Math.round(c.spend), c.currency || currency)}</Text> : null}
+                        <Text style={{ fontSize: 11, color: C.ink3, fontFamily: F.regular }}>{c.lastTs ? new Date(c.lastTs).toLocaleDateString() : ''}</Text>
+                      </View>
                     </View>
                   ))
                 : (listRows as any[]).map((v) => (

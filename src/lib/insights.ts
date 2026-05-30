@@ -4,8 +4,9 @@
 import { MerchantBooking, MerchantVoucherSale, MerchantPlace } from './merchant';
 import { PlaceStat } from './stats';
 
-export type Metric = 'views' | 'clicks' | 'bookings' | 'vouchers' | 'revenue';
+export type Metric = 'views' | 'clicks' | 'bookings' | 'vouchers' | 'revenue' | 'clients';
 export type Point = { date: string; value: number; forecast?: boolean };
+export type ClientRow = { uid: string; name?: string; bookings: number; vouchers: number; spend: number; currency?: string; lastTs: number };
 
 const toMillis = (ts: any): number => (ts?.toMillis ? ts.toMillis() : typeof ts === 'number' ? ts : (ts?.seconds ? ts.seconds * 1000 : 0));
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -33,6 +34,14 @@ export function buildSeries(metric: Metric, opts: SeriesOpts): Point[] {
   const map: Record<string, number> = {};
   keys.forEach((k) => (map[k] = 0));
   const inScope = (pid?: string) => !pid || idset.has(pid);
+  if (metric === 'clients') {
+    // Unique customers (uid) per day across bookings + voucher sales.
+    const perDay: Record<string, Set<string>> = {}; keys.forEach((k) => (perDay[k] = new Set()));
+    const add = (pid?: string, uid?: string, ts?: any) => { if (!inScope(pid) || !uid) return; const k = dayKey(new Date(toMillis(ts))); if (perDay[k]) perDay[k].add(uid); };
+    bookings.forEach((b) => add(b.placeId, b.uid, b.createdAt));
+    vouchers.forEach((v) => add(v.placeId, v.uid, v.createdAt));
+    return keys.map((k) => ({ date: k, value: perDay[k].size }));
+  }
   if (metric === 'bookings') {
     bookings.forEach((b) => { if (!inScope(b.placeId)) return; const k = dayKey(new Date(toMillis(b.createdAt))); if (k in map) map[k] += 1; });
   } else if (metric === 'vouchers') {
@@ -47,6 +56,17 @@ export function buildSeries(metric: Metric, opts: SeriesOpts): Point[] {
 }
 
 export const sumSeries = (s: Point[]): number => s.reduce((a, p) => a + p.value, 0);
+
+// Aggregate unique customers across bookings + voucher sales, scoped to placeIds.
+export function clientList(opts: { placeIds: string[]; bookings: MerchantBooking[]; vouchers: MerchantVoucherSale[] }): ClientRow[] {
+  const idset = new Set(opts.placeIds);
+  const inScope = (pid?: string) => !pid || idset.has(pid);
+  const m: Record<string, ClientRow> = {};
+  const ensure = (uid: string) => (m[uid] || (m[uid] = { uid, bookings: 0, vouchers: 0, spend: 0, lastTs: 0 }));
+  opts.bookings.forEach((b) => { if (!inScope(b.placeId) || !b.uid) return; const r = ensure(b.uid); r.bookings++; if (b.familyName && !r.name) r.name = b.familyName; r.lastTs = Math.max(r.lastTs, toMillis(b.createdAt)); });
+  opts.vouchers.forEach((v) => { if (!inScope(v.placeId) || !v.uid) return; const r = ensure(v.uid); r.vouchers++; r.spend += v.price || 0; r.currency = v.currencyCode || r.currency; r.lastTs = Math.max(r.lastTs, toMillis(v.createdAt)); });
+  return Object.values(m).sort((a, b) => b.lastTs - a.lastTs);
+}
 
 // % change of the most recent half-window vs the half before it.
 export function trendPct(series: Point[]): number {
@@ -79,6 +99,11 @@ export function forecast(series: Point[], ahead: number): Point[] {
 export type BranchTotal = { place: MerchantPlace; total: number };
 export function perBranch(metric: Metric, opts: { days: number; places: MerchantPlace[] } & Omit<SeriesOpts, 'placeIds'>): BranchTotal[] {
   return opts.places
-    .map((p) => ({ place: p, total: sumSeries(buildSeries(metric, { days: opts.days, placeIds: [p.id], bookings: opts.bookings, vouchers: opts.vouchers, stats: opts.stats })) }))
+    .map((p) => ({
+      place: p,
+      total: metric === 'clients'
+        ? clientList({ placeIds: [p.id], bookings: opts.bookings, vouchers: opts.vouchers }).length
+        : sumSeries(buildSeries(metric, { days: opts.days, placeIds: [p.id], bookings: opts.bookings, vouchers: opts.vouchers, stats: opts.stats })),
+    }))
     .sort((a, b) => b.total - a.total);
 }
