@@ -23,6 +23,7 @@ export type RouteName =
   | 'merchantTeam'
   | 'merchantClaim'
   | 'merchantScan'
+  | 'merchantInsights'
   | 'purchases';
 
 export type Route = { name: RouteName; params?: any };

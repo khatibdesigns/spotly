@@ -88,6 +88,7 @@ type MerchantState = {
   rejectClaim: (placeId: string) => Promise<void>;
   inviteManager: (email: string, role: MerchantRole, scope: any) => Promise<void>;
   removeMember: (uid: string) => Promise<void>;
+  refresh: () => void;
 };
 
 const Ctx = createContext<MerchantState | null>(null);
@@ -103,6 +104,8 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
   const [stats, setStats] = useState<Record<string, PlaceStat>>({});
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [invites, setInvites] = useState<TeamInvite[]>([]);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
 
   const role = (merchant?.role || (merchant ? 'owner' : '')) as MerchantRole | '';
   const orgId = merchant?.orgId || user?.uid || '';
@@ -188,7 +191,7 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     fetchByPlaceIds('bookings', managedIds).then((rows) => { if (!cancelled) setBookings(sortByCreated(rows)); });
     return () => { cancelled = true; };
-  }, [user, merchant, role, JSON.stringify(managedIds)]);
+  }, [user, merchant, role, JSON.stringify(managedIds), refreshTick]);
 
   useEffect(() => {
     if (!user || !firestore || !merchant) { setVoucherSales([]); return; }
@@ -199,7 +202,7 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     fetchByPlaceIds('voucherOrders', managedIds).then((rows) => { if (!cancelled) setVoucherSales(sortByCreated(rows)); });
     return () => { cancelled = true; };
-  }, [user, merchant, role, JSON.stringify(managedIds)]);
+  }, [user, merchant, role, JSON.stringify(managedIds), refreshTick]);
 
   // Team (owner/country see their org's members + pending invites).
   useEffect(() => {
@@ -308,8 +311,8 @@ export function MerchantProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<MerchantState>(() => ({
     merchant, isMerchant: !!merchant, loading, role, orgId, scope,
     places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, members, invites,
-    createMerchant, claimBranch, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed, setLive, approveClaim, rejectClaim, inviteManager, removeMember,
-  }), [merchant, loading, role, orgId, scope, places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, members, invites, createMerchant, claimBranch, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed, setLive, approveClaim, rejectClaim, inviteManager, removeMember]);
+    createMerchant, claimBranch, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed, setLive, approveClaim, rejectClaim, inviteManager, removeMember, refresh,
+  }), [merchant, loading, role, orgId, scope, places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, members, invites, createMerchant, claimBranch, requestPromotion, markRedeemed, confirmBooking, setPlaceVouchers, markVoucherRedeemed, setLive, approveClaim, rejectClaim, inviteManager, removeMember, refresh]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

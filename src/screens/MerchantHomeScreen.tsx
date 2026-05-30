@@ -1,8 +1,8 @@
 // Spotly — merchant dashboard. Their places (status + performance + promote),
 // and incoming bookings (confirm / mark redeemed). One login, routed here when
 // a merchants/{uid} doc exists.
-import React from 'react';
-import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, Pressable, Alert, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, F, R, SH } from '../lib/theme';
@@ -20,12 +20,16 @@ function statusMeta(s: string, t: (k: string) => string) {
   return { label: t('mh.pending'), c: C.ink2, bg: C.surface2 };
 }
 
-function StatTile({ n, label, color }: { n: number; label: string; color: string }) {
+function StatTile({ n, label, color, onPress }: { n: number; label: string; color: string; onPress?: () => void }) {
+  const Cmp: any = onPress ? Pressable : View;
   return (
-    <View style={{ flex: 1, minWidth: 92, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 12 }}>
-      <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 22, lineHeight: 24 }}>{n}</Text>
+    <Cmp onPress={onPress} style={{ flex: 1, minWidth: 92, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 22, lineHeight: 24 }}>{n}</Text>
+        {onPress ? <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>›</Text> : null}
+      </View>
       <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10.5, fontFamily: F.bold, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 3 }}>{label}</Text>
-    </View>
+    </Cmp>
   );
 }
 
@@ -163,9 +167,11 @@ function BookingCard({ b, onConfirm, onRedeem }: { b: MerchantBooking; onConfirm
 export function MerchantHomeScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
-  const { merchant, role, places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, requestPromotion, markRedeemed, confirmBooking, markVoucherRedeemed, setLive, approveClaim, rejectClaim } = useMerchant();
+  const { merchant, role, places, pendingPlaces, pendingApprovals, bookings, voucherSales, stats, requestPromotion, markRedeemed, confirmBooking, markVoucherRedeemed, setLive, approveClaim, rejectClaim, refresh } = useMerchant();
   const { t, lang, setLang } = useI18n();
   const { push } = useStore();
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(() => { setRefreshing(true); refresh(); setTimeout(() => setRefreshing(false), 900); }, [refresh]);
   const roleLabel = role === 'owner' ? t('mh.roleOwner') : role === 'country_manager' ? t('mh.roleCountry') : role === 'branch_manager' ? t('mh.roleBranch') : '';
   const canManageTeam = role === 'owner' || role === 'country_manager';
   const canPromote = role !== 'branch_manager';
@@ -216,7 +222,7 @@ export function MerchantHomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.coral} colors={[C.coral]} />}>
         {/* Header */}
         <LinearGradient colors={[C.ink, '#2b2b3a']} style={{ paddingTop: insets.top + 16, paddingBottom: 26, paddingHorizontal: 20 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -239,17 +245,20 @@ export function MerchantHomeScreen() {
 
           {/* Overview analytics */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 18 }}>
-            <StatTile n={totals.views} label={t('mh.statViews')} color={C.sky} />
-            <StatTile n={totals.clicks} label={t('mh.statClicks')} color={C.sun} />
-            <StatTile n={totals.bookings} label={t('mh.statBookings')} color={C.coral} />
-            <StatTile n={totals.sold} label={t('mh.statVouchers')} color={C.sun} />
+            <StatTile n={totals.views} label={t('mh.statViews')} color={C.sky} onPress={() => push('merchantInsights', { metric: 'views' })} />
+            <StatTile n={totals.clicks} label={t('mh.statClicks')} color={C.sun} onPress={() => push('merchantInsights', { metric: 'clicks' })} />
+            <StatTile n={totals.bookings} label={t('mh.statBookings')} color={C.coral} onPress={() => push('merchantInsights', { metric: 'bookings' })} />
+            <StatTile n={totals.sold} label={t('mh.statVouchers')} color={C.sun} onPress={() => push('merchantInsights', { metric: 'vouchers' })} />
             <StatTile n={totals.clients} label={t('mh.statClients')} color={C.plum} />
           </View>
           {revenueLabel ? (
-            <View style={{ marginTop: 12, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14 }}>
-              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10.5, fontFamily: F.bold, textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('mh.voucherRevenue')}</Text>
-              <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 22, marginTop: 3 }}>{revenueLabel}</Text>
-            </View>
+            <Pressable onPress={() => push('merchantInsights', { metric: 'revenue' })} style={{ marginTop: 12, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10.5, fontFamily: F.bold, textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('mh.voucherRevenue')}</Text>
+                <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 22, marginTop: 3 }}>{revenueLabel}</Text>
+              </View>
+              <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 16 }}>›</Text>
+            </Pressable>
           ) : null}
         </LinearGradient>
 

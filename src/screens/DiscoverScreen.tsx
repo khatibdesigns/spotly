@@ -1,6 +1,6 @@
 // Spotly — Discover. Real nearby places (Google Places + curated) with photos.
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Modal, AppState } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator, TextInput, Modal, AppState, RefreshControl } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -201,6 +201,8 @@ export function DiscoverScreen() {
   const [q, setQ] = useState('');
   const scrollRef = useRef<ScrollView>(null);
   const feedY = useRef(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = () => { setRefreshing(true); Promise.resolve(reload()).finally(() => setRefreshing(false)); };
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t('discover.morning') : hour < 18 ? t('discover.afternoon') : t('discover.evening');
 
@@ -302,7 +304,7 @@ export function DiscoverScreen() {
           <Text style={{ marginTop: 12, color: C.ink3, fontFamily: F.semibold }}>{t('discover.finding')}</Text>
         </View>
       ) : (
-        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.coral} colors={[C.coral]} />}>
           {/* Strict AI screening of newly-seen places (first visit to an area). */}
           {screening ? (
             <View style={{ marginHorizontal: 20, marginBottom: 6, padding: 12, borderRadius: R.lg, backgroundColor: C.surface, flexDirection: 'row', alignItems: 'center', gap: 10 }}>

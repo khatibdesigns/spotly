@@ -556,6 +556,12 @@ const EN: Record<string, string> = {
   'mscan.confirmBooking': 'Redeem this booking?',
   'mscan.doneTitle': 'Redeemed ✓',
   'mscan.doneMsg': 'Marked as redeemed.',
+  // insights / trends
+  'insights.last30': 'Last 30 days',
+  'insights.forecast': 'Forecast',
+  'insights.next7': 'Projected next 7 days',
+  'insights.estimate': 'Estimate based on your recent trend.',
+  'insights.byBranch': 'By branch',
   // discover promoted badge
   'discover.promoted': 'PROMOTED',
   // QR / booking pass

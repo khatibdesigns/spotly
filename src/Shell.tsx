@@ -41,6 +41,7 @@ import { PurchasesScreen } from './screens/PurchasesScreen';
 import { MerchantTeamScreen } from './screens/MerchantTeamScreen';
 import { MerchantClaimScreen } from './screens/MerchantClaimScreen';
 import { MerchantScanScreen } from './screens/MerchantScanScreen';
+import { MerchantInsightsScreen } from './screens/MerchantInsightsScreen';
 
 const OVERLAYS: Record<RouteName, React.ComponentType> = {
   place: PlaceScreen,
@@ -60,6 +61,7 @@ const OVERLAYS: Record<RouteName, React.ComponentType> = {
   merchantTeam: MerchantTeamScreen,
   merchantClaim: MerchantClaimScreen,
   merchantScan: MerchantScanScreen,
+  merchantInsights: MerchantInsightsScreen,
   purchases: PurchasesScreen,
 };
 
