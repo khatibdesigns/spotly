@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /join/
+
+Sitemap: https://meetspotly.com/sitemap.xml
