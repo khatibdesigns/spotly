@@ -44,3 +44,10 @@ footer{border-top:1px solid var(--line);padding:30px 0;color:var(--ink3);font-si
 footer .row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;max-width:1120px;margin:0 auto;padding:0 22px}
 footer a{color:var(--ink2);font-weight:600;margin-left:18px}
 @media(max-width:620px){.related{grid-template-columns:1fr}}
+
+/* Arabic / RTL */
+[dir="rtl"] body{font-family:"Cairo","Plus Jakarta Sans",sans-serif}
+[dir="rtl"] h1,[dir="rtl"] article h2,[dir="rtl"] .cta h2,[dir="rtl"] .serif{font-family:"Cairo",Georgia,serif;font-weight:700;letter-spacing:0}
+[dir="rtl"] article ul{padding-left:0;padding-right:22px}
+[dir="rtl"] footer a{margin-left:0;margin-right:18px}
+[dir="rtl"] .related a span{font-weight:500}
