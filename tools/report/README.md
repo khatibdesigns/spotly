@@ -27,8 +27,8 @@ Console light up as you grant access. Run it any time from the **Actions** tab �
 |---|---|---|
 | `FIREBASE_SA_JSON` | Paste the **entire** Firebase service-account JSON (`spotly-6ca9a-firebase-adminsdk-…json`) | ✅ |
 | `RESEND_API_KEY` | The `re_...` key from step 1 | ✅ |
-| `GA4_PROPERTY_ID` | GA4 numeric property id (step 4) | for GA4 section |
-| `GSC_SITE` | `sc-domain:meetspotly.com` | for SEO section |
+| `GA4_PROPERTY_ID` | GA4 **numeric** property id, e.g. `483920114` (step 4). `GA4_KEY` is also accepted. **Not** a `G-XXXX` id or an API key. | for GA4 section |
+| `GSC_SITE` | `sc-domain:meetspotly.com` (this is the default if unset) | for SEO section |
 | `REPORT_TO` | override recipient (defaults to nader@khatibdesigns.com) | optional |
 
 ### 3. Grant the service account read access

@@ -34,10 +34,11 @@ jobs:
           FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SA_JSON }}
           # Resend API key (https://resend.com → API Keys).
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          # GA4 numeric property ID (GA4 → Admin → Property settings). Optional.
-          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
-          # Search Console property. DNS-verified domain → "sc-domain:meetspotly.com".
-          GSC_SITE: ${{ secrets.GSC_SITE }}
+          # GA4 NUMERIC property ID (GA4 → Admin → Property settings). Accepts
+          # either secret name (GA4_PROPERTY_ID preferred; GA4_KEY also works).
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID || secrets.GA4_KEY }}
+          # Search Console property. Defaults to the DNS-verified domain property.
+          GSC_SITE: ${{ secrets.GSC_SITE || 'sc-domain:meetspotly.com' }}
           # Recipient + sender (sender defaults to the Resend onboarding domain).
           REPORT_TO: ${{ secrets.REPORT_TO }}
           REPORT_FROM: ${{ secrets.REPORT_FROM }}

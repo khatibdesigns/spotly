@@ -104,6 +104,12 @@ async function firestoreHealth() {
 
 async function ga4() {
   if (!GA4_PROPERTY_ID) return { configured: false };
+  // The GA4 Data API authenticates via the service account (FIREBASE_SA_JSON);
+  // there is no "GA4 API key". The only GA4-specific value is the NUMERIC
+  // property id. Catch a wrong value (e.g. a G-XXXX measurement id or an API key).
+  if (!/^\d+$/.test(GA4_PROPERTY_ID)) {
+    return { configured: true, error: `GA4 property id must be numeric (GA4 → Admin → Property Settings → Property ID), got "${GA4_PROPERTY_ID}". A G-XXXX measurement id or an API key won't work here.` };
+  }
   try {
     const client = new BetaAnalyticsDataClient({
       credentials: { client_email: sa.client_email, private_key: sa.private_key },
