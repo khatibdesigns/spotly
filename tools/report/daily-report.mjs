@@ -6,15 +6,16 @@
 //   2. GA4         → app + site usage (active users, sessions, sources)      [if GA4_PROPERTY_ID]
 //   3. SearchConsole → organic SEO (clicks, impressions, queries, position)  [if GSC_SITE]
 //
-// Then emails a styled HTML digest to REPORT_TO via Resend.
+// Then emails the digest to REPORT_TO via FormSubmit (no API key).
 //
 // Env:
-//   FIREBASE_SA_JSON  (required) — service-account JSON, whole file as a string
-//   RESEND_API_KEY    (required to actually send; without it, dry-run to stdout)
+//   GA4_KEY / GOOGLE_APPLICATION_CREDENTIALS  (required) — service-account JSON
+//                     (or a file path) with Firestore + GA4 + GSC access
+//   FIREBASE_SA_JSON  (optional) — separate Firestore SA if GA4_KEY can't read it
 //   REPORT_TO         (default nader@khatibdesigns.com)
-//   REPORT_FROM       (default "Spotly Reports <onboarding@resend.dev>")
-//   GA4_PROPERTY_ID   (optional) — numeric GA4 property id
-//   GSC_SITE          (optional) — e.g. "sc-domain:meetspotly.com"
+//   GA4_PROPERTY / GA4_PROPERTY_ID  (numeric GA4 property id; default 538818604 via workflow)
+//   GSC_SITE          (default "sc-domain:meetspotly.com")
+//   REPORT_DRYRUN     (set to print fields instead of sending)
 
 import fs from 'node:fs';
 import admin from 'firebase-admin';

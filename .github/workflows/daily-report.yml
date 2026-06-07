@@ -3,7 +3,7 @@ name: Spotly daily report
 # Emails a daily app-health + traffic report to nader@khatibdesigns.com.
 # Data: Firestore (app health) + GA4 (app/site usage) + Search Console (organic SEO).
 # Auth: the GA4_KEY secret (a service-account JSON) via GOOGLE_APPLICATION_CREDENTIALS,
-#       matching the existing SEO report's convention. Delivery: Resend.
+#       matching the existing SEO report's convention. Delivery: FormSubmit.
 on:
   schedule:
     - cron: '0 5 * * *' # 05:00 UTC = 08:00 Asia/Kuwait
