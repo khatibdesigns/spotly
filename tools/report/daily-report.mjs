@@ -453,25 +453,31 @@ async function send(subject, fields) {
     console.log(JSON.stringify(fields, null, 2));
     return;
   }
-  // FormSubmit AJAX endpoint — no API key. Origin/Referer are required or
-  // FormSubmit rejects server-side posts ("open this page through a web server").
-  const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(TO)}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json', Accept: 'application/json',
-      Origin: 'https://meetspotly.com', Referer: 'https://meetspotly.com/',
-    },
-    body: JSON.stringify({ _subject: subject, _template: 'table', _captcha: 'false', ...fields }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (body.success === true || body.success === 'true') { console.log('Sent via FormSubmit →', TO); return; }
-  // First-time use: FormSubmit emails an "Activate Form" link that must be
-  // clicked once. Treat that as a healthy run (delivery resumes after activation).
-  if (/activat/i.test(body.message || '')) {
-    console.log(`FormSubmit pending activation: ${body.message}\n→ Click the "Activate Form" link emailed to ${TO}, then re-run.`);
-    return;
+  // FormSubmit AJAX endpoint — no API key. A browser-like User-Agent + Origin/
+  // Referer are required: FormSubmit (behind Cloudflare) 403s server-side posts
+  // that look like a bot — e.g. GitHub Actions' datacenter IP with a "node" UA.
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    Origin: 'https://meetspotly.com',
+    Referer: 'https://meetspotly.com/',
+  };
+  const payload = JSON.stringify({ _subject: subject, _template: 'table', _captcha: 'false', ...fields });
+  let body = {};
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(TO)}`, { method: 'POST', headers, body: payload });
+    body = await res.json().catch(() => ({}));
+    if (body.success === true || body.success === 'true') { console.log('Sent via FormSubmit →', TO); return; }
+    // First-time use: FormSubmit emails an "Activate Form" link that must be
+    // clicked once. Treat that as a healthy run (delivery resumes after activation).
+    if (/activat/i.test(body.message || '')) {
+      console.log(`FormSubmit pending activation: ${body.message}\n→ Click the "Activate Form" link emailed to ${TO}, then re-run.`);
+      return;
+    }
+    console.error(`FormSubmit attempt ${attempt} failed (${res.status}):`, JSON.stringify(body));
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 2000));
   }
-  console.error('FormSubmit error', res.status, JSON.stringify(body));
   process.exit(1);
 }
 
