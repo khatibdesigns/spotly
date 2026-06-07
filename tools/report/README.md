@@ -1,34 +1,32 @@
 # Spotly daily report
 
 Emails a daily **app-health + traffic** digest to `nader@khatibdesigns.com`, every
-morning at **07:00 Kuwait** (04:00 UTC), via GitHub Actions → Resend.
+morning at **08:00 Kuwait** (05:00 UTC), via GitHub Actions → FormSubmit.
 
 - Workflow: [`.github/workflows/daily-report.yml`](../../.github/workflows/daily-report.yml)
 - Script: [`daily-report.mjs`](./daily-report.mjs)
-- Data: **Firestore** (always) + **GA4** (if configured) + **Search Console** (if configured)
+- Data: **Firestore** (always) + **GA4** (property 538818604) + **Search Console** (sc-domain:meetspotly.com)
 
-The report works the moment the two required secrets are set; GA4 and Search
-Console light up as you grant access. Run it any time from the **Actions** tab →
-*Spotly daily report* → **Run workflow**.
+Run it any time from the **Actions** tab → *Spotly daily report* → **Run workflow**.
 
 ---
 
 ## Setup checklist
 
-### 1. Resend (email) — required
-1. Sign up at <https://resend.com> using **nader@khatibdesigns.com** (so the
-   onboarding sender can deliver to you with zero domain setup).
-2. **API Keys → Create** → copy the `re_...` key.
+### 1. Email — FormSubmit (no API key)
+Delivery uses FormSubmit, so there's nothing to sign up for. The **first** send
+triggers a one-time **"Activate Form"** email to `nader@khatibdesigns.com` — click
+that link once and every future report is delivered. (The script posts with an
+`Origin`/`Referer` header, which FormSubmit requires for server-side calls.)
 
 ### 2. GitHub repo secrets
 `khatibdesigns/spotly` → **Settings → Secrets and variables → Actions → New repository secret**:
 
 | Secret | Value | Required |
 |---|---|---|
-| `GA4_KEY` | The **service-account JSON** (whole file) used to auth Firestore + GA4 + Search Console. Written to a file → `GOOGLE_APPLICATION_CREDENTIALS`, same convention as the existing SEO report. | ✅ |
-| `RESEND_API_KEY` | The `re_...` key from step 1 (delivers the email) | ✅ |
+| `GA4_KEY` | The **service-account JSON** (whole file) used to auth Firestore + GA4 + Search Console. Must be the spotly-6ca9a admin SA (`firebase-adminsdk-fbsvc@spotly-6ca9a…`) — the one granted GA4 + GSC access. | ✅ |
 | `FIREBASE_SA_JSON` | Optional **second** SA, only if the `GA4_KEY` SA can't read spotly-6ca9a Firestore (then Firestore uses this, GA4/GSC use `GA4_KEY`) | optional |
-| `GA4_PROPERTY` | GA4 **numeric** property id. Defaults to `540327946`. Not a `G-XXXX` id. | optional |
+| `GA4_PROPERTY` | GA4 **numeric** property id. Defaults to `538818604` (the Spotly property). Not a `G-XXXX` id. | optional |
 | `GSC_SITE` | Defaults to `sc-domain:meetspotly.com` | optional |
 | `REPORT_TO` | override recipient (defaults to nader@khatibdesigns.com) | optional |
 

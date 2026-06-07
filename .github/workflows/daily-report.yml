@@ -43,12 +43,10 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa-key.json
           # Optional: a separate Firestore SA if GA4_KEY can't read spotly-6ca9a.
           FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SA_JSON }}
-          # GA4 numeric property id (the existing report's value).
-          GA4_PROPERTY: ${{ secrets.GA4_PROPERTY || '540327946' }}
+          # GA4 numeric property id — the Spotly property (spotly-6ca9a).
+          GA4_PROPERTY: ${{ secrets.GA4_PROPERTY || '538818604' }}
           # Search Console property (DNS-verified domain).
           GSC_SITE: ${{ secrets.GSC_SITE || 'sc-domain:meetspotly.com' }}
-          # Email delivery.
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # Email delivery via FormSubmit (no API key needed).
           REPORT_TO: ${{ secrets.REPORT_TO || 'nader@khatibdesigns.com' }}
-          REPORT_FROM: ${{ secrets.REPORT_FROM }}
         run: node daily-report.mjs

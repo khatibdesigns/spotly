@@ -22,8 +22,6 @@ import { BetaAnalyticsDataClient } from '@google-analytics/data';
 import { google } from 'googleapis';
 
 const TO = process.env.REPORT_TO || 'nader@khatibdesigns.com';
-const FROM = process.env.REPORT_FROM || 'Spotly Reports <onboarding@resend.dev>';
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 // GA4 numeric property id (GA4_PROPERTY is the env name used by the existing
 // SEO report; GA4_PROPERTY_ID also accepted).
 const GA4_PROPERTY_ID = (process.env.GA4_PROPERTY_ID || process.env.GA4_PROPERTY || '').trim();
@@ -375,25 +373,67 @@ function buildText(h, g, s) {
   return L.join('\n');
 }
 
-// ---------------------------------------------------------------- send
+// ---------------------------------------------------------------- email fields
 
-async function send(subject, html, text) {
-  if (!RESEND_API_KEY) {
-    console.log('\n[dry-run] RESEND_API_KEY not set — printing report instead of emailing.\n');
-    console.log(text);
+// FormSubmit builds the email from posted fields (it can't render custom HTML),
+// so the report is sent as an ordered set of label→value rows that FormSubmit's
+// `table` template renders. Empty-value keys act as section headers.
+function buildFields(h, g, s, dateLabel) {
+  const td = (n) => (n == null ? 'n/a today' : `+${fmt(n)} today`);
+  const f = {};
+  f['Date'] = dateLabel;
+  f['▾ APP HEALTH'] = ' ';
+  f['Families'] = `${fmt(h.familiesTotal)}  (+${fmt(h.familiesNew24)} today · +${fmt(h.familiesNew7)} in 7 days)`;
+  f['Active devices'] = `${fmt(h.withFcm)}  (push-registered)`;
+  f['▾ ENGAGEMENT'] = ' ';
+  f['Plans built'] = `${fmt(h.plansTotal)}  (${td(h.plansNew24)})`;
+  f['Memories saved'] = `${fmt(h.memoriesTotal)}  (${td(h.memoriesNew24)})`;
+  f['Bookings'] = `${fmt(h.bookingsTotal)}  (${td(h.bookingsNew24)})`;
+  f['▾ CATALOG & AI SCREENING'] = ' ';
+  f['Curated places'] = fmt(h.placesTotal);
+  f['AI-vetted (kept)'] = `${fmt(h.screenedKept)} of ${fmt(h.screenedTotal)} screened  (keep rate ${pct(h.keptRatio)})`;
+  f['▾ TRAFFIC — ORGANIC SEARCH'] = '(meetspotly.com)';
+  if (s.configured && !s.error) {
+    f['Search (7d)'] = `${fmt(s.totals.clicks)} clicks · ${fmt(s.totals.impressions)} impressions · avg pos ${s.totals.position ? s.totals.position.toFixed(1) : '—'} · CTR ${pct(s.totals.ctr)}`;
+    if (s.queries?.length) f['Top query'] = `"${s.queries[0].q}" — ${fmt(s.queries[0].clicks)} clk / ${fmt(s.queries[0].impressions)} imp`;
+  } else f['Search Console'] = s.error ? `error: ${s.error}` : 'not connected';
+  f['▾ TRAFFIC — APP & SITE (GA4)'] = ' ';
+  if (g.configured && !g.error) {
+    f['Users (yesterday)'] = `${fmt(g.yesterday.activeUsers)} active · ${fmt(g.yesterday.newUsers)} new · ${fmt(g.yesterday.sessions)} sessions · ${fmt(g.yesterday.views)} views`;
+    f['Active users (7d)'] = fmt(g.last7.activeUsers);
+    if (g.channels?.length) f['Top channel (7d)'] = `${g.channels[0].name} — ${fmt(g.channels[0].sessions)} sessions`;
+  } else f['GA4'] = g.error ? `error: ${g.error}` : 'not connected';
+  return f;
+}
+
+// ---------------------------------------------------------------- send (FormSubmit)
+
+async function send(subject, fields) {
+  if (process.env.REPORT_DRYRUN) {
+    console.log('\n[dry-run] REPORT_DRYRUN set — not sending. Fields:\n');
+    console.log(JSON.stringify(fields, null, 2));
     return;
   }
-  const res = await fetch('https://api.resend.com/emails', {
+  // FormSubmit AJAX endpoint — no API key. Origin/Referer are required or
+  // FormSubmit rejects server-side posts ("open this page through a web server").
+  const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(TO)}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: [TO], subject, html, text }),
+    headers: {
+      'Content-Type': 'application/json', Accept: 'application/json',
+      Origin: 'https://meetspotly.com', Referer: 'https://meetspotly.com/',
+    },
+    body: JSON.stringify({ _subject: subject, _template: 'table', _captcha: 'false', ...fields }),
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    console.error('Resend error', res.status, JSON.stringify(body));
-    process.exit(1);
+  if (body.success === true || body.success === 'true') { console.log('Sent via FormSubmit →', TO); return; }
+  // First-time use: FormSubmit emails an "Activate Form" link that must be
+  // clicked once. Treat that as a healthy run (delivery resumes after activation).
+  if (/activat/i.test(body.message || '')) {
+    console.log(`FormSubmit pending activation: ${body.message}\n→ Click the "Activate Form" link emailed to ${TO}, then re-run.`);
+    return;
   }
-  console.log('Sent:', body.id || '(ok)', '→', TO);
+  console.error('FormSubmit error', res.status, JSON.stringify(body));
+  process.exit(1);
 }
 
 // ---------------------------------------------------------------- main
@@ -401,10 +441,7 @@ async function send(subject, html, text) {
 (async () => {
   const dateLabel = new Date(now).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kuwait' });
   const [h, g, s] = await Promise.all([firestoreHealth(), ga4(), searchConsole()]);
-  const html = buildHtml(h, g, s, dateLabel);
-  const text = buildText(h, g, s);
-  if (process.env.REPORT_HTML_OUT) { (await import('node:fs')).writeFileSync(process.env.REPORT_HTML_OUT, html); }
-  console.log(text); // always log to the Actions run for visibility/debugging
-  await send(`Spotly daily report — ${dateLabel}`, html, text);
+  console.log(buildText(h, g, s)); // always log to the Actions run for visibility/debugging
+  await send(`Spotly daily report — ${dateLabel}`, buildFields(h, g, s, dateLabel));
   process.exit(0);
 })().catch((e) => { console.error('FATAL', e); process.exit(1); });
