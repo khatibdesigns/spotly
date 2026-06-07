@@ -47,6 +47,8 @@ jobs:
           GA4_PROPERTY: ${{ secrets.GA4_PROPERTY || '538818604' }}
           # Search Console property (DNS-verified domain).
           GSC_SITE: ${{ secrets.GSC_SITE || 'sc-domain:meetspotly.com' }}
-          # Email delivery via FormSubmit (no API key needed).
+          # Email delivery. Web3Forms (free access key) works from CI; FormSubmit
+          # is the keyless fallback but Cloudflare 403s GitHub's datacenter IPs.
+          WEB3FORMS_KEY: ${{ secrets.WEB3FORMS_KEY }}
           REPORT_TO: ${{ secrets.REPORT_TO || 'nader@khatibdesigns.com' }}
         run: node daily-report.mjs

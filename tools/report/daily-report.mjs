@@ -453,6 +453,25 @@ async function send(subject, fields) {
     console.log(JSON.stringify(fields, null, 2));
     return;
   }
+  // Web3Forms works from datacenter IPs (GitHub Actions); FormSubmit is blocked
+  // there by Cloudflare. Prefer Web3Forms when a key is set, else fall back.
+  if (process.env.WEB3FORMS_KEY) return sendWeb3Forms(subject, fields);
+  return sendFormSubmit(subject, fields);
+}
+
+async function sendWeb3Forms(subject, fields) {
+  const res = await fetch('https://api.web3forms.com/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ access_key: process.env.WEB3FORMS_KEY, subject, from_name: 'Spotly Reports', ...fields }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (res.ok && body.success) { console.log('Sent via Web3Forms →', TO); return; }
+  console.error('Web3Forms error', res.status, JSON.stringify(body));
+  process.exit(1);
+}
+
+async function sendFormSubmit(subject, fields) {
   // FormSubmit AJAX endpoint — no API key. A browser-like User-Agent + Origin/
   // Referer are required: FormSubmit (behind Cloudflare) 403s server-side posts
   // that look like a bot — e.g. GitHub Actions' datacenter IP with a "node" UA.
