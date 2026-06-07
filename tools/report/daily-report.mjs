@@ -132,23 +132,24 @@ async function ga4() {
     const [totals] = await client.runReport({
       property,
       dateRanges: [
-        { startDate: 'yesterday', endDate: 'yesterday' },
-        { startDate: '7daysAgo', endDate: 'yesterday' },
+        { startDate: 'yesterday', endDate: 'yesterday' },     // date_range_0
+        { startDate: '7daysAgo', endDate: 'yesterday' },       // date_range_1 — last 7d
+        { startDate: '14daysAgo', endDate: '8daysAgo' },       // date_range_2 — prior 7d (for WoW)
       ],
       metrics: [
         { name: 'activeUsers' }, { name: 'newUsers' },
         { name: 'sessions' }, { name: 'screenPageViews' },
       ],
     });
-    const row1 = totals.rows?.find((r) => r.dimensionValues == null) || totals.rows?.[0];
     // With multiple date ranges, GA4 returns a dateRange dimension; map by it.
     const byRange = {};
     for (const r of totals.rows || []) {
       const rng = r.dimensionValues?.[0]?.value || 'date_range_0';
       byRange[rng] = r.metricValues.map((m) => Number(m.value || 0));
     }
-    const d1 = byRange['date_range_0'] || (row1 ? row1.metricValues.map((m) => Number(m.value || 0)) : [0, 0, 0, 0]);
+    const d1 = byRange['date_range_0'] || [0, 0, 0, 0];
     const d7 = byRange['date_range_1'] || [null, null, null, null];
+    const d7prev = byRange['date_range_2'] || [null, null, null, null];
 
     // Top acquisition channels over the last 7 days.
     const [chan] = await client.runReport({
@@ -168,6 +169,7 @@ async function ga4() {
       configured: true,
       yesterday: { activeUsers: d1[0], newUsers: d1[1], sessions: d1[2], views: d1[3] },
       last7: { activeUsers: d7[0], newUsers: d7[1], sessions: d7[2], views: d7[3] },
+      last7prev: { activeUsers: d7prev[0], newUsers: d7prev[1], sessions: d7prev[2], views: d7prev[3] },
       channels,
     };
   } catch (e) {
@@ -188,30 +190,52 @@ async function searchConsole() {
       scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
     });
     const sc = google.searchconsole({ version: 'v1', auth });
-    // GSC data lags ~2 days. Window: last 7 complete days ending 2 days ago.
-    const endDate = ymd(now - 2 * DAY);
-    const startDate = ymd(now - 9 * DAY);
+    // GSC data lags ~2 days. Compare the last 7 complete days to the 7 before.
+    const curEnd = ymd(now - 2 * DAY), curStart = ymd(now - 9 * DAY);
+    const prevEnd = ymd(now - 9 * DAY), prevStart = ymd(now - 16 * DAY);
+    const q = (start, end, body) => sc.searchanalytics.query({ siteUrl: GSC_SITE, requestBody: { startDate: start, endDate: end, ...body } });
 
-    const q = (body) => sc.searchanalytics.query({ siteUrl: GSC_SITE, requestBody: { startDate, endDate, ...body } });
-
-    const [totalsR, queriesR, pagesR, daysR] = await Promise.all([
-      q({}),
-      q({ dimensions: ['query'], rowLimit: 8 }),
-      q({ dimensions: ['page'], rowLimit: 5 }),
-      q({ dimensions: ['date'] }),
+    const [curTotR, prevTotR, curQR, prevQR, pagesR, daysR] = await Promise.all([
+      q(curStart, curEnd, {}),
+      q(prevStart, prevEnd, {}),
+      q(curStart, curEnd, { dimensions: ['query'], rowLimit: 25 }),
+      q(prevStart, prevEnd, { dimensions: ['query'], rowLimit: 25 }),
+      q(curStart, curEnd, { dimensions: ['page'], rowLimit: 5 }),
+      q(curStart, curEnd, { dimensions: ['date'] }),
     ]);
 
-    const tot = totalsR.data.rows?.[0] || { clicks: 0, impressions: 0, ctr: 0, position: 0 };
+    const cur = curTotR.data.rows?.[0] || { clicks: 0, impressions: 0, ctr: 0, position: 0 };
+    const prev = prevTotR.data.rows?.[0] || { clicks: 0, impressions: 0, ctr: 0, position: 0 };
     const days = (daysR.data.rows || []).map((r) => ({ date: r.keys[0], clicks: r.clicks, impressions: r.impressions }));
-    const latest = days[days.length - 1] || null;
+
+    // Rising queries: biggest impression gain vs the prior week.
+    const prevByQ = new Map((prevQR.data.rows || []).map((r) => [r.keys[0], r]));
+    const rising = (curQR.data.rows || [])
+      .map((r) => ({ q: r.keys[0], clicks: r.clicks, impressions: r.impressions, position: r.position, impDelta: r.impressions - (prevByQ.get(r.keys[0])?.impressions || 0) }))
+      .sort((a, b) => b.impDelta - a.impDelta).slice(0, 5);
+
+    // Index coverage from submitted sitemaps (submitted vs indexed urls).
+    let coverage = null;
+    try {
+      const sm = await sc.sitemaps.list({ siteUrl: GSC_SITE });
+      let submitted = 0, indexed = 0, errors = 0, warnings = 0, n = 0;
+      for (const s of (sm.data.sitemap || [])) {
+        n++; errors += Number(s.errors || 0); warnings += Number(s.warnings || 0);
+        for (const c of (s.contents || [])) { submitted += Number(c.submitted || 0); indexed += Number(c.indexed || 0); }
+      }
+      coverage = { sitemaps: n, submitted, indexed, errors, warnings };
+    } catch { /* no sitemaps yet */ }
 
     return {
       configured: true,
-      window: { startDate, endDate },
-      totals: { clicks: tot.clicks, impressions: tot.impressions, ctr: tot.ctr, position: tot.position },
-      latestDay: latest,
-      queries: (queriesR.data.rows || []).map((r) => ({ q: r.keys[0], clicks: r.clicks, impressions: r.impressions, position: r.position })),
+      window: { startDate: curStart, endDate: curEnd },
+      totals: { clicks: cur.clicks, impressions: cur.impressions, ctr: cur.ctr, position: cur.position },
+      prev: { clicks: prev.clicks, impressions: prev.impressions, ctr: prev.ctr, position: prev.position },
+      latestDay: days[days.length - 1] || null,
+      queries: (curQR.data.rows || []).slice(0, 8).map((r) => ({ q: r.keys[0], clicks: r.clicks, impressions: r.impressions, position: r.position })),
+      rising,
       pages: (pagesR.data.rows || []).map((r) => ({ url: r.keys[0], clicks: r.clicks, impressions: r.impressions })),
+      coverage,
     };
   } catch (e) {
     console.error('Search Console failed:', e.message);
@@ -360,17 +384,24 @@ function buildText(h, g, s) {
   L.push(`  Curated places: ${fmt(h.placesTotal)}`);
   L.push(`  AI-vetted kept: ${fmt(h.screenedKept)} of ${fmt(h.screenedTotal)} (keep rate ${pct(h.keptRatio)})`);
   L.push(`  Album orders: ${fmt(h.ordersTotal)} (+${fmt(h.ordersNew24)} today) · Voucher orders: ${fmt(h.voucherOrdersTotal)} (+${fmt(h.voucherOrdersNew24)} today)`);
-  L.push('TRAFFIC — SEARCH CONSOLE');
+  const dw = (c, p) => (p == null ? '' : ` (${c - p >= 0 ? '+' : ''}${fmt(c - p)} vs prior 7d)`);
+  L.push('TRAFFIC — SEARCH CONSOLE (7d vs prior 7d)');
   if (!s.configured) L.push('  (not connected — set GSC_SITE + grant access)');
   else if (s.error) L.push('  error: ' + s.error);
   else {
-    L.push(`  7d: ${fmt(s.totals.clicks)} clicks, ${fmt(s.totals.impressions)} impressions, avg pos ${s.totals.position?.toFixed(1)}, CTR ${pct(s.totals.ctr)}`);
+    L.push(`  Clicks: ${fmt(s.totals.clicks)}${dw(s.totals.clicks, s.prev?.clicks)} · Impressions: ${fmt(s.totals.impressions)}${dw(s.totals.impressions, s.prev?.impressions)}`);
+    L.push(`  Avg pos: ${s.totals.position ? s.totals.position.toFixed(1) : '—'}${s.prev?.position ? ` (was ${s.prev.position.toFixed(1)})` : ''} · CTR ${pct(s.totals.ctr)}`);
+    if (s.coverage) L.push(`  Indexed: ${fmt(s.coverage.indexed)} of ${fmt(s.coverage.submitted)} submitted${s.coverage.errors ? `, ${fmt(s.coverage.errors)} errors` : ''}`);
     s.queries.slice(0, 5).forEach((q) => L.push(`    "${q.q}" — ${fmt(q.clicks)} clk / ${fmt(q.impressions)} imp / #${q.position.toFixed(0)}`));
+    if (s.rising?.length && s.rising[0].impDelta > 0) L.push(`  Rising: "${s.rising[0].q}" +${fmt(s.rising[0].impDelta)} imp`);
   }
-  L.push('TRAFFIC — GA4');
-  if (!g.configured) L.push('  (not connected — set GA4_PROPERTY_ID + grant access)');
+  L.push('TRAFFIC — GA4 (7d vs prior 7d)');
+  if (!g.configured) L.push('  (not connected — set GA4_PROPERTY + grant access)');
   else if (g.error) L.push('  error: ' + g.error);
-  else L.push(`  yesterday: ${fmt(g.yesterday.activeUsers)} active, ${fmt(g.yesterday.newUsers)} new, ${fmt(g.yesterday.sessions)} sessions`);
+  else {
+    L.push(`  Yesterday: ${fmt(g.yesterday.activeUsers)} active, ${fmt(g.yesterday.newUsers)} new, ${fmt(g.yesterday.sessions)} sessions`);
+    L.push(`  7d active users: ${fmt(g.last7.activeUsers)}${dw(g.last7.activeUsers, g.last7prev?.activeUsers)}`);
+  }
   return L.join('\n');
 }
 
@@ -393,15 +424,22 @@ function buildFields(h, g, s, dateLabel) {
   f['▾ CATALOG & AI SCREENING'] = ' ';
   f['Curated places'] = fmt(h.placesTotal);
   f['AI-vetted (kept)'] = `${fmt(h.screenedKept)} of ${fmt(h.screenedTotal)} screened  (keep rate ${pct(h.keptRatio)})`;
-  f['▾ TRAFFIC — ORGANIC SEARCH'] = '(meetspotly.com)';
+  const wow = (cur, prev) => (prev == null || cur == null) ? '' : `  (${cur - prev >= 0 ? '+' : ''}${fmt(cur - prev)} vs prior 7d)`;
+  f['▾ TRAFFIC — ORGANIC SEARCH'] = '(meetspotly.com · 7d vs prior 7d)';
   if (s.configured && !s.error) {
-    f['Search (7d)'] = `${fmt(s.totals.clicks)} clicks · ${fmt(s.totals.impressions)} impressions · avg pos ${s.totals.position ? s.totals.position.toFixed(1) : '—'} · CTR ${pct(s.totals.ctr)}`;
+    f['Clicks (7d)'] = `${fmt(s.totals.clicks)}${wow(s.totals.clicks, s.prev?.clicks)}`;
+    f['Impressions (7d)'] = `${fmt(s.totals.impressions)}${wow(s.totals.impressions, s.prev?.impressions)}`;
+    f['Avg position'] = s.totals.position ? `${s.totals.position.toFixed(1)}${s.prev?.position ? `  (was ${s.prev.position.toFixed(1)})` : ''}` : '—';
+    f['CTR'] = pct(s.totals.ctr);
+    if (s.coverage) f['Pages indexed'] = `${fmt(s.coverage.indexed)} of ${fmt(s.coverage.submitted)} submitted${s.coverage.errors ? `  · ${fmt(s.coverage.errors)} errors` : ''}`;
     if (s.queries?.length) f['Top query'] = `"${s.queries[0].q}" — ${fmt(s.queries[0].clicks)} clk / ${fmt(s.queries[0].impressions)} imp`;
+    if (s.rising?.length && s.rising[0].impDelta > 0) f['Rising query'] = `"${s.rising[0].q}" — +${fmt(s.rising[0].impDelta)} impressions vs prior`;
   } else f['Search Console'] = s.error ? `error: ${s.error}` : 'not connected';
-  f['▾ TRAFFIC — APP & SITE (GA4)'] = ' ';
+  f['▾ TRAFFIC — APP & SITE (GA4)'] = '(7d vs prior 7d)';
   if (g.configured && !g.error) {
     f['Users (yesterday)'] = `${fmt(g.yesterday.activeUsers)} active · ${fmt(g.yesterday.newUsers)} new · ${fmt(g.yesterday.sessions)} sessions · ${fmt(g.yesterday.views)} views`;
-    f['Active users (7d)'] = fmt(g.last7.activeUsers);
+    f['Active users (7d)'] = `${fmt(g.last7.activeUsers)}${wow(g.last7.activeUsers, g.last7prev?.activeUsers)}`;
+    f['Sessions (7d)'] = `${fmt(g.last7.sessions)}${wow(g.last7.sessions, g.last7prev?.sessions)}`;
     if (g.channels?.length) f['Top channel (7d)'] = `${g.channels[0].name} — ${fmt(g.channels[0].sessions)} sessions`;
   } else f['GA4'] = g.error ? `error: ${g.error}` : 'not connected';
   return f;
