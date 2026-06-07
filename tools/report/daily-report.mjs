@@ -44,8 +44,13 @@ const gacPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 const saFirebase = process.env.FIREBASE_SA_JSON ? parseSA(process.env.FIREBASE_SA_JSON, 'FIREBASE_SA_JSON') : null;
 const saGa4 = process.env.GA4_KEY ? parseSA(process.env.GA4_KEY, 'GA4_KEY') : null;
 const saGac = (gacPath && fs.existsSync(gacPath)) ? parseSA(fs.readFileSync(gacPath, 'utf8'), 'GOOGLE_APPLICATION_CREDENTIALS') : null;
+const saGsc = process.env.GSC_SA_JSON ? parseSA(process.env.GSC_SA_JSON, 'GSC_SA_JSON') : null;
 const firestoreSA = saFirebase || saGac || saGa4; // prefer a dedicated Firestore SA
 const analyticsSA = saGa4 || saGac || saFirebase; // prefer the GA4/GSC SA
+// Search Console can't add a service account via API and its UI rejects SA emails
+// ("user not found"), so allow a SEPARATE GSC credential (an SA already added to
+// the property). Falls back to the analytics SA when they're the same.
+const gscSA = saGsc || analyticsSA;
 if (!firestoreSA) { console.error('FATAL: no service-account credential. Set GA4_KEY (or FIREBASE_SA_JSON / GOOGLE_APPLICATION_CREDENTIALS).'); process.exit(1); }
 // Pin the Firestore project so app-health reads Spotly even if the SA's own project differs.
 admin.initializeApp({ credential: admin.credential.cert(firestoreSA), projectId: 'spotly-6ca9a' });
@@ -186,7 +191,7 @@ async function searchConsole() {
   if (!GSC_SITE) return { configured: false };
   try {
     const auth = new google.auth.GoogleAuth({
-      credentials: { client_email: analyticsSA.client_email, private_key: analyticsSA.private_key },
+      credentials: { client_email: gscSA.client_email, private_key: gscSA.private_key },
       scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
     });
     const sc = google.searchconsole({ version: 'v1', auth });
