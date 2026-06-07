@@ -5,8 +5,13 @@ name: Spotly daily report
 # Auth: the GA4_KEY secret (a service-account JSON) via GOOGLE_APPLICATION_CREDENTIALS,
 #       matching the existing SEO report's convention. Delivery: FormSubmit.
 on:
-  schedule:
-    - cron: '0 5 * * *' # 05:00 UTC = 08:00 Asia/Kuwait
+  # NOTE: the daily EMAILED report runs LOCALLY via launchd (~/.spotly-report),
+  # because free form-relays (FormSubmit/Web3Forms) block datacenter/CI IPs.
+  # This workflow is kept for manual, on-demand data checks only (it gathers GA4 +
+  # Search Console + Firestore and prints them to the run log; email won't deliver
+  # from CI). Re-enable the schedule below only if a real email sender is wired.
+  # schedule:
+  #   - cron: '0 5 * * *' # 05:00 UTC = 08:00 Asia/Kuwait
   workflow_dispatch: {} # run on demand from the Actions tab
 
 permissions:
