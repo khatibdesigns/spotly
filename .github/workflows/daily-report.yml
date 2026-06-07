@@ -1,0 +1,44 @@
+name: Spotly daily report
+
+# Emails a daily app-health + traffic report to nader@khatibdesigns.com.
+# Data: Firestore (app health) + GA4 (app/site usage) + Search Console (organic SEO).
+# Delivery: Resend.
+on:
+  schedule:
+    # 04:00 UTC = 07:00 Asia/Kuwait — a morning digest.
+    - cron: '0 4 * * *'
+  workflow_dispatch: {} # lets you run it on demand from the Actions tab to test
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        working-directory: tools/report
+        run: npm install --no-audit --no-fund
+      - name: Build & send report
+        working-directory: tools/report
+        env:
+          # Firebase service account JSON (whole file pasted as a secret).
+          FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SA_JSON }}
+          # Resend API key (https://resend.com → API Keys).
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # GA4 numeric property ID (GA4 → Admin → Property settings). Optional.
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+          # Search Console property. DNS-verified domain → "sc-domain:meetspotly.com".
+          GSC_SITE: ${{ secrets.GSC_SITE }}
+          # Recipient + sender (sender defaults to the Resend onboarding domain).
+          REPORT_TO: ${{ secrets.REPORT_TO }}
+          REPORT_FROM: ${{ secrets.REPORT_FROM }}
+        run: node daily-report.mjs
