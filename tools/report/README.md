@@ -25,24 +25,34 @@ Console light up as you grant access. Run it any time from the **Actions** tab �
 
 | Secret | Value | Required |
 |---|---|---|
-| `FIREBASE_SA_JSON` | Paste the **entire** Firebase service-account JSON (`spotly-6ca9a-firebase-adminsdk-…json`) | ✅ |
-| `RESEND_API_KEY` | The `re_...` key from step 1 | ✅ |
-| `GA4_PROPERTY_ID` | GA4 **numeric** property id, e.g. `483920114` (step 4). `GA4_KEY` is also accepted. **Not** a `G-XXXX` id or an API key. | for GA4 section |
-| `GSC_SITE` | `sc-domain:meetspotly.com` (this is the default if unset) | for SEO section |
+| `GA4_KEY` | The **service-account JSON** (whole file) used to auth Firestore + GA4 + Search Console. Written to a file → `GOOGLE_APPLICATION_CREDENTIALS`, same convention as the existing SEO report. | ✅ |
+| `RESEND_API_KEY` | The `re_...` key from step 1 (delivers the email) | ✅ |
+| `FIREBASE_SA_JSON` | Optional **second** SA, only if the `GA4_KEY` SA can't read spotly-6ca9a Firestore (then Firestore uses this, GA4/GSC use `GA4_KEY`) | optional |
+| `GA4_PROPERTY` | GA4 **numeric** property id. Defaults to `540327946`. Not a `G-XXXX` id. | optional |
+| `GSC_SITE` | Defaults to `sc-domain:meetspotly.com` | optional |
 | `REPORT_TO` | override recipient (defaults to nader@khatibdesigns.com) | optional |
 
-### 3. Grant the service account read access
-Service-account email: **`firebase-adminsdk-fbsvc@spotly-6ca9a.iam.gserviceaccount.com`**
+### 3. Make the service account able to read all three sources
+A service account can only call an API if **that API is enabled on the SA's own
+project**. Pick one model:
 
-- **GA4**: Admin → **Property Access Management** → add that email as **Viewer**.
-  Then enable the **Google Analytics Data API** in the GCP project `spotly-6ca9a`
-  (<https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com>).
-- **Search Console**: open the `meetspotly.com` property → **Settings → Users and
-  permissions → Add user** → that email (Restricted is fine). Then enable the
-  **Search Console API** (<https://console.cloud.google.com/apis/library/searchconsole.googleapis.com>).
+**A — single SA (simplest).** Use the spotly admin SA
+(`firebase-adminsdk-fbsvc@spotly-6ca9a.iam.gserviceaccount.com`) as `GA4_KEY` — it
+already reads Firestore. Then, on project **spotly-6ca9a**, enable:
+- Analytics Data API → <https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com?project=spotly-6ca9a>
+- Search Console API → <https://console.cloud.google.com/apis/library/searchconsole.googleapis.com?project=spotly-6ca9a>
 
-### 4. GA4 IDs + website tag
-- **Property id**: GA4 → Admin → **Property settings** → copy the numeric id → `GA4_PROPERTY_ID`.
+and grant that email **GA4 Viewer** on property `540327946` and **Search Console**
+access on `meetspotly.com`.
+
+**B — two SAs.** Keep your existing analytics SA in `GA4_KEY` (its project already
+has the two APIs enabled + Viewer on the property + GSC access) and add the spotly
+admin SA as `FIREBASE_SA_JSON` for Firestore. Nothing to enable on spotly-6ca9a.
+
+> The report is fail-soft: app-health always renders; GA4/SEO sections show a clear
+> error (with the exact "enable this API" link) until their SA is ready.
+
+### 4. GA4 website tag
 - **Website tracking**: GA4 → Admin → **Data streams → Add stream → Web** →
   `https://meetspotly.com` → copy the **Measurement ID** (`G-XXXXXXXXXX`) and paste
   it into [`/analytics.js`](../../analytics.js) (one line). Until then the site tag

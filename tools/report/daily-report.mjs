@@ -16,6 +16,7 @@
 //   GA4_PROPERTY_ID   (optional) — numeric GA4 property id
 //   GSC_SITE          (optional) — e.g. "sc-domain:meetspotly.com"
 
+import fs from 'node:fs';
 import admin from 'firebase-admin';
 import { BetaAnalyticsDataClient } from '@google-analytics/data';
 import { google } from 'googleapis';
@@ -23,20 +24,32 @@ import { google } from 'googleapis';
 const TO = process.env.REPORT_TO || 'nader@khatibdesigns.com';
 const FROM = process.env.REPORT_FROM || 'Spotly Reports <onboarding@resend.dev>';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const GA4_PROPERTY_ID = (process.env.GA4_PROPERTY_ID || '').trim();
-const GSC_SITE = (process.env.GSC_SITE || '').trim();
+// GA4 numeric property id (GA4_PROPERTY is the env name used by the existing
+// SEO report; GA4_PROPERTY_ID also accepted).
+const GA4_PROPERTY_ID = (process.env.GA4_PROPERTY_ID || process.env.GA4_PROPERTY || '').trim();
+const GSC_SITE = (process.env.GSC_SITE || 'sc-domain:meetspotly.com').trim();
 
 const DAY = 86400000;
 const now = Date.now();
 const cut24 = now - DAY;
 const cut7 = now - 7 * DAY;
 
-if (!process.env.FIREBASE_SA_JSON) {
-  console.error('FATAL: FIREBASE_SA_JSON is not set.');
-  process.exit(1);
-}
-const sa = JSON.parse(process.env.FIREBASE_SA_JSON);
-admin.initializeApp({ credential: admin.credential.cert(sa) });
+// Two credential slots so the Firestore SA and the GA4/GSC SA can differ:
+//  - Firestore needs read access on spotly-6ca9a.
+//  - GA4/GSC need a SA whose OWN project has the Analytics Data + Search Console
+//    APIs enabled, plus Viewer on the GA4 property / access to the GSC site.
+// If a single SA has all three (e.g. the spotly admin SA with those two APIs
+// enabled on spotly-6ca9a), put it in GA4_KEY and it is used for everything.
+const parseSA = (s, where) => { try { return JSON.parse(s); } catch { console.error(`FATAL: invalid JSON in ${where}`); process.exit(1); } };
+const gacPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+const saFirebase = process.env.FIREBASE_SA_JSON ? parseSA(process.env.FIREBASE_SA_JSON, 'FIREBASE_SA_JSON') : null;
+const saGa4 = process.env.GA4_KEY ? parseSA(process.env.GA4_KEY, 'GA4_KEY') : null;
+const saGac = (gacPath && fs.existsSync(gacPath)) ? parseSA(fs.readFileSync(gacPath, 'utf8'), 'GOOGLE_APPLICATION_CREDENTIALS') : null;
+const firestoreSA = saFirebase || saGac || saGa4; // prefer a dedicated Firestore SA
+const analyticsSA = saGa4 || saGac || saFirebase; // prefer the GA4/GSC SA
+if (!firestoreSA) { console.error('FATAL: no service-account credential. Set GA4_KEY (or FIREBASE_SA_JSON / GOOGLE_APPLICATION_CREDENTIALS).'); process.exit(1); }
+// Pin the Firestore project so app-health reads Spotly even if the SA's own project differs.
+admin.initializeApp({ credential: admin.credential.cert(firestoreSA), projectId: 'spotly-6ca9a' });
 const db = admin.firestore();
 const Timestamp = admin.firestore.Timestamp;
 const ts24 = Timestamp.fromMillis(cut24);
@@ -112,7 +125,8 @@ async function ga4() {
   }
   try {
     const client = new BetaAnalyticsDataClient({
-      credentials: { client_email: sa.client_email, private_key: sa.private_key },
+      credentials: { client_email: analyticsSA.client_email, private_key: analyticsSA.private_key },
+      projectId: analyticsSA.project_id,
     });
     const property = `properties/${GA4_PROPERTY_ID}`;
 
@@ -171,7 +185,7 @@ async function searchConsole() {
   if (!GSC_SITE) return { configured: false };
   try {
     const auth = new google.auth.GoogleAuth({
-      credentials: { client_email: sa.client_email, private_key: sa.private_key },
+      credentials: { client_email: analyticsSA.client_email, private_key: analyticsSA.private_key },
       scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
     });
     const sc = google.searchconsole({ version: 'v1', auth });
