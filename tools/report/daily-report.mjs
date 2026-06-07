@@ -458,10 +458,30 @@ async function send(subject, fields) {
     console.log(JSON.stringify(fields, null, 2));
     return;
   }
-  // Web3Forms works from datacenter IPs (GitHub Actions); FormSubmit is blocked
-  // there by Cloudflare. Prefer Web3Forms when a key is set, else fall back.
+  // Sender priority: Resend (works from any server, incl. EC2) → Web3Forms →
+  // FormSubmit (the last two only deliver from a residential IP, e.g. the Mac).
+  if (process.env.RESEND_API_KEY) return sendResend(subject, fields);
   if (process.env.WEB3FORMS_KEY) return sendWeb3Forms(subject, fields);
   return sendFormSubmit(subject, fields);
+}
+
+async function sendResend(subject, fields) {
+  const FROM = process.env.REPORT_FROM || 'Spotly Reports <onboarding@resend.dev>';
+  const rows = Object.entries(fields).map(([k, v]) => {
+    if (/^▾/.test(k)) return `<tr><td colspan="2" style="padding:14px 0 4px;font:700 12px/1.2 -apple-system,sans-serif;color:#fa7959;text-transform:uppercase;letter-spacing:.05em;">${k.replace(/^▾\s*/, '')}${v && v.trim() ? ` <span style="color:#9a9088;font-weight:500;text-transform:none;">${v}</span>` : ''}</td></tr>`;
+    return `<tr><td style="padding:5px 14px 5px 0;color:#6f675f;font:500 14px/1.3 -apple-system,sans-serif;white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:5px 0;color:#2b2622;font:600 14px/1.3 -apple-system,sans-serif;">${v}</td></tr>`;
+  }).join('');
+  const html = `<div style="background:#fcfaf6;padding:24px;"><div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #ece7df;border-radius:16px;padding:22px 24px;"><div style="font:800 20px/1.1 -apple-system,Segoe UI,Roboto,sans-serif;color:#2b2622;"><span style="color:#fa7959;">●</span> Spotly — daily report</div><table style="width:100%;border-collapse:collapse;margin-top:12px;">${rows}</table></div></div>`;
+  const text = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n');
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: FROM, to: [TO], subject, html, text }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (res.ok && body.id) { console.log('Sent via Resend →', TO, body.id); return; }
+  console.error('Resend error', res.status, JSON.stringify(body));
+  process.exit(1);
 }
 
 async function sendWeb3Forms(subject, fields) {
