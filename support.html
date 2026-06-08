@@ -28,8 +28,45 @@
 
   <div class="card">
     <h2 style="margin-top:0">Contact us</h2>
-    <p>Email <a href="mailto:support@meetspotly.com">support@meetspotly.com</a> and we'll get back to you, usually within 1–2 business days.</p>
-    <p class="muted">When reporting a problem, it helps to include your device model, iOS/Android version, and a short description of what happened.</p>
+    <p>Send us a message below and we'll get back to you, usually within 1–2 business days. Prefer email? Write to <a href="mailto:support@meetspotly.com">support@meetspotly.com</a>.</p>
+
+    <form id="contactForm" action="https://api.web3forms.com/submit" method="POST">
+      <input type="hidden" name="access_key" value="732a49f7-974f-4a52-a9bb-5cf2e0c90c0b" />
+      <input type="hidden" name="subject" value="New Spotly support message" />
+      <input type="hidden" name="from_name" value="Spotly Support Form" />
+      <!-- honeypot: bots fill this, humans never see it -->
+      <input type="checkbox" name="botcheck" class="form-hp" tabindex="-1" autocomplete="off" />
+
+      <div class="field">
+        <label for="cf-name">Your name</label>
+        <input id="cf-name" type="text" name="name" placeholder="Jane Doe" required />
+      </div>
+      <div class="field">
+        <label for="cf-email">Email</label>
+        <input id="cf-email" type="email" name="email" placeholder="you@example.com" required />
+      </div>
+      <div class="field">
+        <label for="cf-topic">Topic</label>
+        <select id="cf-topic" name="topic">
+          <option>General question</option>
+          <option>A problem in the app</option>
+          <option>Booking or album order</option>
+          <option>Privacy or my data</option>
+          <option>Partnership / list my venue</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="cf-message">Message</label>
+        <textarea id="cf-message" name="message" placeholder="How can we help? If it's a bug, your device model and iOS/Android version help a lot." required></textarea>
+      </div>
+
+      <div class="field" style="margin-top:18px">
+        <button type="submit" class="btn" id="cf-submit">Send message</button>
+      </div>
+      <p class="form-status" id="cf-status" role="status" aria-live="polite"></p>
+    </form>
+
+    <p class="muted" style="margin-top:14px">When reporting a problem, it helps to include your device model, iOS/Android version, and a short description of what happened.</p>
   </div>
 
   <h2>Frequently asked questions</h2>
@@ -62,5 +99,49 @@
     <div style="margin-top:12px">© 2026 Spotly. All rights reserved.</div>
   </div>
 </footer>
+
+<script>
+(function () {
+  var form = document.getElementById('contactForm');
+  if (!form) return;
+  var btn = document.getElementById('cf-submit');
+  var status = document.getElementById('cf-status');
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    status.className = 'form-status';
+    status.textContent = '';
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    var data = new FormData(form);
+    // include the chosen topic in the email subject for easy triage
+    var topic = data.get('topic');
+    if (topic) data.set('subject', 'Spotly support — ' + topic);
+    fetch('https://api.web3forms.com/submit', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+      body: data
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (json) {
+      if (json.success) {
+        status.className = 'form-status ok';
+        status.textContent = '✓ Thanks! Your message is on its way — we’ll reply by email soon.';
+        form.reset();
+      } else {
+        status.className = 'form-status err';
+        status.textContent = (json.message || 'Something went wrong.') + ' You can also email support@meetspotly.com.';
+      }
+    })
+    .catch(function () {
+      status.className = 'form-status err';
+      status.textContent = 'Couldn’t send right now — please email support@meetspotly.com instead.';
+    })
+    .finally(function () {
+      btn.disabled = false;
+      btn.textContent = 'Send message';
+    });
+  });
+})();
+</script>
 </body>
 </html>

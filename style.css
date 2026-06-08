@@ -46,3 +46,23 @@ footer.site .wrap { padding-top: 26px; padding-bottom: 40px; color: var(--ink3);
 footer.site a { color: var(--ink2); text-decoration: none; margin-right: 16px; font-weight: 600; }
 .hero { text-align: center; padding: 60px 0 20px; }
 .hero p { font-size: 18px; max-width: 480px; margin: 10px auto 24px; }
+
+/* Forms (contact / support) */
+.field { margin-top: 14px; }
+.field label { display: block; font-weight: 600; font-size: 14px; color: var(--ink); margin-bottom: 6px; }
+.field input, .field textarea, .field select {
+  width: 100%; font: inherit; font-size: 15px; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; -webkit-appearance: none; appearance: none;
+}
+.field textarea { min-height: 130px; resize: vertical; line-height: 1.5; }
+.field input:focus, .field textarea:focus, .field select:focus {
+  outline: none; border-color: var(--coral); box-shadow: 0 0 0 3px rgba(250,121,89,.16);
+}
+.field input::placeholder, .field textarea::placeholder { color: var(--ink3); }
+.btn { border: 0; cursor: pointer; font: inherit; font-weight: 700; }
+.btn[disabled] { opacity: .6; cursor: default; }
+.form-hp { position: absolute; left: -9999px; opacity: 0; height: 0; width: 0; overflow: hidden; }
+.form-status { margin-top: 14px; font-size: 14.5px; font-weight: 600; display: none; }
+.form-status.ok { display: block; color: var(--sage); }
+.form-status.err { display: block; color: var(--coral-dk); }
