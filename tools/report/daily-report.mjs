@@ -22,7 +22,9 @@ import admin from 'firebase-admin';
 import { BetaAnalyticsDataClient } from '@google-analytics/data';
 import { google } from 'googleapis';
 
-const TO = process.env.REPORT_TO || 'nader@khatibdesigns.com';
+// REPORT_TO may be a comma-separated list; Resend gets all, fallbacks use the first.
+const TO_LIST = (process.env.REPORT_TO || 'nader@khatibdesigns.com').split(',').map((s) => s.trim()).filter(Boolean);
+const TO = TO_LIST[0];
 // GA4 numeric property id (GA4_PROPERTY is the env name used by the existing
 // SEO report; GA4_PROPERTY_ID also accepted).
 const GA4_PROPERTY_ID = (process.env.GA4_PROPERTY_ID || process.env.GA4_PROPERTY || '').trim();
@@ -520,10 +522,10 @@ async function sendResend(subject, fields) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: [TO], subject, html, text }),
+    body: JSON.stringify({ from: FROM, to: TO_LIST, subject, html, text }),
   });
   const body = await res.json().catch(() => ({}));
-  if (res.ok && body.id) { console.log('Sent via Resend →', TO, body.id); return; }
+  if (res.ok && body.id) { console.log('Sent via Resend →', TO_LIST.join(', '), body.id); return; }
   console.error('Resend error', res.status, JSON.stringify(body));
   process.exit(1);
 }
