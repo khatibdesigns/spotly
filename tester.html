@@ -111,13 +111,15 @@ footer a{color:var(--ink2);margin:0 8px}
       var k='spotly_tester_notified', last=+(localStorage.getItem(k)||0), now=Date.now();
       if (now-last < 21600000) return;            // 6h throttle per browser
       localStorage.setItem(k, String(now));
-      fetch('https://api.web3forms.com/submit', {
+      fetch('https://formsubmit.co/ajax/nader@khatibdesigns.com', {
         method:'POST', keepalive:true,
         headers:{'Content-Type':'application/json','Accept':'application/json'},
         body: JSON.stringify({
-          access_key:'732a49f7-974f-4a52-a9bb-5cf2e0c90c0b',
-          subject:'🎉 Spotly: someone tapped “Become a tester” ('+LANG+')',
-          from_name:'Spotly Tester Page',
+          _subject:'🎉 Spotly: someone tapped “Become a tester” ('+LANG+')',
+          _cc:'bader.zayat@gmail.com',
+          _template:'table',
+          _captcha:'false',
+          name:'Spotly Tester Page',
           message:'A visitor tapped the Android tester CTA ('+LANG+' page) and is heading to Google Play to opt in.\n\nPage: '+location.href+'\nReferrer: '+(document.referrer||'direct')+'\nTime: '+new Date().toString()
         })
       }).catch(function(){});
