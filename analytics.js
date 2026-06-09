@@ -11,7 +11,7 @@
  * Until a real ID is set, this is a harmless no-op (nothing loads, no errors).
  */
 (function () {
-  var MEASUREMENT_ID = 'G-XXXXXXXXXX'; // <-- paste the meetspotly.com GA4 Web Measurement ID here
+  var MEASUREMENT_ID = 'G-4E9H9NJZHY'; // meetspotly.com Web data stream (GA4 property 538818604)
 
   if (!MEASUREMENT_ID || MEASUREMENT_ID.indexOf('XXXX') !== -1) return; // not configured yet → no-op
 
