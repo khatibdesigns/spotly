@@ -69,19 +69,23 @@ footer a{color:var(--ink2);margin:0 8px}
     <h1>ساعدنا في تطوير <span class="hl">Spotly</span>.<br/>كن من المختبرين.</h1>
     <p class="lead">يساعد Spotly العائلات على اكتشاف أماكن مناسبة للأطفال فعلاً، والتخطيط ليوم ممتع بمساعدة الذكاء الاصطناعي، وحفظ الذكريات. نحن في مرحلة تجريبية مغلقة على Google Play — انضمّ، جرّب التطبيق، وملاحظاتك تُوجّه ما نبنيه لاحقًا. لا يستغرق الأمر سوى ٥ دقائق.</p>
     <div class="cta">
-      <a class="btn" id="joinBtn" href="https://play.google.com/apps/testing/com.khd.spotly" target="_blank" rel="noopener" onclick="try{gtag&&gtag('event','tester_join_click',{lang:'ar'})}catch(e){}">كن مختبِرًا على Google Play ←</a>
-      <p class="muted" style="margin-top:12px">افتح هذا على <b>هاتف أندرويد</b>، مسجّلاً الدخول بحساب Google الذي ستستخدمه.</p>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+        <a class="btn" id="groupBtn" href="https://groups.google.com/g/spotly-testers" target="_blank" rel="noopener" onclick="try{gtag&&gtag('event','tester_group_click',{lang:'ar'})}catch(e){}">① انضمّ إلى مجموعة المختبرين ←</a>
+        <a class="btn" id="joinBtn" style="background:#fff;color:var(--ink);box-shadow:0 2px 10px rgba(40,30,20,.08);border:1px solid var(--line)" href="https://play.google.com/apps/testing/com.khd.spotly" target="_blank" rel="noopener" onclick="try{gtag&&gtag('event','tester_join_click',{lang:'ar'})}catch(e){}">② كن مختبِرًا على Google Play ←</a>
+      </div>
+      <p class="muted" style="margin-top:14px">نفّذ <b>الخطوتين</b> على <b>هاتف أندرويد</b>، مسجّلاً الدخول بحساب Google الذي ستستخدمه. بعد الخطوة ① مباشرةً، قد تظهر الخطوة ② كـ«غير متوفّر» لبضع دقائق — هذه مزامنة Google، أعد فتحها بعد قليل.</p>
     </div>
   </div>
 </header>
 
 <main class="wrap">
   <div class="card">
-    <h2 class="serif">كيفية الانضمام — ٣ خطوات</h2>
+    <h2 class="serif">كيفية الانضمام — ٤ خطوات سريعة</h2>
     <div class="steps">
-      <div class="step"><div class="n">١</div><div><b>اضغط «Become a tester»</b><p>على هاتف أندرويد (مسجّلاً الدخول بحساب Google)، اضغط الزر بالأعلى واقبل الدعوة.</p></div></div>
-      <div class="step"><div class="n">٢</div><div><b>ثبّت Spotly من Google Play</b><p>ستظهر لك «Download it on Google Play». ثبّت التطبيق — قد يظهر «(Unreleased)» وهذا طبيعي أثناء الاختبار.</p></div></div>
-      <div class="step"><div class="n">٣</div><div><b>جرّبه واحتفظ به ~أسبوعين</b><p>أنشئ حسابًا، وخطّط ليوم أو احفظ مكانًا، ويُرجى إبقاء التطبيق مثبّتًا لمدة ١٤ يومًا — افتحه بين فترة وأخرى. هذا ما يسمح لـ Google بالموافقة على التطبيق. 🙏</p></div></div>
+      <div class="step"><div class="n">١</div><div><b>انضمّ إلى مجموعة المختبرين</b><p>اضغط «① انضمّ إلى مجموعة المختبرين» بالأعلى وانضمّ (قد تحتاج للضغط على «Join group»). هذا ما يمنح حسابك صلاحية الوصول إلى الاختبار.</p></div></div>
+      <div class="step"><div class="n">٢</div><div><b>كن مختبِرًا</b><p>اضغط «② كن مختبِرًا» واقبل. إذا ظهر «App not available»، انتظر بضع دقائق بعد الانضمام إلى المجموعة وأعد الفتح — Google لا تزال تُزامن.</p></div></div>
+      <div class="step"><div class="n">٣</div><div><b>ثبّت Spotly من Google Play</b><p>ستظهر لك «Download it on Google Play». ثبّت التطبيق — قد يظهر «(Unreleased)» وهذا طبيعي أثناء الاختبار.</p></div></div>
+      <div class="step"><div class="n">٤</div><div><b>جرّبه واحتفظ به ~أسبوعين</b><p>أنشئ حسابًا، وخطّط ليوم أو احفظ مكانًا، ويُرجى إبقاء التطبيق مثبّتًا لمدة ١٤ يومًا — افتحه بين فترة وأخرى. هذا ما يسمح لـ Google بالموافقة على التطبيق. 🙏</p></div></div>
     </div>
   </div>
 
@@ -90,7 +94,7 @@ footer a{color:var(--ink2);margin:0 8px}
     <div class="req"><span class="t">✓</span><div><b>هاتف أندرويد</b> (النسخة التجريبية لأندرويد فقط حاليًا).</div></div>
     <div class="req"><span class="t">✓</span><div><b>حساب Google</b> — نفس بريد Gmail الذي تستخدمه على ذلك الهاتف.</div></div>
     <div class="req"><span class="t">✓</span><div>إبقاء Spotly مثبّتًا لمدة <b>١٤ يومًا</b> وفتحه من حين لآخر.</div></div>
-    <div class="note">إذا ظهر أنك «لست مختبِرًا» أو لم تُفتح صفحة Play، فقد لا يكون حسابك مُضافًا بعد، أو أن Google لا تزال تنشر التطبيق. راسلنا على <a href="mailto:contact@meetspotly.com" style="color:var(--coral-dk);font-weight:700">contact@meetspotly.com</a> مع بريد Gmail الخاص بك وسنضيفك خلال يوم.</div>
+    <div class="note"><b>عالق على «App not available»؟</b> تأكّد من انضمامك إلى مجموعة المختبرين (الخطوة ①) بنفس حساب Google، ثم انتظر بضع دقائق وأعد فتح الخطوة ②. لا يزال عالقًا بعد يوم؟ راسلنا على <a href="mailto:contact@meetspotly.com" style="color:var(--coral-dk);font-weight:700">contact@meetspotly.com</a> مع بريد Gmail الخاص بك وسنحلّه.</div>
   </div>
 
   <div class="card" style="text-align:center">
