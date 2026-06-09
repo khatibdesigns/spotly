@@ -54,6 +54,26 @@ h2.serif{font-size:24px;margin-bottom:4px}
 .note{background:var(--coral-lt);border-radius:14px;padding:14px 16px;font-size:13.5px;color:var(--coral-dk);line-height:1.55;margin-top:14px}
 footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0;color:var(--ink3);font-size:13px;text-align:center}
 footer a{color:var(--ink2);margin:0 8px}
+/* visual tutorial */
+.tut{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:10px}
+@media(max-width:560px){.tut{grid-template-columns:1fr}}
+.tut-step{display:flex;flex-direction:column;gap:11px}
+.tut-screen{background:linear-gradient(180deg,#fbf9f6,#f3efe9);border:1px solid var(--line);border-radius:16px;height:160px;padding:12px;display:flex;flex-direction:column;gap:9px;overflow:hidden}
+.m-bar{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink3);font-weight:600;background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 10px}
+.m-dot{width:7px;height:7px;border-radius:50%;background:#cfc7bd;flex:none}
+.m-row{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;color:var(--ink);margin-top:2px}
+.m-btn{margin-inline-start:auto;background:var(--coral);color:#fff;font-size:11px;font-weight:800;padding:6px 12px;border-radius:999px;box-shadow:0 4px 12px rgba(250,121,89,.35);white-space:nowrap}
+.m-btn.green{background:#1a8f4c;box-shadow:0 4px 12px rgba(26,143,76,.3)}
+.m-ban{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink3);background:#fff;border:1px dashed #e6cabf;border-radius:10px;padding:7px 9px}
+.m-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;text-align:center}
+.m-h{font-weight:800;font-size:16px;color:var(--ink)}
+.m-sub{font-size:11px;color:var(--ink3)}
+.m-appicon{width:38px;height:38px;border-radius:11px;background:var(--coral);box-shadow:0 4px 12px rgba(250,121,89,.35)}
+.m-big{font-size:34px;line-height:1}
+.tut-cap{display:flex;gap:10px;align-items:flex-start}
+.tut-n{flex:none;width:26px;height:26px;border-radius:50%;background:var(--coral);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+.tut-cap b{font-size:15px;color:var(--ink)}
+.tut-cap p{color:var(--ink2);font-size:13px;line-height:1.5;margin-top:2px}
 </style>
 </head>
 <body>
@@ -76,12 +96,37 @@ footer a{color:var(--ink2);margin:0 8px}
 
 <main class="wrap">
   <div class="card">
-    <h2 class="serif">How to join — 4 quick steps</h2>
-    <div class="steps">
-      <div class="step"><div class="n">1</div><div><b>Join the testers group</b><p>Tap “① Join the testers group” above and join (you may need to tap “Join group”). This is what gives your Google account access to the test.</p></div></div>
-      <div class="step"><div class="n">2</div><div><b>Become a tester</b><p>Tap “② Become a tester” and accept. If it says “App not available”, wait a few minutes after joining the group and reopen it — Google is still syncing.</p></div></div>
-      <div class="step"><div class="n">3</div><div><b>Install Spotly from Google Play</b><p>You’ll get a “Download it on Google Play” link. Install it — it may show “(Unreleased)”, which is normal for a test.</p></div></div>
-      <div class="step"><div class="n">4</div><div><b>Try it &amp; keep it ~2 weeks</b><p>Create an account, plan a day out or save a place, and please leave it installed for 14 days — open it now and then. That’s what lets Google approve the app. 🙏</p></div></div>
+    <h2 class="serif">How it works — visual guide</h2>
+    <p class="muted" style="margin-top:2px;margin-bottom:8px">Two quick taps on your <b>Android phone</b>, in order. Here’s exactly what you’ll see:</p>
+    <div class="tut">
+      <div class="tut-step">
+        <div class="tut-screen">
+          <div class="m-bar"><span class="m-dot"></span> groups.google.com</div>
+          <div class="m-row">Spotly Testers <span class="m-btn">Join group</span></div>
+          <div class="m-ban">⊘ “no permission” — normal, ignore it</div>
+        </div>
+        <div class="tut-cap"><span class="tut-n">1</span><div><b>Join the group</b><p>Open step ① and tap <b>Join group</b>. The “no permission” message just means the group’s posts are private — it doesn’t stop you joining.</p></div></div>
+      </div>
+      <div class="tut-step">
+        <div class="tut-screen">
+          <div class="m-bar"><span class="m-dot"></span> play.google.com</div>
+          <div class="m-center"><div class="m-h">You’re a tester</div><span class="m-btn">Become a tester</span></div>
+        </div>
+        <div class="tut-cap"><span class="tut-n">2</span><div><b>Become a tester</b><p>Open step ② and tap <b>Become a tester</b>. Seeing “App not available”? Wait a few minutes after joining the group, then reopen.</p></div></div>
+      </div>
+      <div class="tut-step">
+        <div class="tut-screen">
+          <div class="m-bar"><span class="m-dot"></span> Google Play</div>
+          <div class="m-center"><div class="m-appicon"></div><span class="m-btn green">Install</span></div>
+        </div>
+        <div class="tut-cap"><span class="tut-n">3</span><div><b>Install Spotly</b><p>Tap <b>Download it on Google Play</b> → <b>Install</b>. It may show “(Unreleased)” — that’s normal for a test.</p></div></div>
+      </div>
+      <div class="tut-step">
+        <div class="tut-screen">
+          <div class="m-center"><div class="m-big">🗓️</div><div class="m-h">14 days</div><p class="m-sub">open it now &amp; then</p></div>
+        </div>
+        <div class="tut-cap"><span class="tut-n">4</span><div><b>Keep it ~2 weeks</b><p>Use it a little and please leave it installed for 14 days — that’s what lets Google approve the app. 🙏</p></div></div>
+      </div>
     </div>
   </div>
 
