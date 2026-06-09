@@ -134,6 +134,13 @@ async function ga4() {
     });
     const property = `properties/${GA4_PROPERTY_ID}`;
 
+    // This GA4 property holds THREE data streams: iOS app, Android app, and the
+    // meetspotly.com web stream. Keep app-health app-only (exclude web) so the
+    // website's traffic doesn't inflate the app numbers; the website + the tester
+    // CTA event are reported separately below.
+    const APP_ONLY = { notExpression: { filter: { fieldName: 'platform', stringFilter: { matchType: 'EXACT', value: 'web' } } } };
+    const WEB_ONLY = { filter: { fieldName: 'platform', stringFilter: { matchType: 'EXACT', value: 'web' } } };
+
     const [totals] = await client.runReport({
       property,
       dateRanges: [
@@ -145,6 +152,7 @@ async function ga4() {
         { name: 'activeUsers' }, { name: 'newUsers' },
         { name: 'sessions' }, { name: 'screenPageViews' },
       ],
+      dimensionFilter: APP_ONLY,
     });
     // With multiple date ranges, GA4 returns a dateRange dimension; map by it.
     const byRange = {};
@@ -170,12 +178,42 @@ async function ga4() {
       sessions: Number(r.metricValues[0].value || 0),
     }));
 
+    // Website-only traffic (meetspotly.com web stream) — yesterday + last 7d.
+    const [webR] = await client.runReport({
+      property,
+      dateRanges: [
+        { startDate: 'yesterday', endDate: 'yesterday' },
+        { startDate: '7daysAgo', endDate: 'yesterday' },
+      ],
+      metrics: [{ name: 'activeUsers' }, { name: 'sessions' }, { name: 'screenPageViews' }],
+      dimensionFilter: WEB_ONLY,
+    });
+    const webBy = {};
+    for (const r of webR.rows || []) webBy[r.dimensionValues?.[0]?.value || 'date_range_0'] = r.metricValues.map((m) => Number(m.value || 0));
+    const w1 = webBy['date_range_0'] || [0, 0, 0];
+    const w7 = webBy['date_range_1'] || [0, 0, 0];
+
+    // Tester CTA clicks — the tester_join_click event on the Android beta pages.
+    const [tcR] = await client.runReport({
+      property,
+      dateRanges: [
+        { startDate: 'yesterday', endDate: 'yesterday' },
+        { startDate: '7daysAgo', endDate: 'yesterday' },
+      ],
+      metrics: [{ name: 'eventCount' }],
+      dimensionFilter: { filter: { fieldName: 'eventName', stringFilter: { matchType: 'EXACT', value: 'tester_join_click' } } },
+    });
+    const tcBy = {};
+    for (const r of tcR.rows || []) tcBy[r.dimensionValues?.[0]?.value || 'date_range_0'] = Number(r.metricValues?.[0]?.value || 0);
+
     return {
       configured: true,
       yesterday: { activeUsers: d1[0], newUsers: d1[1], sessions: d1[2], views: d1[3] },
       last7: { activeUsers: d7[0], newUsers: d7[1], sessions: d7[2], views: d7[3] },
       last7prev: { activeUsers: d7prev[0], newUsers: d7prev[1], sessions: d7prev[2], views: d7prev[3] },
       channels,
+      web: { yesterday: { activeUsers: w1[0], sessions: w1[1], views: w1[2] }, last7: { activeUsers: w7[0], sessions: w7[1], views: w7[2] } },
+      testerClicks: { yesterday: tcBy['date_range_0'] || 0, last7: tcBy['date_range_1'] || 0 },
     };
   } catch (e) {
     console.error('GA4 failed:', e.message);
@@ -312,11 +350,17 @@ function buildHtml(h, g, s, dateLabel) {
     usage = note(`⚠️ Couldn't read GA4: ${g.error}`);
   } else {
     usage = cards([
-      { label: 'Active users (yest.)', value: fmt(g.yesterday.activeUsers), sub: `${fmt(g.last7.activeUsers)} in 7d` },
-      { label: 'New users (yest.)', value: fmt(g.yesterday.newUsers) },
-      { label: 'Sessions (yest.)', value: fmt(g.yesterday.sessions), sub: `${fmt(g.yesterday.views)} views` },
+      { label: 'App active users (yest.)', value: fmt(g.yesterday.activeUsers), sub: `${fmt(g.last7.activeUsers)} in 7d` },
+      { label: 'App new users (yest.)', value: fmt(g.yesterday.newUsers) },
+      { label: 'App sessions (yest.)', value: fmt(g.yesterday.sessions), sub: `${fmt(g.yesterday.views)} views` },
     ]);
-    if (g.channels?.length) usage += listTable('Acquisition channels (7d)', g.channels.map((c) => ({ left: c.name, right: `${fmt(c.sessions)} sessions` })));
+    // Website (meetspotly.com) + Android tester-CTA clicks — reported separately from the app.
+    if (g.web) usage += cards([
+      { label: 'Website users (yest.)', value: fmt(g.web.yesterday.activeUsers), sub: `${fmt(g.web.last7.activeUsers)} in 7d` },
+      { label: 'Website views (yest.)', value: fmt(g.web.yesterday.views), sub: `${fmt(g.web.last7.views)} in 7d` },
+      { label: '“Become a tester” clicks (yest.)', value: fmt(g.testerClicks?.yesterday ?? 0), sub: `${fmt(g.testerClicks?.last7 ?? 0)} in 7d` },
+    ]);
+    if (g.channels?.length) usage += listTable('Acquisition channels (7d, app + site)', g.channels.map((c) => ({ left: c.name, right: `${fmt(c.sessions)} sessions` })));
   }
 
   return `<!doctype html><html><body style="margin:0;background:${C.bg};">
