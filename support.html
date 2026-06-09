@@ -29,7 +29,7 @@
 
   <div class="card">
     <h2 style="margin-top:0">Contact us</h2>
-    <p>Send us a message below and we'll get back to you, usually within 1–2 business days. Prefer email? Write to <a href="mailto:support@meetspotly.com">support@meetspotly.com</a>.</p>
+    <p>Send us a message below and we'll get back to you, usually within 1–2 business days. Prefer email? Write to <a href="mailto:contact@meetspotly.com">contact@meetspotly.com</a>.</p>
 
     <form id="contactForm" action="https://api.web3forms.com/submit" method="POST">
       <input type="hidden" name="access_key" value="732a49f7-974f-4a52-a9bb-5cf2e0c90c0b" />
@@ -85,10 +85,10 @@
   <p>Your photos and memories are private to your family by default. We don't share them publicly. If you order a printed album, the photos you include are shared only with our print partner to make your book. See our <a href="privacy.html">Privacy Policy</a>.</p>
 
   <h3>How do I delete my account or data?</h3>
-  <p>You can delete your account from within the app, or email <a href="mailto:privacy@meetspotly.com">privacy@meetspotly.com</a> and we'll remove your data. See the Privacy Policy for details.</p>
+  <p>You can delete your account from within the app, or email <a href="mailto:contact@meetspotly.com">contact@meetspotly.com</a> and we'll remove your data. See the Privacy Policy for details.</p>
 
   <h3>I had a problem with a booking or an album order.</h3>
-  <p>Email <a href="mailto:support@meetspotly.com">support@meetspotly.com</a> with the date and place (for bookings) or your order number (for albums) and we'll help sort it out.</p>
+  <p>Email <a href="mailto:contact@meetspotly.com">contact@meetspotly.com</a> with the date and place (for bookings) or your order number (for albums) and we'll help sort it out.</p>
 </main>
 
 <footer class="site">
@@ -131,12 +131,12 @@
         form.reset();
       } else {
         status.className = 'form-status err';
-        status.textContent = (json.message || 'Something went wrong.') + ' You can also email support@meetspotly.com.';
+        status.textContent = (json.message || 'Something went wrong.') + ' You can also email contact@meetspotly.com.';
       }
     })
     .catch(function () {
       status.className = 'form-status err';
-      status.textContent = 'Couldn’t send right now — please email support@meetspotly.com instead.';
+      status.textContent = 'Couldn’t send right now — please email contact@meetspotly.com instead.';
     })
     .finally(function () {
       btn.disabled = false;
