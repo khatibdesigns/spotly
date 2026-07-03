@@ -63,6 +63,130 @@ const ts24 = Timestamp.fromMillis(cut24);
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-US'));
 const pct = (n) => (n == null ? '—' : (n * 100).toFixed(1) + '%');
 
+// ---------------------------------------------------------------- Growth scorecard
+//
+// The point of this section: give Nader a daily "am I growing?" read he can trust
+// — real day-over-day (DoD) and week-over-week (WoW) movement, arrows, and a
+// single composite Growth Index that starts at 100 today and climbs (or dips) as
+// the business moves. Honesty rules baked in:
+//   • Absolute numbers ALWAYS shown next to %, because early on the counts are
+//     tiny and a % swing off a base of 1–2 is noise, not signal.
+//   • When the prior value is small (<5) we show the absolute change, not a % —
+//     "0 → 1 click" is "+1", never "+∞%".
+//   • WoW works from day one (GA4/GSC give us prior-week ranges directly).
+//   • DoD needs a stored snapshot of yesterday, so it lights up from tomorrow.
+//     Today is the honest baseline.
+
+const SNAP_DIR = process.env.SNAP_DIR || `${process.env.HOME}/.spotly-report/snapshots`;
+// Kuwait-local calendar date, so "today" matches the report's date label.
+const kwDate = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }); // YYYY-MM-DD
+const loadSnap = (dateStr) => {
+  try { return JSON.parse(fs.readFileSync(`${SNAP_DIR}/${dateStr}.json`, 'utf8')); } catch { return null; }
+};
+const saveSnap = (dateStr, obj) => {
+  try { fs.mkdirSync(SNAP_DIR, { recursive: true }); fs.writeFileSync(`${SNAP_DIR}/${dateStr}.json`, JSON.stringify(obj)); }
+  catch (e) { console.error('snapshot save failed (non-fatal):', e.message); }
+};
+const earliestSnap = () => {
+  try {
+    const files = fs.readdirSync(SNAP_DIR).filter((f) => f.endsWith('.json')).sort();
+    return files.length ? JSON.parse(fs.readFileSync(`${SNAP_DIR}/${files[0]}`, 'utf8')) : null;
+  } catch { return null; }
+};
+
+// One growth cell: arrow + change, absolute for small/undefined bases, % otherwise.
+function cell(now, prev) {
+  if (prev == null || now == null) return '—';
+  const d = now - prev;
+  const arrow = d > 0 ? '▲' : d < 0 ? '▼' : '–';
+  const sign = d > 0 ? '+' : '';                              // '-' already comes from fmt/toFixed
+  if (prev < 5) return `${arrow} ${sign}${fmt(d)}`;          // tiny base → show absolute
+  return `${arrow} ${sign}${(d / prev * 100).toFixed(0)}%`;   // real base → show %
+}
+
+// Compute today's metric set + composite index from the live report data.
+function scorecardMetrics(h, g, s) {
+  const gsc = (s.configured && !s.error) ? s : { totals: {}, prev: {} };
+  const gaOk = g.configured && !g.error;
+  const conv = gaOk && g.conversions ? g.conversions : {};
+  const convSum = (slot) => ['store_click', 'get_app_click', 'notify_signup'].reduce((a, k) => a + (conv[k]?.[slot] || 0), 0);
+  const m = {
+    impr7:      gsc.totals?.impressions ?? null,
+    imprPrev:   gsc.prev?.impressions ?? null,
+    clicks7:    gsc.totals?.clicks ?? null,
+    clicksPrev: gsc.prev?.clicks ?? null,
+    sess7:      gaOk ? (g.web?.last7?.sessions ?? 0) : null,
+    sessPrev:   gaOk ? (g.web?.last7prev?.sessions ?? 0) : null,
+    installs7:  gaOk ? (g.last7?.newUsers ?? 0) : null,       // app new users ≈ installs
+    installsPrev: gaOk ? (g.last7prev?.newUsers ?? 0) : null,
+    conv7:      gaOk ? convSum('last7') : null,
+    convPrev:   gaOk ? convSum('last7prev') : null,
+    families:   h.familiesTotal ?? null,
+    plans:      h.plansTotal ?? null,
+    bookings:   h.bookingsTotal ?? null,
+  };
+  // Composite "raw" — weighted so a rare high-value event (install, conversion)
+  // moves the index more than a cheap one (an impression). Weights are a
+  // deliberate editorial call, documented so the index is reproducible.
+  const W = { impr: 1, clicks: 20, sess: 5, installs: 30, conv: 15, families: 8 };
+  m.raw = (m.impr7 || 0) * W.impr + (m.clicks7 || 0) * W.clicks + (m.sess7 || 0) * W.sess
+        + (m.installs7 || 0) * W.installs + (m.conv7 || 0) * W.conv + (m.families || 0) * W.families;
+  // Traffic-only raw (no cumulative families) → used for the this-week-vs-last
+  // "momentum" %, which needs a comparable prior-week figure.
+  m.trafNow  = (m.impr7 || 0) * W.impr + (m.clicks7 || 0) * W.clicks + (m.sess7 || 0) * W.sess + (m.installs7 || 0) * W.installs + (m.conv7 || 0) * W.conv;
+  m.trafPrev = (m.imprPrev || 0) * W.impr + (m.clicksPrev || 0) * W.clicks + (m.sessPrev || 0) * W.sess + (m.installsPrev || 0) * W.installs + (m.convPrev || 0) * W.conv;
+  return m;
+}
+
+// Build the scorecard text block (used for console + Telegram) and the ordered
+// field rows (used for the email). `today` is this run's metrics; `ySnap`/`wSnap`
+// are yesterday's / last-week's saved snapshots (null until history accrues).
+function buildScorecard(today, ySnap, wSnap, baseline, dateLabel) {
+  const baseRaw = baseline?.raw || today.raw || 1;
+  const level = baseline ? (100 * today.raw / baseRaw) : 100;
+  const isBaseline = !baseline || !ySnap;
+  // Growth Index movement
+  const idxDoD = (ySnap?.level != null) ? cell(round1(level), ySnap.level) : '—';
+  const idxWoW = (wSnap?.level != null) ? cell(round1(level), wSnap.level) : '—';
+  // Momentum — this week vs last week, single number, available today.
+  const momentum = today.trafPrev > 0
+    ? cell(today.trafNow, today.trafPrev)
+    : (today.trafNow > 0 ? '▲ new activity' : '– building baseline');
+
+  // rows: [label, nowValue, WoW cell, DoD cell]
+  const dod = (key) => ySnap ? cell(today[key], ySnap[key]) : '—';
+  const rows = [
+    ['SEO impressions 7d', today.impr7,    cell(today.impr7, today.imprPrev),       dod('impr7')],
+    ['SEO clicks 7d',      today.clicks7,  cell(today.clicks7, today.clicksPrev),   dod('clicks7')],
+    ['Site sessions 7d',   today.sess7,    cell(today.sess7, today.sessPrev),       dod('sess7')],
+    ['App installs 7d',    today.installs7,cell(today.installs7, today.installsPrev),dod('installs7')],
+    ['Conversions 7d',     today.conv7,    cell(today.conv7, today.convPrev),       dod('conv7')],
+    ['Families (total)',   today.families, '—',                                     ySnap ? cell(today.families, ySnap.families) : 'baseline'],
+    ['Plans built (total)',today.plans,    '—',                                     ySnap ? cell(today.plans, ySnap.plans) : 'baseline'],
+  ];
+
+  // Text block (monospace-ish, plain — renders fine in Telegram & terminal).
+  const L = [];
+  L.push('📈 GROWTH SCORECARD');
+  L.push(`Growth Index: ${round1(level).toFixed(1)}${isBaseline ? '  (baseline set today)' : `   DoD ${idxDoD}  ·  WoW ${idxWoW}`}`);
+  L.push(`Momentum (this wk vs last): ${momentum}`);
+  L.push('');
+  L.push(pad('', 20) + pad('now', 7) + pad('WoW', 10) + 'DoD');
+  for (const [label, nv, wow, dd] of rows) L.push(pad(label, 20) + pad(fmt(nv), 7) + pad(wow, 10) + dd);
+  if (isBaseline) { L.push(''); L.push('· Baseline set today — daily % moves begin tomorrow.'); L.push('· Weekly (WoW) moves are live now where data exists.'); }
+
+  // Email field rows (label → value), one per metric, WoW + DoD inline.
+  const F = {};
+  F['▾ 📈 GROWTH SCORECARD'] = isBaseline ? 'baseline set today · weekly moves live now' : `Index ${round1(level).toFixed(1)} · momentum ${momentum}`;
+  F['Growth Index'] = `${round1(level).toFixed(1)}${isBaseline ? '  (baseline — climbs from here)' : `   (DoD ${idxDoD} · WoW ${idxWoW})`}`;
+  F['Momentum (wk/wk)'] = momentum;
+  for (const [label, nv, wow, dd] of rows) F[label] = `${fmt(nv)}    WoW ${wow}${dd !== '—' ? ` · DoD ${dd}` : ''}`;
+
+  return { textLines: L, fields: F, level: round1(level) };
+}
+const round1 = (n) => Math.round(n * 10) / 10;
+const pad = (s, n) => { s = String(s); return s.length >= n ? s + ' ' : s + ' '.repeat(n - s.length); };
+
 // ---------------------------------------------------------------- Firestore
 
 // Aggregation count() — cheap, no doc reads. Returns null on error so one bad
@@ -184,8 +308,9 @@ async function ga4() {
     const [webR] = await client.runReport({
       property,
       dateRanges: [
-        { startDate: 'yesterday', endDate: 'yesterday' },
-        { startDate: '7daysAgo', endDate: 'yesterday' },
+        { startDate: 'yesterday', endDate: 'yesterday' },      // date_range_0
+        { startDate: '7daysAgo', endDate: 'yesterday' },        // date_range_1 — last 7d
+        { startDate: '14daysAgo', endDate: '8daysAgo' },        // date_range_2 — prior 7d (WoW)
       ],
       metrics: [{ name: 'activeUsers' }, { name: 'sessions' }, { name: 'screenPageViews' }],
       dimensionFilter: WEB_ONLY,
@@ -194,6 +319,7 @@ async function ga4() {
     for (const r of webR.rows || []) webBy[r.dimensionValues?.[0]?.value || 'date_range_0'] = r.metricValues.map((m) => Number(m.value || 0));
     const w1 = webBy['date_range_0'] || [0, 0, 0];
     const w7 = webBy['date_range_1'] || [0, 0, 0];
+    const w7prev = webBy['date_range_2'] || [0, 0, 0];
 
     // Tester CTA clicks — the tester_join_click event on the Android beta pages.
     const [tcR] = await client.runReport({
@@ -215,20 +341,22 @@ async function ga4() {
     const [cvR] = await client.runReport({
       property,
       dateRanges: [
-        { startDate: 'yesterday', endDate: 'yesterday' },
-        { startDate: '7daysAgo', endDate: 'yesterday' },
+        { startDate: 'yesterday', endDate: 'yesterday' },       // date_range_0
+        { startDate: '7daysAgo', endDate: 'yesterday' },         // date_range_1 — last 7d
+        { startDate: '14daysAgo', endDate: '8daysAgo' },         // date_range_2 — prior 7d (WoW)
       ],
       dimensions: [{ name: 'eventName' }],
       metrics: [{ name: 'eventCount' }],
       dimensionFilter: { filter: { fieldName: 'eventName', inListFilter: { values: CONVERSION_EVENTS } } },
     });
     const conversions = {};
-    CONVERSION_EVENTS.forEach((e) => { conversions[e] = { yesterday: 0, last7: 0 }; });
+    CONVERSION_EVENTS.forEach((e) => { conversions[e] = { yesterday: 0, last7: 0, last7prev: 0 }; });
     for (const r of cvR.rows || []) {
       const name = r.dimensionValues?.[0]?.value;
       const rng = r.dimensionValues?.[1]?.value || 'date_range_0';
       if (!conversions[name]) continue;
-      conversions[name][rng === 'date_range_1' ? 'last7' : 'yesterday'] = Number(r.metricValues?.[0]?.value || 0);
+      const slot = rng === 'date_range_1' ? 'last7' : rng === 'date_range_2' ? 'last7prev' : 'yesterday';
+      conversions[name][slot] = Number(r.metricValues?.[0]?.value || 0);
     }
 
     // ── Paid/campaign attribution — web sessions by source/medium+campaign (7d).
@@ -254,7 +382,7 @@ async function ga4() {
       last7: { activeUsers: d7[0], newUsers: d7[1], sessions: d7[2], views: d7[3] },
       last7prev: { activeUsers: d7prev[0], newUsers: d7prev[1], sessions: d7prev[2], views: d7prev[3] },
       channels,
-      web: { yesterday: { activeUsers: w1[0], sessions: w1[1], views: w1[2] }, last7: { activeUsers: w7[0], sessions: w7[1], views: w7[2] } },
+      web: { yesterday: { activeUsers: w1[0], sessions: w1[1], views: w1[2] }, last7: { activeUsers: w7[0], sessions: w7[1], views: w7[2] }, last7prev: { activeUsers: w7prev[0], sessions: w7prev[1], views: w7prev[2] } },
       testerClicks: { yesterday: tcBy['date_range_0'] || 0, last7: tcBy['date_range_1'] || 0 },
       conversions,
       campaigns,
@@ -667,9 +795,29 @@ async function sendTelegram(text) {
 (async () => {
   const dateLabel = new Date(now).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kuwait' });
   const [h, g, s] = await Promise.all([firestoreHealth(), ga4(), searchConsole()]);
-  const text = buildText(h, g, s);
+
+  // Growth scorecard — leads the report. WoW is live today; DoD + Index deltas
+  // populate from tomorrow once yesterday's snapshot exists.
+  const today = scorecardMetrics(h, g, s);
+  const ySnap = loadSnap(kwDate(now - DAY));
+  const wSnap = loadSnap(kwDate(now - 7 * DAY));
+  const baseline = earliestSnap();                 // earliest saved day (before we save today)
+  const sc = buildScorecard(today, ySnap, wSnap, baseline, dateLabel);
+
+  const text = `${sc.textLines.join('\n')}\n\n${buildText(h, g, s)}`;
   console.log(text); // always log to the Actions run for visibility/debugging
-  await send(`Spotly daily report — ${dateLabel}`, buildFields(h, g, s, dateLabel));
+  const fields = { ...sc.fields, ...buildFields(h, g, s, dateLabel) };
+  await send(`Spotly daily report — ${dateLabel}`, fields);
   await sendTelegram(`📊 Spotly — ${dateLabel}\n\n${text}`); // no-op unless TELEGRAM_* set
+
+  // Persist today's snapshot so tomorrow's DoD/Index deltas are real. Skipped on
+  // dry-runs so testing never pollutes the real baseline history.
+  if (!process.env.REPORT_DRYRUN) {
+    saveSnap(kwDate(now), {
+      date: kwDate(now), impr7: today.impr7, clicks7: today.clicks7, sess7: today.sess7,
+      installs7: today.installs7, conv7: today.conv7, families: today.families,
+      plans: today.plans, bookings: today.bookings, raw: today.raw, level: sc.level,
+    });
+  }
   process.exit(0);
 })().catch((e) => { console.error('FATAL', e); process.exit(1); });
