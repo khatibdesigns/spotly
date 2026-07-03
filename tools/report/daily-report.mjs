@@ -208,6 +208,46 @@ async function ga4() {
     const tcBy = {};
     for (const r of tcR.rows || []) tcBy[r.dimensionValues?.[0]?.value || 'date_range_0'] = Number(r.metricValues?.[0]?.value || 0);
 
+    // ── Acquisition conversions — the events analytics.js fires (install intent,
+    // get-app, email signup, invites). Counts per event, yesterday + last 7d.
+    // Fail-soft: an empty/absent result just shows zeros.
+    const CONVERSION_EVENTS = ['store_click', 'get_app_click', 'notify_signup', 'join_open', 'whatsapp_click'];
+    const [cvR] = await client.runReport({
+      property,
+      dateRanges: [
+        { startDate: 'yesterday', endDate: 'yesterday' },
+        { startDate: '7daysAgo', endDate: 'yesterday' },
+      ],
+      dimensions: [{ name: 'eventName' }],
+      metrics: [{ name: 'eventCount' }],
+      dimensionFilter: { filter: { fieldName: 'eventName', inListFilter: { values: CONVERSION_EVENTS } } },
+    });
+    const conversions = {};
+    CONVERSION_EVENTS.forEach((e) => { conversions[e] = { yesterday: 0, last7: 0 }; });
+    for (const r of cvR.rows || []) {
+      const name = r.dimensionValues?.[0]?.value;
+      const rng = r.dimensionValues?.[1]?.value || 'date_range_0';
+      if (!conversions[name]) continue;
+      conversions[name][rng === 'date_range_1' ? 'last7' : 'yesterday'] = Number(r.metricValues?.[0]?.value || 0);
+    }
+
+    // ── Paid/campaign attribution — web sessions by source/medium+campaign (7d).
+    // Once ads run with UTMs, this shows which campaign drove the traffic.
+    const [campR] = await client.runReport({
+      property,
+      dateRanges: [{ startDate: '7daysAgo', endDate: 'yesterday' }],
+      dimensions: [{ name: 'sessionSourceMedium' }, { name: 'sessionCampaignName' }],
+      metrics: [{ name: 'sessions' }],
+      dimensionFilter: WEB_ONLY,
+      orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+      limit: 6,
+    });
+    const campaigns = (campR.rows || []).map((r) => ({
+      sourceMedium: r.dimensionValues?.[0]?.value || '(unknown)',
+      campaign: r.dimensionValues?.[1]?.value || '(none)',
+      sessions: Number(r.metricValues?.[0]?.value || 0),
+    })).filter((c) => c.sessions > 0);
+
     return {
       configured: true,
       yesterday: { activeUsers: d1[0], newUsers: d1[1], sessions: d1[2], views: d1[3] },
@@ -216,6 +256,8 @@ async function ga4() {
       channels,
       web: { yesterday: { activeUsers: w1[0], sessions: w1[1], views: w1[2] }, last7: { activeUsers: w7[0], sessions: w7[1], views: w7[2] } },
       testerClicks: { yesterday: tcBy['date_range_0'] || 0, last7: tcBy['date_range_1'] || 0 },
+      conversions,
+      campaigns,
     };
   } catch (e) {
     console.error('GA4 failed:', e.message);
@@ -453,6 +495,21 @@ function buildText(h, g, s) {
     L.push(`  Yesterday: ${fmt(g.yesterday.activeUsers)} active, ${fmt(g.yesterday.newUsers)} new, ${fmt(g.yesterday.sessions)} sessions`);
     L.push(`  7d active users: ${fmt(g.last7.activeUsers)}${dw(g.last7.activeUsers, g.last7prev?.activeUsers)}`);
   }
+  L.push('ACQUISITION — CONVERSIONS (yest · 7d)');
+  if (g.configured && !g.error && g.conversions) {
+    const c = g.conversions;
+    const line = (lbl, k) => L.push(`  ${lbl}: ${fmt(c[k]?.yesterday || 0)} · ${fmt(c[k]?.last7 || 0)}`);
+    line('Install intent (store tap)', 'store_click');
+    line('Get-app CTA', 'get_app_click');
+    line('Waitlist signups', 'notify_signup');
+    line('Family invites opened', 'join_open');
+    if (g.campaigns?.length) {
+      const paid = g.campaigns.filter((x) => x.campaign && x.campaign !== '(none)' && x.campaign !== '(not set)' && x.campaign !== '(organic)');
+      (paid.length ? paid : g.campaigns).slice(0, 3).forEach((x) => L.push(`    ${x.campaign} · ${x.sourceMedium} — ${fmt(x.sessions)} sess`));
+    }
+  } else L.push('  (GA4 not connected — conversions unavailable)');
+  L.push('REVENUE (proxy — orders/bookings)');
+  L.push(`  Bookings: ${fmt(h.bookingsTotal)} · Album orders: ${fmt(h.ordersTotal)} · Voucher orders: ${fmt(h.voucherOrdersTotal)}`);
   return L.join('\n');
 }
 
@@ -493,6 +550,24 @@ function buildFields(h, g, s, dateLabel) {
     f['Sessions (7d)'] = `${fmt(g.last7.sessions)}${wow(g.last7.sessions, g.last7prev?.sessions)}`;
     if (g.channels?.length) f['Top channel (7d)'] = `${g.channels[0].name} — ${fmt(g.channels[0].sessions)} sessions`;
   } else f['GA4'] = g.error ? `error: ${g.error}` : 'not connected';
+
+  // Acquisition / conversion funnel — what paid & organic traffic actually did.
+  f['▾ ACQUISITION — CONVERSIONS'] = '(yesterday · last 7d)';
+  if (g.configured && !g.error && g.conversions) {
+    const c = g.conversions;
+    const cv = (k) => `${fmt(c[k]?.yesterday || 0)}  ·  ${fmt(c[k]?.last7 || 0)} in 7d`;
+    f['Install intent (store tap)'] = cv('store_click');
+    f['Get-app CTA'] = cv('get_app_click');
+    f['Waitlist signups'] = cv('notify_signup');
+    f['Family invites opened'] = cv('join_open');
+    if (g.campaigns?.length) {
+      const paid = g.campaigns.filter((x) => x.campaign && !['(none)', '(not set)', '(organic)', '(direct)'].includes(x.campaign));
+      const top = (paid.length ? paid : g.campaigns).slice(0, 3);
+      top.forEach((x, i) => { f[`Campaign ${i + 1} (7d)`] = `${x.campaign} · ${x.sourceMedium} — ${fmt(x.sessions)} sessions`; });
+    }
+  } else f['Conversions'] = 'GA4 not connected';
+  f['▾ REVENUE (proxy)'] = 'orders & bookings — commerce fully on after registration';
+  f['Bookings / Album / Voucher'] = `${fmt(h.bookingsTotal)}  /  ${fmt(h.ordersTotal)}  /  ${fmt(h.voucherOrdersTotal)}`;
   return f;
 }
 
@@ -573,10 +648,28 @@ async function sendFormSubmit(subject, fields) {
 
 // ---------------------------------------------------------------- main
 
+// Optional Telegram push — reuses the TikTok approve-bot channel (same env as
+// the KHD SEO pipeline: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID). Best-effort:
+// a missing token or a failed call never breaks the email run.
+async function sendTelegram(text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chat = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chat) return;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chat, text, disable_web_page_preview: true }),
+    });
+    console.log(res.ok ? 'Sent via Telegram ✓' : `Telegram error ${res.status}`);
+  } catch (e) { console.error('Telegram failed (non-fatal):', e.message); }
+}
+
 (async () => {
   const dateLabel = new Date(now).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kuwait' });
   const [h, g, s] = await Promise.all([firestoreHealth(), ga4(), searchConsole()]);
-  console.log(buildText(h, g, s)); // always log to the Actions run for visibility/debugging
+  const text = buildText(h, g, s);
+  console.log(text); // always log to the Actions run for visibility/debugging
   await send(`Spotly daily report — ${dateLabel}`, buildFields(h, g, s, dateLabel));
+  await sendTelegram(`📊 Spotly — ${dateLabel}\n\n${text}`); // no-op unless TELEGRAM_* set
   process.exit(0);
 })().catch((e) => { console.error('FATAL', e); process.exit(1); });
