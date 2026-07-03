@@ -458,6 +458,34 @@ async function searchConsole() {
   }
 }
 
+// ---------------------------------------------------------------- App Store (iOS)
+// Public iTunes lookup — no auth. Returns rating count/average per store (a proxy
+// for reach/traction; it is NOT a download count). Kept from the EC2 report so
+// consolidating here doesn't lose the App Store ratings line.
+async function appStore() {
+  const APP_ID = '6772814230';
+  const COUNTRIES = [['kw', 'Kuwait'], ['sa', 'Saudi Arabia'], ['ae', 'UAE'], ['qa', 'Qatar'], ['bh', 'Bahrain'], ['om', 'Oman'], ['eg', 'Egypt']];
+  try {
+    const out = [];
+    for (const [cc, name] of COUNTRIES) {
+      try {
+        const r = await fetch(`https://itunes.apple.com/lookup?id=${APP_ID}&country=${cc}`, { signal: AbortSignal.timeout(12000) });
+        const j = await r.json();
+        const x = j.resultCount ? j.results[0] : null;
+        if (!x || !x.userRatingCount) continue;
+        out.push({ cc: cc.toUpperCase(), name, avg: x.averageUserRating, count: x.userRatingCount });
+      } catch { /* per-country failure is non-fatal */ }
+    }
+    if (!out.length) return { configured: true, empty: true };
+    out.sort((a, b) => b.count - a.count);
+    const primary = out.find((o) => o.cc === 'KW') || out[0];
+    const totalCount = out.reduce((s, o) => s + o.count, 0);
+    return { configured: true, primary, byCountry: out, totalCount };
+  } catch (e) {
+    return { configured: true, error: String(e).slice(0, 120) };
+  }
+}
+
 // ---------------------------------------------------------------- HTML email
 
 const C = { coral: '#fa7959', ink: '#2b2622', ink2: '#6f675f', line: '#ece7df', bg: '#fcfaf6', card: '#ffffff', good: '#2e7d57' };
@@ -589,7 +617,7 @@ function buildHtml(h, g, s, dateLabel) {
   </table></body></html>`;
 }
 
-function buildText(h, g, s) {
+function buildText(h, g, s, a) {
   const L = [];
   L.push('SPOTLY — DAILY REPORT');
   L.push('');
@@ -597,6 +625,10 @@ function buildText(h, g, s) {
   L.push(`  Families: ${fmt(h.familiesTotal)} (+${fmt(h.familiesNew24)} today, +${fmt(h.familiesNew7)} in 7d)`);
   L.push(`  Active (push-registered) devices: ${fmt(h.withFcm)}`);
   const td = (n) => (n == null ? 'today n/a' : `+${fmt(n)} today`);
+  L.push('APP STORE (iOS · all-time ratings)');
+  if (a?.error) L.push('  error: ' + a.error);
+  else if (a?.empty) L.push('  live — no ratings yet');
+  else if (a?.primary) L.push(`  Kuwait: ${a.primary.avg != null ? a.primary.avg.toFixed(2) : '—'}★ (${fmt(a.primary.count)} ratings) · all stores: ${fmt(a.totalCount)}`);
   L.push('ENGAGEMENT');
   L.push(`  Plans built: ${fmt(h.plansTotal)} (${td(h.plansNew24)})`);
   L.push(`  Memories saved: ${fmt(h.memoriesTotal)} (${td(h.memoriesNew24)})`);
@@ -646,13 +678,15 @@ function buildText(h, g, s) {
 // FormSubmit builds the email from posted fields (it can't render custom HTML),
 // so the report is sent as an ordered set of label→value rows that FormSubmit's
 // `table` template renders. Empty-value keys act as section headers.
-function buildFields(h, g, s, dateLabel) {
+function buildFields(h, g, s, a, dateLabel) {
   const td = (n) => (n == null ? 'n/a today' : `+${fmt(n)} today`);
   const f = {};
   f['Date'] = dateLabel;
   f['▾ APP HEALTH'] = ' ';
   f['Families'] = `${fmt(h.familiesTotal)}  (+${fmt(h.familiesNew24)} today · +${fmt(h.familiesNew7)} in 7 days)`;
   f['Active devices'] = `${fmt(h.withFcm)}  (push-registered)`;
+  if (a?.primary) f['App Store (iOS)'] = `Kuwait ${a.primary.avg != null ? a.primary.avg.toFixed(2) : '—'}★ (${fmt(a.primary.count)} ratings) · all stores ${fmt(a.totalCount)}`;
+  else if (a?.error) f['App Store (iOS)'] = `error: ${a.error}`;
   f['▾ ENGAGEMENT'] = ' ';
   f['Plans built'] = `${fmt(h.plansTotal)}  (${td(h.plansNew24)})`;
   f['Memories saved'] = `${fmt(h.memoriesTotal)}  (${td(h.memoriesNew24)})`;
@@ -794,7 +828,7 @@ async function sendTelegram(text) {
 
 (async () => {
   const dateLabel = new Date(now).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kuwait' });
-  const [h, g, s] = await Promise.all([firestoreHealth(), ga4(), searchConsole()]);
+  const [h, g, s, a] = await Promise.all([firestoreHealth(), ga4(), searchConsole(), appStore()]);
 
   // Growth scorecard — leads the report. WoW is live today; DoD + Index deltas
   // populate from tomorrow once yesterday's snapshot exists.
@@ -804,9 +838,9 @@ async function sendTelegram(text) {
   const baseline = earliestSnap();                 // earliest saved day (before we save today)
   const sc = buildScorecard(today, ySnap, wSnap, baseline, dateLabel);
 
-  const text = `${sc.textLines.join('\n')}\n\n${buildText(h, g, s)}`;
+  const text = `${sc.textLines.join('\n')}\n\n${buildText(h, g, s, a)}`;
   console.log(text); // always log to the Actions run for visibility/debugging
-  const fields = { ...sc.fields, ...buildFields(h, g, s, dateLabel) };
+  const fields = { ...sc.fields, ...buildFields(h, g, s, a, dateLabel) };
   await send(`Spotly daily report — ${dateLabel}`, fields);
   await sendTelegram(`📊 Spotly — ${dateLabel}\n\n${text}`); // no-op unless TELEGRAM_* set
 
