@@ -201,6 +201,39 @@ async function count(ref) {
   }
 }
 
+// Retention truth: how many families ever DID anything, how many are ghosts, and
+// whether the referral loop moved. The old report showed only signup totals +
+// GA4 actives (which mixes in website traffic), so a 0%-activation month looked
+// like growth. These three numbers are the actual health of the product.
+async function retentionHealth() {
+  try {
+    const fams = await db.collection('families').get();
+    let activated = 0, solo = 0, shared = 0, newIn7 = 0, activatedIn7 = 0;
+    for (const f of fams.docs) {
+      const v = f.data() || {};
+      const created = v.createdAt?.toMillis ? v.createdAt.toMillis() : null;
+      const isNew7 = created && created >= cut7;
+      if (isNew7) newIn7++;
+      const [p, m, s] = await Promise.all([
+        f.ref.collection('plans').count().get().then((x) => x.data().count).catch(() => 0),
+        f.ref.collection('memories').count().get().then((x) => x.data().count).catch(() => 0),
+        f.ref.collection('saved').count().get().then((x) => x.data().count).catch(() => 0),
+      ]);
+      const act = (p + m + s) > 0;
+      if (act) { activated++; if (isNew7) activatedIn7++; }
+      if ((v.members || []).length > 1) shared++; else solo++;
+    }
+    const invites = await db.collection('familyInvites').get().catch(() => ({ docs: [] }));
+    const accepted = invites.docs.filter((d) => (d.data() || {}).status === 'accepted').length;
+    const total = fams.size || 1;
+    return {
+      families: fams.size, activated, ghosts: fams.size - activated,
+      activationRate: activated / total, newIn7, activatedIn7,
+      shared, solo, invitesTotal: invites.docs.length, invitesAccepted: accepted,
+    };
+  } catch (e) { return { error: e.message }; }
+}
+
 async function firestoreHealth() {
   const families = db.collection('families');
   const [
@@ -522,7 +555,43 @@ function listTable(title, rows) {
 }
 const note = (txt) => `<div style="font:500 13px/1.4 -apple-system,sans-serif;color:${C.ink2};background:#fff7f2;border:1px solid #ffe0d2;border-radius:12px;padding:12px 14px;margin-top:8px;">${txt}</div>`;
 
-function buildHtml(h, g, s, dateLabel) {
+function heroBlock(sc, today, h, g) {
+  const idx = sc && sc.level != null ? sc.level.toFixed(1) : '—';
+  const mo = (sc && sc.fields && sc.fields['Momentum (wk/wk)']) || '';
+  const band = `<div style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:15px 18px;margin:0 6px 2px;">
+      <div style="font:600 11px/1.2 -apple-system,Segoe UI,Roboto,sans-serif;color:${C.ink2};text-transform:uppercase;letter-spacing:.08em;">Growth Index</div>
+      <div style="font:800 32px/1 -apple-system,Segoe UI,Roboto,sans-serif;color:${C.ink};margin-top:5px;">${idx}${mo ? ` <span style="font:600 13px/1 -apple-system,sans-serif;color:${C.coral};">${mo}</span>` : ''}</div>
+    </div>`;
+  const c = cards([
+    { label: 'Families (total)', value: fmt(h.familiesTotal), sub: h.familiesNew7 != null ? `+${fmt(h.familiesNew7)} in 7d` : '' },
+    { label: 'App active · 7d', value: fmt(g && g.last7 ? g.last7.activeUsers : null), sub: 'do they return?' },
+    { label: 'Installs · 7d', value: fmt(today ? today.installs7 : null), sub: today ? `WoW ${cell(today.installs7, today.installsPrev)}` : '' },
+    { label: 'SEO impressions · 7d', value: fmt(today ? today.impr7 : null), sub: today ? `${fmt(today.clicks7)} clicks` : '' },
+    { label: 'Bookings (total)', value: fmt(h.bookingsTotal), sub: 'revenue proxy' },
+  ]);
+  return band + c;
+}
+function funnelBlock(today, s, g, h) {
+  const imp = (s && s.totals ? s.totals.impressions : null) ?? (today ? today.impr7 : 0) ?? 0;
+  const clk = (s && s.totals ? s.totals.clicks : null) ?? (today ? today.clicks7 : 0) ?? 0;
+  const inst = (today ? today.installs7 : 0) ?? 0;
+  const act = (g && g.last7 ? g.last7.activeUsers : 0) ?? 0;
+  const pay = (h.ordersTotal || 0) + (h.voucherOrdersTotal || 0);
+  const max = Math.max(imp, 1);
+  const bar = (label, val) => {
+    const w = Math.max(1, Math.round(val / max * 100));
+    return `<tr>
+      <td style="padding:5px 10px 5px 0;font:600 11px/1.2 -apple-system,sans-serif;color:${C.ink2};text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;">${label}</td>
+      <td style="padding:5px 0;width:100%;"><div style="background:#fbe4db;border-radius:6px;height:22px;"><div style="background:${C.coral};height:22px;border-radius:6px;width:${w}%;"></div></div></td>
+      <td align="right" style="padding:5px 0 5px 10px;font:700 13px/1.2 -apple-system,sans-serif;color:${C.ink};white-space:nowrap;">${fmt(val)}</td>
+    </tr>`;
+  };
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:8px 14px;margin-top:8px;">
+    ${bar('Impressions', imp)}${bar('Site clicks', clk)}${bar('Installs 7d', inst)}${bar('App active 7d', act)}${bar('Paying', pay)}
+  </table>`;
+}
+
+function buildHtml(h, g, s, dateLabel, sc, today, r) {
   const delta = (n) => (n == null ? 'today: n/a' : n ? `+${fmt(n)} today` : 'none today');
 
   // Traffic — Search Console
@@ -574,6 +643,8 @@ function buildHtml(h, g, s, dateLabel) {
         <div style="font:500 13px/1.4 -apple-system,sans-serif;color:${C.ink2};margin-top:4px;">${dateLabel}</div>
       </td></tr>
 
+      <tr><td style="padding:0 6px 2px;">${heroBlock(sc, today, h, g)}</td></tr>
+
       <tr><td style="padding:0 6px;">${sectionTitle('App health')}
         ${cards([
           { label: 'Families', value: fmt(h.familiesTotal), sub: delta(h.familiesNew24) },
@@ -606,10 +677,25 @@ function buildHtml(h, g, s, dateLabel) {
       <tr><td style="padding:0 6px;">${sectionTitle('Traffic — organic search', 'meetspotly.com')}${seo}</td></tr>
       <tr><td style="padding:0 6px;">${sectionTitle('Traffic — app & site usage', 'GA4')}${usage}</td></tr>
 
+      ${r && !r.error ? `<tr><td style="padding:0 6px;">${sectionTitle('Retention & referral', 'the real health check')}
+        ${cards([
+          { label: 'Activation rate', value: pct(r.activationRate), sub: `${fmt(r.activated)} of ${fmt(r.families)} ever acted` },
+          { label: 'Ghost families', value: fmt(r.ghosts), sub: 'signed up, did nothing' },
+          { label: 'New in 7d', value: fmt(r.newIn7), sub: `${fmt(r.activatedIn7)} of them activated` },
+          { label: 'Shared families', value: fmt(r.shared), sub: `${fmt(r.solo)} still solo` },
+          { label: 'Invites created', value: fmt(r.invitesTotal), sub: `${fmt(r.invitesAccepted)} accepted` },
+        ])}
+        ${r.ghosts > r.activated ? note(`⚠️ <b>${fmt(r.ghosts)} of ${fmt(r.families)} families have never taken a single action.</b> Activation — not traffic — is the bottleneck.`) : ''}
+      </td></tr>` : ''}
+
+      <tr><td style="padding:0 6px;">${sectionTitle('Funnel', 'impressions → clicks → installs → active → paying')}${funnelBlock(today, s, g, h)}
+        ${note('<b>What to watch:</b> impressions are vanity — <b>installs</b> and whether <b>app active users return</b> are the real signal. Retention is the current bottleneck; the built-in family <b>invites</b> loop is the lever.')}
+      </td></tr>
+
       <tr><td style="padding:22px 6px 6px;">
         <div style="font:500 12px/1.5 -apple-system,sans-serif;color:${C.ink2};border-top:1px solid ${C.line};padding-top:14px;">
           Phase 1 · Kuwait. Commerce hidden until company registration — album/voucher orders shown for completeness.<br>
-          Generated automatically by GitHub Actions.
+          Generated automatically on EC2 · daily 05:00 Kuwait.
         </div>
       </td></tr>
     </table>
@@ -735,7 +821,10 @@ function buildFields(h, g, s, a, dateLabel) {
 
 // ---------------------------------------------------------------- send (FormSubmit)
 
-async function send(subject, fields) {
+async function send(subject, fields, html) {
+  if (process.env.HTML_OUT) {
+    try { fs.writeFileSync(process.env.HTML_OUT, html || ''); console.log('[html-out] wrote', process.env.HTML_OUT); } catch (e) { console.error('html-out failed', e.message); }
+  }
   if (process.env.REPORT_DRYRUN) {
     console.log('\n[dry-run] REPORT_DRYRUN set — not sending. Fields:\n');
     console.log(JSON.stringify(fields, null, 2));
@@ -743,27 +832,41 @@ async function send(subject, fields) {
   }
   // Sender priority: Resend (works from any server, incl. EC2) → Web3Forms →
   // FormSubmit (the last two only deliver from a residential IP, e.g. the Mac).
-  if (process.env.RESEND_API_KEY) return sendResend(subject, fields);
+  if (process.env.RESEND_API_KEY) return sendResend(subject, fields, html);
   if (process.env.WEB3FORMS_KEY) return sendWeb3Forms(subject, fields);
   return sendFormSubmit(subject, fields);
 }
 
-async function sendResend(subject, fields) {
+async function sendResend(subject, fields, htmlIn) {
   const FROM = process.env.REPORT_FROM || 'Spotly Reports <onboarding@resend.dev>';
   const rows = Object.entries(fields).map(([k, v]) => {
     if (/^▾/.test(k)) return `<tr><td colspan="2" style="padding:14px 0 4px;font:700 12px/1.2 -apple-system,sans-serif;color:#fa7959;text-transform:uppercase;letter-spacing:.05em;">${k.replace(/^▾\s*/, '')}${v && v.trim() ? ` <span style="color:#9a9088;font-weight:500;text-transform:none;">${v}</span>` : ''}</td></tr>`;
     return `<tr><td style="padding:5px 14px 5px 0;color:#6f675f;font:500 14px/1.3 -apple-system,sans-serif;white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:5px 0;color:#2b2622;font:600 14px/1.3 -apple-system,sans-serif;">${v}</td></tr>`;
   }).join('');
-  const html = `<div style="background:#fcfaf6;padding:24px;"><div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #ece7df;border-radius:16px;padding:22px 24px;"><div style="font:800 20px/1.1 -apple-system,Segoe UI,Roboto,sans-serif;color:#2b2622;"><span style="color:#fa7959;">●</span> Spotly — daily report</div><table style="width:100%;border-collapse:collapse;margin-top:12px;">${rows}</table></div></div>`;
+  const html = htmlIn || `<div style="background:#fcfaf6;padding:24px;"><div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #ece7df;border-radius:16px;padding:22px 24px;"><div style="font:800 20px/1.1 -apple-system,Segoe UI,Roboto,sans-serif;color:#2b2622;"><span style="color:#fa7959;">●</span> Spotly — daily report</div><table style="width:100%;border-collapse:collapse;margin-top:12px;">${rows}</table></div></div>`;
   const text = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n');
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: TO_LIST, subject, html, text }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (res.ok && body.id) { console.log('Sent via Resend →', TO_LIST.join(', '), body.id); return; }
-  console.error('Resend error', res.status, JSON.stringify(body));
+  // Senders to try in order. The first is what this report should come from; the second
+  // is the only domain currently verified in the Resend account, kept as a fallback so a
+  // DNS gap costs a nicer From line rather than the entire report. Verified 2026-09-02:
+  // send.meetspotly.com has a DKIM record but was never verified, so it returns 403 and
+  // nothing is delivered. Complete its DNS and the primary simply starts working again.
+  const SENDERS = [FROM, process.env.REPORT_FROM_FALLBACK || 'Spotly Reports <reports@outreach.khatibdesigns.com>'];
+  let lastStatus = 0, lastBody = {};
+  for (const from of SENDERS) {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: TO_LIST, subject, html, text }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.id) {
+      if (from !== SENDERS[0]) console.warn('NOTE: fell back to', from, '— the intended sender was rejected:', lastStatus, lastBody.message || '');
+      console.log('Sent via Resend →', TO_LIST.join(', '), body.id, 'from', from);
+      return;
+    }
+    lastStatus = res.status; lastBody = body;
+    console.error('Resend rejected', from, res.status, JSON.stringify(body).slice(0, 200));
+  }
   process.exit(1);
 }
 
@@ -828,7 +931,7 @@ async function sendTelegram(text) {
 
 (async () => {
   const dateLabel = new Date(now).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kuwait' });
-  const [h, g, s, a] = await Promise.all([firestoreHealth(), ga4(), searchConsole(), appStore()]);
+  const [h, g, s, a, r] = await Promise.all([firestoreHealth(), ga4(), searchConsole(), appStore(), retentionHealth()]);
 
   // Growth scorecard — leads the report. WoW is live today; DoD + Index deltas
   // populate from tomorrow once yesterday's snapshot exists.
@@ -838,10 +941,12 @@ async function sendTelegram(text) {
   const baseline = earliestSnap();                 // earliest saved day (before we save today)
   const sc = buildScorecard(today, ySnap, wSnap, baseline, dateLabel);
 
-  const text = `${sc.textLines.join('\n')}\n\n${buildText(h, g, s, a)}`;
+  const rTxt = (r && !r.error) ? `\nRETENTION & REFERRAL\n  Activation: ${(r.activationRate*100).toFixed(0)}% (${r.activated}/${r.families})  ·  Ghosts: ${r.ghosts}\n  New 7d: ${r.newIn7} (${r.activatedIn7} activated)  ·  Shared families: ${r.shared}/${r.families}\n  Invites: ${r.invitesTotal} created, ${r.invitesAccepted} accepted\n` : '';
+  const text = `${sc.textLines.join('\n')}\n\n${buildText(h, g, s, a)}${rTxt}`;
   console.log(text); // always log to the Actions run for visibility/debugging
   const fields = { ...sc.fields, ...buildFields(h, g, s, a, dateLabel) };
-  await send(`Spotly daily report — ${dateLabel}`, fields);
+  const emailHtml = buildHtml(h, g, s, dateLabel, sc, today, r);
+  await send(`Spotly daily report — ${dateLabel}`, fields, emailHtml);
   await sendTelegram(`📊 Spotly — ${dateLabel}\n\n${text}`); // no-op unless TELEGRAM_* set
 
   // Persist today's snapshot so tomorrow's DoD/Index deltas are real. Skipped on
