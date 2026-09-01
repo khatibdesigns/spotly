@@ -11,6 +11,7 @@ export type RouteName =
   | 'bookingConfirmed'
   | 'filters'
   | 'albumEditor'
+  | 'albumPreview'
   | 'albumCheckout'
   | 'paywall'
   | 'aiPlan'

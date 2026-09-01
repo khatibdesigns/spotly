@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Spotly for Partners</title>
+<style>
+  :root{
+    --bg:#fcfaf6; --ink:#211c17; --ink2:#574d43; --ink3:#8a7f72;
+    --coral:#fa7959; --coralDk:#d8512b; --coralLt:#fdeee7;
+    --indigo:#363a82; --indigoLt:#ecebf7;
+    --sage:#4f6f53; --sageLt:#e7efe6;
+    --line:#ece6dc; --card:#ffffff;
+  }
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;}
+  h1,h2,h3,.serif{font-family:Georgia,"Times New Roman",serif;}
+  @page{size:A4;margin:0;}
+  .page{width:210mm;min-height:297mm;padding:16mm 16mm;position:relative;page-break-after:always;}
+  .page:last-child{page-break-after:auto;}
+  .hero{background:linear-gradient(135deg,#fa7959,#d8512b);color:#fff;border-radius:18px;padding:22px 24px;}
+  .hero .pin{width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(255,255,255,.5);margin-bottom:12px;}
+  .hero h1{font-size:34px;margin:0 0 4px;letter-spacing:-1px;line-height:1.05;}
+  .hero p{margin:0;font-size:14px;opacity:.96;max-width:150mm;line-height:1.55;}
+  .eyebrow{font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);font-weight:700;}
+  .kicker{font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:var(--coralDk);font-weight:800;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 15px;}
+  .card .ic{font-size:20px;margin-bottom:6px;}
+  .card h3{margin:0 0 4px;font-size:14.5px;}
+  .card p{margin:0;color:var(--ink2);font-size:12px;}
+  .big{background:var(--indigo);color:#fff;border-radius:16px;padding:18px 20px;}
+  .big h3{margin:0 0 6px;color:#fff;font-size:17px;}
+  .big p{margin:0;opacity:.93;font-size:12.5px;}
+  ul.feat{margin:6px 0 0;padding-left:17px;}
+  ul.feat li{margin:5px 0;color:var(--ink2);font-size:12.3px;}
+  ul.feat li b{color:var(--ink);}
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  thead th{background:var(--sage);color:#fff;font-size:10px;letter-spacing:.4px;text-transform:uppercase;border:none;}
+  thead th:first-child{border-top-left-radius:9px;} thead th:last-child{border-top-right-radius:9px;}
+  td.k{font-weight:700;color:var(--ink);}
+  .check{color:var(--sage);font-weight:800;}
+  .step{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px dashed var(--line);}
+  .step .n{min-width:28px;height:28px;border-radius:50%;background:var(--coral);color:#fff;font-family:Georgia,serif;font-size:14px;display:flex;align-items:center;justify-content:center;}
+  .step .t b{color:var(--ink);} .step .t{font-size:12.3px;color:var(--ink2);}
+  .sec{font-family:Georgia,serif;font-size:19px;letter-spacing:-.4px;margin:18px 0 10px;}
+  .mt{margin-top:13px;}
+  .foot{position:absolute;bottom:11mm;left:16mm;right:16mm;display:flex;justify-content:space-between;font-size:10px;color:var(--ink3);font-weight:700;letter-spacing:.6px;border-top:1px solid var(--line);padding-top:10px;}
+  .stat{flex:1;text-align:center;}
+  .stat .n{font-family:Georgia,serif;font-size:24px;color:var(--coralDk);}
+  .stat .l{font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;margin-top:3px;}
+</style>
+</head>
+<body>
+
+<!-- PAGE 1 -->
+<section class="page">
+  <div class="hero">
+    <div class="pin"><svg width="22" height="26" viewBox="0 0 100 118"><path d="M50 4 C24 4 6 22 6 47 c0 23 18 41 38 65 c2 2 4 2 6 2 c2 0 4 0 6-2 c20-24 38-42 38-65 C94 22 76 4 50 4z" fill="#fff"/><circle cx="50" cy="46" r="20" fill="#fa7959"/></svg></div>
+    <h1>Spotly for Partners</h1>
+    <p>Spotly is where families decide where to take their kids. Get discovered by the right parents, sell prepaid offers, take bookings, and see exactly who's interested — all from one dashboard.</p>
+  </div>
+
+  <div class="grid mt">
+    <div class="card"><div class="ic">👨‍👩‍👧‍👦</div><h3>The right audience</h3><p>Parents actively planning kid-friendly outings — not a generic crowd. Every place on Spotly is vetted as family-friendly.</p></div>
+    <div class="card"><div class="ic">💸</div><h3>Cash upfront</h3><p>Sell prepaid vouchers and get paid <b>before</b> the family even visits — instant cash flow plus new customers.</p></div>
+    <div class="card"><div class="ic">📈</div><h3>Real numbers</h3><p>See views, clicks, bookings, vouchers, revenue &amp; repeat clients — with trends, forecasts, and a per-branch breakdown.</p></div>
+    <div class="card"><div class="ic">🏷️</div><h3>Promotion that works</h3><p>Float to the top of Discover with a badge + a highlighted map pin, right when families are choosing where to go.</p></div>
+  </div>
+
+  <div class="sec">Free to list — earn when you onboard</div>
+  <table>
+    <thead><tr><th>What you get</th><th>Free listing</th><th>Onboarded partner</th></tr></thead>
+    <tbody>
+      <tr><td class="k">Appear in Discover, Map &amp; AI plans</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td class="k">See your views &amp; clicks</td><td class="check">✓</td><td class="check">✓</td></tr>
+      <tr><td class="k">Sell prepaid vouchers (cash upfront)</td><td>—</td><td class="check">✓</td></tr>
+      <tr><td class="k">Take bookings + scan-to-redeem (QR)</td><td>—</td><td class="check">✓</td></tr>
+      <tr><td class="k">Promoted placement &amp; full analytics</td><td>—</td><td class="check">✓</td></tr>
+      <tr><td class="k">Branded confirmation emails to customers</td><td>—</td><td class="check">✓</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:11.5px;color:var(--ink3);margin-top:8px;">Your venue may already be on Spotly. <b>Claiming it is free.</b> To start <b>selling</b> — vouchers or bookings — we onboard you and add your offers (we'll do it with you in one sitting).</p>
+
+  <div class="big mt">
+    <h3>Why families love it (and come back)</h3>
+    <p>Spotly doesn't just help families find you — it helps them keep the memory. They save the day out, plan with AI, and turn their photos into printed albums. That's a parent who returns every weekend — and discovers you again.</p>
+  </div>
+
+  <div class="foot"><span>SPOTLY FOR PARTNERS</span><span>meetspotly.com/partners</span></div>
+</section>
+
+<!-- PAGE 2 -->
+<section class="page">
+  <div class="kicker">Getting started</div>
+  <h2 class="serif" style="font-size:26px;letter-spacing:-.5px;margin:6px 0 4px;">Live in one sitting</h2>
+  <p style="color:var(--ink2);max-width:155mm;margin:0 0 6px;">No setup fee, no long forms. We help you onboard so your first voucher can sell the same day.</p>
+
+  <div class="step"><div class="n">1</div><div class="t"><b>Claim your place.</b> Find your venue on Spotly (it's likely already listed) and claim it from the partner dashboard or the app.</div></div>
+  <div class="step"><div class="n">2</div><div class="t"><b>Add your offers.</b> Create prepaid vouchers (e.g. "pay 10 → get 15 balance") and/or enable bookings. We'll set these up with you.</div></div>
+  <div class="step"><div class="n">3</div><div class="t"><b>Go live &amp; get discovered.</b> Families see your offers in Discover; you can request promoted placement to feature them.</div></div>
+  <div class="step"><div class="n">4</div><div class="t"><b>Redeem &amp; track.</b> Scan the customer's QR to redeem (app camera or in-browser), and watch your sales, clients &amp; trends in the dashboard.</div></div>
+
+  <div class="sec">Founding Partner program</div>
+  <div class="grid3">
+    <div class="card"><div class="ic">🎖️</div><h3>Founding badge</h3><p>A "Founding Partner" badge on your listing — early credibility with families.</p></div>
+    <div class="card"><div class="ic">🚀</div><h3>Free promotion</h3><p>3–6 months of promoted placement, on us, for the first partners to join.</p></div>
+    <div class="card"><div class="ic">🤝</div><h3>White-glove setup</h3><p>We onboard your branches and offers for you — multi-branch brands welcome.</p></div>
+  </div>
+
+  <div class="sec">For multi-branch brands</div>
+  <p style="color:var(--ink2);max-width:155mm;margin-top:0;">Spotly supports a full brand → country → branch hierarchy: one head-office account, country managers, and branch managers — each sees only their own performance. Onboard the whole brand once; every branch goes live together.</p>
+
+  <div class="big" style="background:var(--sage);margin-top:8px;">
+    <h3>Ready when you are</h3>
+    <p>Claim your venue today and we'll help you list your first offer. Partner dashboard: <b>meetspotly.com/partners</b>. Prefer a hand? Reply to this and we'll onboard you in one call.</p>
+  </div>
+
+  <div style="display:flex;gap:14px;margin-top:16px;">
+    <div class="stat"><div class="n">Free</div><div class="l">To list &amp; be discovered</div></div>
+    <div class="stat"><div class="n">Cash</div><div class="l">Upfront on vouchers</div></div>
+    <div class="stat"><div class="n">1 call</div><div class="l">To go live</div></div>
+  </div>
+
+  <div class="foot"><span>SPOTLY FOR PARTNERS</span><span>meetspotly.com/partners</span></div>
+</section>
+
+</body>
+</html>

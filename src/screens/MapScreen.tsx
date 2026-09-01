@@ -10,6 +10,7 @@ import { Btn, SpotImage, CircBtn } from '../components/ui';
 import { useStore } from '../lib/store';
 import { usePlaces } from '../lib/placesStore';
 import { useMemories } from '../lib/memories';
+import { GALLERY_ENABLED } from '../lib/flags';
 import { useI18n } from '../lib/i18n';
 import { Spot, formatDistance, getEvents, SpotEvent, getUserLocation } from '../lib/places';
 
@@ -184,7 +185,8 @@ export function MapScreen() {
 
       {/* Top toggle */}
       <View style={{ position: 'absolute', top: insets.top + 6, left: 16, right: 16, flexDirection: 'row', gap: 10 }}>
-        <Toggle mode={mode} onChange={(m) => { setMode(m); setActive(null); }} />
+        {/* Phase 1: "places we've been" needs memories (gallery) → hidden. */}
+        {GALLERY_ENABLED ? <Toggle mode={mode} onChange={(m) => { setMode(m); setActive(null); }} /> : <View style={{ flex: 1 }} />}
         <CircBtn onPress={() => push('filters')}>{Icons.filter({ size: 16, color: C.ink })}</CircBtn>
       </View>
 

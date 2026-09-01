@@ -10,6 +10,8 @@ import { Icons } from '../components/icons';
 import { Chip, Btn, CircBtn } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useProfile, Kid } from '../lib/profile';
+import { DobPicker } from '../components/DobPicker';
+import { ageFromDob, formatDob } from '../lib/dob';
 import { useI18n } from '../lib/i18n';
 
 const LIKE_PRESETS = ['Pizza', 'Pasta', 'Burgers', 'Chicken', 'Rice', 'Noodles', 'Sushi', 'Sandwiches', 'Fruit', 'Pancakes', 'Ice cream', 'Cheese'];
@@ -32,6 +34,8 @@ export function KidFoodScreen() {
 
   const [favs, setFavs] = useState<string[]>(kid?.favFoods || []);
   const [avoid, setAvoid] = useState<string[]>(kid?.avoidFoods || []);
+  const [dob, setDob] = useState<string | undefined>(kid?.dob);
+  const [dobOpen, setDobOpen] = useState(false);
   const [draftFav, setDraftFav] = useState('');
   const [draftAvoid, setDraftAvoid] = useState('');
   const [saving, setSaving] = useState(false);
@@ -54,7 +58,7 @@ export function KidFoodScreen() {
     setSaving(true);
     try {
       const kids = (profile.kids || []).map((k) =>
-        k.id === kid.id ? { ...k, favFoods: favs, avoidFoods: avoid } : k
+        k.id === kid.id ? { ...k, dob, age: ageFromDob(dob) ?? k.age, favFoods: favs, avoidFoods: avoid } : k
       );
       await saveProfile({ kids });
       pop();
@@ -77,8 +81,18 @@ export function KidFoodScreen() {
         </View>
 
         <KeyboardAwareScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bottomOffset={24} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}>
+          {/* Birthday */}
+          <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.coralDk, letterSpacing: 1, textTransform: 'uppercase', marginTop: 10, marginBottom: 10 }}>{t('setup.birthday')}</Text>
+          <Pressable onPress={() => setDobOpen(true)} style={[{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderRadius: R.lg, paddingVertical: 13, paddingHorizontal: 13, borderWidth: 1, borderColor: C.line }, SH.card]}>
+            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: C.coralLt, alignItems: 'center', justifyContent: 'center' }}>{Icons.calendar({ size: 17, color: C.coralDk })}</View>
+            <Text style={{ flex: 1, fontFamily: F.semibold, fontSize: 14.5, color: dob ? C.ink : C.ink3 }}>
+              {dob ? `${formatDob(dob)}  ·  ${t('profile.ageFmt', { age: ageFromDob(dob) ?? 0 })}` : t('setup.setBirthday')}
+            </Text>
+            {Icons.chevR({ size: 16, color: C.ink3 })}
+          </Pressable>
+
           {/* Loves */}
-          <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.sage, letterSpacing: 1, textTransform: 'uppercase', marginTop: 10, marginBottom: 12 }}>{t('food.loves')}</Text>
+          <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.sage, letterSpacing: 1, textTransform: 'uppercase', marginTop: 26, marginBottom: 12 }}>{t('food.loves')}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {favChips.map((f) => (
               <Chip key={f} active={has(favs, f)} onPress={() => toggle(favs, setFavs, f)}>{f}</Chip>
@@ -110,6 +124,8 @@ export function KidFoodScreen() {
         <View style={[{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 12 }, SH.pop]}>
           <Btn kind="primary" size="lg" full onPress={save}>{saving ? t('gallery.saving') : t('food.savePrefs')}</Btn>
         </View>
+
+        <DobPicker visible={dobOpen} value={dob} onClose={() => setDobOpen(false)} onSelect={setDob} />
       </>
     </View>
   );

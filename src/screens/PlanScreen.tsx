@@ -12,6 +12,7 @@ import { usePlans, Plan, Stop } from '../lib/plans';
 import { Spot } from '../lib/places';
 import { addPlanToCalendar } from '../lib/calendar';
 import { dayDateLabel } from '../lib/aiPlan';
+import { GALLERY_ENABLED } from '../lib/flags';
 import { useI18n } from '../lib/i18n';
 
 // Carry the stop's original index so edit actions map back to the flat array.
@@ -41,6 +42,8 @@ function stopToSpot(s: Stop): Spot {
     photoUrl: s.photoUrl || undefined,
     address: undefined,
     tone: s.tone || 'sun',
+    rating: s.rating ?? undefined,
+    reviews: s.reviews ?? undefined,
   };
 }
 
@@ -61,6 +64,7 @@ function StopRow({
   onRemove,
   onUp,
   onDown,
+  onArrive,
 }: {
   s: Stop;
   editing: boolean;
@@ -70,7 +74,9 @@ function StopRow({
   onRemove: () => void;
   onUp: () => void;
   onDown: () => void;
+  onArrive?: () => void;
 }) {
+  const { t } = useI18n();
   const body = (
     <>
       <SpotImage photoUrl={s.photoUrl || undefined} tone={s.tone || 'sun'} height={48} radius={10} style={{ width: 48 }} />
@@ -80,7 +86,12 @@ function StopRow({
           <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.ink }}>{s.name}</Text>
           {s.estCost ? <Text style={{ fontFamily: F.semibold, fontSize: 11, color: C.ink3 }}>{s.estCost}</Text> : null}
         </View>
-        {s.note ? <Text numberOfLines={2} style={{ fontSize: 12, color: C.ink2, fontFamily: F.regular, marginTop: 1, lineHeight: 16 }}>{s.note}</Text> : s.category ? <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{s.category}</Text> : null}
+        {s.rating ? (
+          <Text style={{ fontSize: 11.5, color: C.ink3, fontFamily: F.semibold, marginTop: 2 }}>
+            <Text style={{ color: C.sun }}>★</Text> {s.rating.toFixed(1)}{s.reviews ? ` · ${s.reviews}` : ''}{s.category ? ` · ${s.category}` : ''}
+          </Text>
+        ) : null}
+        {s.note ? <Text numberOfLines={2} style={{ fontSize: 12, color: C.ink2, fontFamily: F.regular, marginTop: 1, lineHeight: 16 }}>{s.note}</Text> : !s.rating && s.category ? <Text style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{s.category}</Text> : null}
       </View>
     </>
   );
@@ -101,8 +112,14 @@ function StopRow({
   }
 
   return (
-    <Pressable onPress={onOpen} style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+    <Pressable onPress={onOpen} style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
       {body}
+      {s.time && onArrive ? (
+        <Pressable onPress={onArrive} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.surface2, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 9 }}>
+          {Icons.pin({ size: 11, color: C.coralDk })}
+          <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: C.coralDk }}>{t('plan.arrive')}</Text>
+        </Pressable>
+      ) : null}
       {Icons.chevR({ size: 16, color: C.ink3 })}
     </Pressable>
   );
@@ -116,6 +133,7 @@ function PlanCard({
   onOpenStop,
   onRemoveStop,
   onMoveStop,
+  onArrive,
 }: {
   plan: Plan;
   onDone?: () => void;
@@ -124,6 +142,7 @@ function PlanCard({
   onOpenStop: (s: Stop) => void;
   onRemoveStop: (index: number) => void;
   onMoveStop: (index: number, dir: 'up' | 'down') => void;
+  onArrive?: (index: number) => void;
 }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
@@ -190,6 +209,7 @@ function PlanCard({
                 onRemove={() => confirmRemove(s._i, s.name)}
                 onUp={() => onMoveStop(s._i, 'up')}
                 onDown={() => onMoveStop(s._i, 'down')}
+                onArrive={onArrive ? () => onArrive(s._i) : undefined}
               />
             ))}
           </View>
@@ -210,9 +230,9 @@ function PlanCard({
               <Btn kind="dark" size="sm" style={{ flex: 1 }} icon={Icons.calendar({ size: 14, color: '#fff' })} onPress={addToCalendar}>{t('plan.addCalendar')}</Btn>
               <Btn kind="ghost" size="sm" onPress={onDone}>{t('plan.markDone')}</Btn>
             </>
-          ) : (
+          ) : GALLERY_ENABLED ? (
             <Btn kind="sage" size="sm" style={{ flex: 1 }} icon={Icons.camera({ size: 14, color: '#fff' })} onPress={onAddPhotos}>{t('plan.addPhotos')}</Btn>
-          )}
+          ) : null}
         </View>
       )}
     </View>
@@ -240,7 +260,7 @@ function AiBanner({ onPress }: { onPress: () => void }) {
 export function PlanScreen() {
   const insets = useSafeAreaInsets();
   const { setTab, push } = useStore();
-  const { plans, markDone, deletePlan, removeStop, moveStop } = usePlans();
+  const { plans, markDone, deletePlan, removeStop, moveStop, retimeDay } = usePlans();
   const { setSelected } = usePlaces();
   const { t } = useI18n();
   const upcoming = plans.filter((p) => p.status === 'upcoming');
@@ -249,6 +269,26 @@ export function PlanScreen() {
   const openStop = (s: Stop) => {
     setSelected(stopToSpot(s));
     push('place');
+  };
+
+  // "I'm here" → use the current time as the arrival, then slide the rest of the day.
+  const confirmArrive = (plan: Plan, index: number) => {
+    const stop = plan.stops?.[index];
+    if (!stop) return;
+    Alert.alert(t('plan.arriveTitle', { name: stop.name }), t('plan.arriveMsg'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('plan.arriveCta'),
+        onPress: async () => {
+          const d = new Date();
+          const delta = await retimeDay(plan.id, index, d.getHours() * 60 + d.getMinutes());
+          if (!delta) { Alert.alert(t('plan.retimed'), t('plan.retimedNone')); return; }
+          const a = Math.abs(delta); const h = Math.floor(a / 60); const m = a % 60;
+          const ds = `${h ? h + 'h ' : ''}${m || !h ? m + 'm' : ''}`.trim();
+          Alert.alert(t('plan.retimed'), t('plan.retimedMsg', { delta: ds }));
+        },
+      },
+    ]);
   };
 
   return (
@@ -284,6 +324,7 @@ export function PlanScreen() {
                   onOpenStop={openStop}
                   onRemoveStop={(i) => removeStop(p.id, i)}
                   onMoveStop={(i, dir) => moveStop(p.id, i, dir)}
+                  onArrive={(i) => confirmArrive(p, i)}
                 />
               ))}
             </View>

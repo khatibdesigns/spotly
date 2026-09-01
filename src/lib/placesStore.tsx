@@ -7,7 +7,12 @@ import { getUserLocation, getSpots, getScreenVerdicts, requestScreen, KUWAIT_CIT
 // Short-lived local cache of the last shown spots so reopening the app paints
 // instantly while a fresh fetch runs in the background. Only the small display
 // snapshot is cached; verdicts/screening still come from Firestore.
-const SPOTS_CACHE_KEY = 'spotly.spots.v1';
+const SPOTS_CACHE_KEY = 'spotly.spots.v2'; // v2: excludes no-cover-photo places
+// How long a cached feed stays "fresh enough" to skip the launch-time refetch.
+// Discovery data barely moves hour-to-hour, but every cold open used to re-bill
+// the full Google Places fan-out — this caps the auto-refetch to once per window
+// per device. On-demand refresh (pull-to-refresh, location changes) bypasses it.
+const SPOTS_FRESH_MS = 12 * 60 * 60 * 1000; // 12h
 
 // Kind filters (activity / dining / shop / stay) — OR among themselves.
 const KIND_OF: Record<string, Spot['kind']> = {
@@ -80,11 +85,22 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
   const [filters, setFilters] = useState<Set<string>>(new Set());
   const [areaLabel, setAreaLabel] = useState<string | null>(null);
 
-  // AI-screening curation (STRICT): a Google place is only shown once Claude
-  // has approved it. Curated/merchant-claimed places (they opted in) always
-  // show and are never screened. Verdicts are cached in Firestore forever, so
-  // each place is screened once — over time the cache becomes a full vetted DB
-  // and screening rarely runs.
+  // AI-screening curation (FAIL-OPEN): a Google place is shown as soon as it
+  // passes the cheap local kid-safety heuristic in getSpots (cafes/bars/shisha
+  // primaryTypes excluded, dining goodForChildren===false dropped, no-cover-photo
+  // dropped). The AI screener is a REFINEMENT layer on top: it only ever SUBTRACTS
+  // places it has EXPLICITLY rejected (keep===false). Unseen places show
+  // immediately and are screened in the background; any that come back rejected
+  // are removed live. Curated/merchant-claimed places (they opted in) always show
+  // and are never screened.
+  //
+  // Why fail-open: the old STRICT gate withheld every Google place until Claude
+  // approved it. With the seeded curated docs purged, the feed is pure Google, so
+  // a cold cache, a slow/unreachable screener, or testing from outside the swept
+  // area (e.g. a sim's default US location) produced a COMPLETELY EMPTY Discover.
+  // Fail-open keeps the feed populated in all those cases; verdicts cached in
+  // Firestore still accumulate, so over time the rejected set is fully known and
+  // the feed converges to the same vetted result the strict gate produced.
   // Mirror of `spots` so callbacks can read the current list without re-creating.
   const spotsRef = useRef<Spot[]>([]);
   const applySpots = useCallback((list: Spot[]) => { spotsRef.current = list; setSpots(list); }, []);
@@ -94,24 +110,24 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
 
   const screenable = (x: Spot) => x.source === 'google' && !x.ownerUid && !!x.id;
   const applyAndScreen = useCallback(async (raw: Spot[], l: UserLoc) => {
-    const ids = raw.filter(screenable).map((x) => x.id);
-    const verdicts = await getScreenVerdicts(ids); // cached id -> keep
-    const approved = new Set<string>();
-    for (const [id, keep] of verdicts) if (keep) approved.add(id);
-    // STRICT: show non-screenable (curated/claimed) + cached-approved only.
-    const initial = raw.filter((x) => !screenable(x) || approved.has(x.id));
-    applySpots(initial);
-    cacheSpots(initial, l);
-    const unseen = raw.filter((x) => screenable(x) && !verdicts.has(x.id));
+    const screenables = raw.filter(screenable);
+    const verdicts = await getScreenVerdicts(screenables.map((x) => x.id)); // cached id -> keep
+    const rejected = new Set<string>();
+    for (const [id, keep] of verdicts) if (!keep) rejected.add(id);
+    // Show everything except places the AI has explicitly rejected.
+    const visible = (rej: Set<string>) => raw.filter((x) => !screenable(x) || !rej.has(x.id));
+    applySpots(visible(rejected));
+    cacheSpots(visible(rejected), l);
+    // Screen the never-seen places in the background and subtract any rejects.
+    const unseen = screenables.filter((x) => !verdicts.has(x.id));
     if (unseen.length) {
       setScreening(true);
       requestScreen(unseen)
         .then((res) => {
-          for (const [id, keep] of res) if (keep) approved.add(id);
+          for (const [id, keep] of res) if (!keep) rejected.add(id);
           // Re-derive from raw so order (distance/promoted) is preserved.
-          const next = raw.filter((x) => !screenable(x) || approved.has(x.id));
-          applySpots(next);
-          cacheSpots(next, l);
+          applySpots(visible(rejected));
+          cacheSpots(visible(rejected), l);
         })
         .catch(() => {})
         .finally(() => setScreening(false));
@@ -145,14 +161,26 @@ export function PlacesProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let fresh = false;
       try {
         const rawC = await AsyncStorage.getItem(SPOTS_CACHE_KEY);
         if (!cancelled && rawC) {
           const c = JSON.parse(rawC);
-          if (Array.isArray(c?.spots) && c.spots.length) { applySpots(c.spots); if (c.loc) setLoc(c.loc); setLoading(false); }
+          if (Array.isArray(c?.spots) && c.spots.length) {
+            applySpots(c.spots);
+            if (c.loc) setLoc(c.loc);
+            setLoading(false);
+            // Fresh cache → skip the launch refetch. Every cold open used to
+            // re-bill the whole Google Places fan-out even though the last feed
+            // was still fine; this is the single biggest per-user cost cut.
+            fresh = typeof c.ts === 'number' && Date.now() - c.ts < SPOTS_FRESH_MS;
+          }
         }
       } catch {}
-      if (!cancelled) reload(); // spotsRef is now populated → reload won't flash the spinner
+      // Only hit Google on launch when we don't already have a fresh feed. The
+      // on-demand paths (pull-to-refresh, "use my location", location picker,
+      // map "search this area") still force a live fetch whenever the user asks.
+      if (!cancelled && !fresh) reload(); // spotsRef populated → reload won't flash the spinner
     })();
     return () => { cancelled = true; };
   }, []);

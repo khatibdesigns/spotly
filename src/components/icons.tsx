@@ -207,6 +207,12 @@ export const camera = ico(
   </>
 );
 export const sparkle = ico(<Path d="M12 3v6M12 15v6M3 12h6M15 12h6M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3" />);
+export const refresh = ico(
+  <>
+    <Path d="M21 12a9 9 0 1 1-2.64-6.36" />
+    <Path d="M21 3v5h-5" />
+  </>
+);
 export const clock = ico(
   <>
     <Circle cx="12" cy="12" r="9" />
@@ -404,6 +410,7 @@ export const Icons = {
   star,
   camera,
   sparkle,
+  refresh,
   clock,
   phone,
   directions,

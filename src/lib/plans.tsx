@@ -21,6 +21,8 @@ export type Stop = {
   estCost?: string | null; // approx cost per family (from the AI plan)
   lat?: number | null;
   lng?: number | null;
+  rating?: number | null;
+  reviews?: number | null;
 };
 export type Plan = {
   id: string;
@@ -44,12 +46,43 @@ type PlansState = {
   deletePlan: (planId: string) => Promise<void>;
   removeStop: (planId: string, index: number) => Promise<void>;
   moveStop: (planId: string, index: number, dir: 'up' | 'down') => Promise<void>;
+  // "I've arrived": shift the rest of a day's stops by how late you reached one.
+  // Returns the applied delta in minutes (0 if nothing changed).
+  retimeDay: (planId: string, index: number, arrivalMinutes: number) => Promise<number>;
 };
 
 const Ctx = createContext<PlansState | null>(null);
 
+// "10:00" / "10:00 AM" / "9 PM" → minutes since midnight, or null if unparseable.
+export function parseTimeToMinutes(t?: string | null): number | null {
+  if (!t) return null;
+  const m = String(t).trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  const ap = m[3]?.toLowerCase();
+  if (ap === 'pm' && h < 12) h += 12;
+  if (ap === 'am' && h === 12) h = 0;
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+// Format minutes back to a time string, matching whether the source used AM/PM,
+// clamped within the same day so a late shift never wraps past midnight.
+export function minutesToTime(orig: string | null | undefined, total: number): string {
+  total = Math.max(0, Math.min(23 * 60 + 59, total));
+  const h = Math.floor(total / 60);
+  const min = total % 60;
+  if (/am|pm/i.test(String(orig || ''))) {
+    const ap = h >= 12 ? 'PM' : 'AM';
+    let h12 = h % 12; if (h12 === 0) h12 = 12;
+    return `${h12}:${String(min).padStart(2, '0')} ${ap}`;
+  }
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
 function spotToStop(s: Spot): Stop {
-  return { placeId: s.id, name: s.name, category: s.category, photoUrl: s.photoUrl || '', tone: s.tone };
+  return { placeId: s.id, name: s.name, category: s.category, photoUrl: s.photoUrl || '', tone: s.tone, rating: s.rating ?? null, reviews: s.reviews ?? null, lat: s.lat ?? null, lng: s.lng ?? null };
 }
 
 export function PlansProvider({ children }: { children: React.ReactNode }) {
@@ -98,7 +131,7 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
       (it.days || []).forEach((d) =>
         (d.stops || []).forEach((s) =>
           stops.push({
-            placeId: s.name,
+            placeId: s.placeId || s.name,
             name: s.name,
             category: s.category || '',
             photoUrl: s.photoUrl ?? null,
@@ -110,6 +143,8 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
             estCost: s.estCost ?? null,
             lat: s.lat ?? null,
             lng: s.lng ?? null,
+            rating: s.rating ?? null,
+            reviews: s.reviews ?? null,
           })
         )
       );
@@ -174,7 +209,36 @@ export function PlansProvider({ children }: { children: React.ReactNode }) {
     [user, familyId, plans]
   );
 
-  return <Ctx.Provider value={{ plans, loading, addSpotToPlan, saveItinerary, markDone, deletePlan, removeStop, moveStop }}>{children}</Ctx.Provider>;
+  // "I've arrived" — you reached the stop at `index` at `arrivalMinutes`. Compute how
+  // far off its planned time that is and add that delta to every later stop IN THE SAME
+  // DAY (so the rest of the day slides to match). Stops with no/unparseable time are left
+  // alone. Returns the applied delta in minutes (0 if you were on time).
+  const retimeDay = useCallback(
+    async (planId: string, index: number, arrivalMinutes: number): Promise<number> => {
+      if (!user || !firestore || !familyId) return 0;
+      const plan = plans.find((p) => p.id === planId);
+      if (!plan) return 0;
+      const stops = [...(plan.stops || [])];
+      const target = stops[index];
+      if (!target) return 0;
+      const planned = parseTimeToMinutes(target.time);
+      if (planned == null) return 0;
+      const delta = arrivalMinutes - planned;
+      if (delta === 0) return 0;
+      const day = target.day ?? 0;
+      for (let i = index; i < stops.length; i++) {
+        if ((stops[i].day ?? 0) !== day) continue;
+        const m = parseTimeToMinutes(stops[i].time);
+        if (m == null) continue;
+        stops[i] = { ...stops[i], time: minutesToTime(stops[i].time, m + delta) };
+      }
+      await updateDoc(doc(firestore, 'families', familyId, 'plans', planId), { stops });
+      return delta;
+    },
+    [user, familyId, plans]
+  );
+
+  return <Ctx.Provider value={{ plans, loading, addSpotToPlan, saveItinerary, markDone, deletePlan, removeStop, moveStop, retimeDay }}>{children}</Ctx.Provider>;
 }
 
 export function usePlans(): PlansState {

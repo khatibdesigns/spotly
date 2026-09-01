@@ -53,3 +53,5 @@ certs/
 Stores/
 spotly-instagram-grid/
 spotly-instagram-grid-jpeg.zip
+android/keystore.properties
+android/app/upload-keystore.jks

@@ -110,7 +110,15 @@ export function BookingScreen() {
             <SpotImage photoUrl={place?.photoUrl} tone={place?.tone || 'sun'} height={54} radius={14} style={{ width: 54 }} />
             <View style={{ flex: 1 }}>
               <Text numberOfLines={1} style={{ fontFamily: F.extrabold, fontSize: 16, color: C.ink }}>{place?.name || t('bk.requestVisit')}</Text>
-              <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular }}>{place?.category || t('bk.requestToBook')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                {place?.rating ? (
+                  <Text style={{ fontSize: 12, color: C.ink2, fontFamily: F.semibold }}>
+                    <Text style={{ color: C.sun }}>★</Text> {place.rating.toFixed(1)}{place.reviews ? ` · ${place.reviews}` : ''}
+                  </Text>
+                ) : null}
+                <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, flex: 1 }}>{place?.category || t('bk.requestToBook')}</Text>
+              </View>
+              {place?.address ? <Text numberOfLines={1} style={{ fontSize: 11.5, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{place.address}</Text> : null}
             </View>
           </View>
 

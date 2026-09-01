@@ -1,0 +1,12 @@
+{
+  "id": "session-1785092612490",
+  "startedAt": "2026-07-26T19:03:32.490Z",
+  "cwd": "/Users/naderalkhatib/spotly",
+  "context": {},
+  "metrics": {
+    "edits": 21,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  }
+}

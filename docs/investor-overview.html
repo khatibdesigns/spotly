@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Spotly — Investor Overview</title>
+<style>
+  :root{
+    --bg:#fcfaf6; --ink:#211c17; --ink2:#574d43; --ink3:#8a7f72;
+    --coral:#fa7959; --coralDk:#d8512b; --coralLt:#fdeee7;
+    --indigo:#363a82; --indigo2:#4c51a6; --indigoLt:#ecebf7;
+    --sage:#4f6f53; --sageLt:#e7efe6; --gold:#b8860b;
+    --line:#ece6dc; --card:#ffffff;
+  }
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:13px;line-height:1.55;}
+  h1,h2,h3,.serif{font-family:Georgia,"Times New Roman",serif;}
+  @page{size:A4;margin:0;}
+  .page{width:210mm;min-height:297mm;padding:20mm 18mm;position:relative;page-break-after:always;}
+  .page:last-child{page-break-after:auto;}
+  .muted{color:var(--ink3);}
+  .kicker{font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--coralDk);font-weight:700;}
+  .eyebrow{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);font-weight:700;}
+
+  .cover{background:linear-gradient(155deg,#363a82 0%,#2a2d66 55%,#d8512b 145%);color:#fff;
+    display:flex;flex-direction:column;justify-content:space-between;}
+  .cover .pin{width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.15);
+    display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(255,255,255,.5);}
+  .cover h1{font-size:58px;line-height:1.02;margin:16px 0 4px;letter-spacing:-1.2px;}
+  .cover .sub{font-size:18px;opacity:.95;font-weight:600;}
+  .cover .lede{font-size:14.5px;max-width:140mm;opacity:.95;line-height:1.65;margin-top:18px;}
+  .cover .foot{font-size:11px;opacity:.9;border-top:1px solid rgba(255,255,255,.3);padding-top:14px;display:flex;justify-content:space-between;}
+
+  .sec-h{border-bottom:2px solid var(--line);padding-bottom:10px;margin-bottom:16px;}
+  .sec-h h2{font-size:26px;margin:6px 0 0;letter-spacing:-.5px;}
+  .lead{font-size:14px;color:var(--ink2);max-width:152mm;}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 15px;}
+  .card h3{margin:0 0 5px;font-size:14.5px;}
+  .card p{margin:0;color:var(--ink2);font-size:12.2px;}
+  .tag{display:inline-block;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;font-weight:700;
+    color:var(--indigo);background:var(--indigoLt);border-radius:6px;padding:3px 7px;margin-bottom:8px;}
+  .tag.coral{color:var(--coralDk);background:var(--coralLt);}
+  .tag.sage{color:var(--sage);background:var(--sageLt);}
+  ul.feat{margin:6px 0 0;padding-left:18px;}
+  ul.feat li{margin:4px 0;color:var(--ink2);font-size:12.5px;}
+
+  .callout{background:var(--indigo);color:#fff;border-radius:16px;padding:18px 20px;margin-top:14px;}
+  .callout h3{margin:0 0 6px;color:#fff;font-size:16px;}
+  .callout p{margin:0;opacity:.92;font-size:12.5px;}
+
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12.3px;}
+  th,td{text-align:right;padding:9px 10px;border-bottom:1px solid var(--line);}
+  th:first-child,td:first-child{text-align:left;}
+  thead th{background:var(--indigo);color:#fff;font-size:11px;letter-spacing:.5px;text-transform:uppercase;border:none;}
+  thead th:first-child{border-top-left-radius:10px;}
+  thead th:last-child{border-top-right-radius:10px;}
+  tbody tr:nth-child(even){background:#fff;}
+  tr.total td{font-weight:800;color:var(--coralDk);border-top:2px solid var(--coral);border-bottom:none;font-size:13.5px;background:var(--coralLt);}
+  td.metric{font-weight:700;color:var(--ink);}
+
+  .market{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;margin-top:8px;}
+  .mc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center;}
+  .mc .n{font-family:Georgia,serif;font-size:30px;color:var(--indigo);line-height:1;}
+  .mc .t{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.8px;margin-top:6px;}
+  .mc .d{font-size:11px;color:var(--ink2);margin-top:7px;line-height:1.4;}
+
+  .streams{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:6px;}
+  .stream{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px 14px;position:relative;}
+  .stream .pct{position:absolute;top:12px;right:14px;font-family:Georgia,serif;font-size:18px;color:var(--coralDk);}
+  .stream h3{margin:0 0 4px;font-size:14px;padding-right:46px;}
+  .stream p{margin:0;font-size:11.8px;color:var(--ink2);}
+
+  .ask{background:linear-gradient(140deg,#fa7959,#d8512b);color:#fff;border-radius:18px;padding:22px 24px;margin-top:8px;}
+  .ask .big{font-family:Georgia,serif;font-size:34px;line-height:1.05;margin:2px 0 4px;}
+  .ask p{opacity:.95;font-size:12.8px;margin:0;}
+  .useoffunds{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:9px;margin-top:12px;}
+  .uf{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);border-radius:11px;padding:11px;text-align:center;}
+  .uf .p{font-family:Georgia,serif;font-size:20px;}
+  .uf .l{font-size:10px;opacity:.92;margin-top:3px;line-height:1.3;}
+
+  .timeline{margin-top:8px;}
+  .tl{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px dashed var(--line);}
+  .tl .when{min-width:64px;font-weight:800;color:var(--coralDk);font-size:12px;}
+  .tl .what{font-size:12.3px;color:var(--ink2);}
+
+  .note{font-size:10px;color:var(--ink3);margin-top:14px;line-height:1.5;border-top:1px solid var(--line);padding-top:10px;}
+  .foot-num{position:absolute;bottom:11mm;right:18mm;font-size:10px;color:var(--ink3);}
+  .foot-brand{position:absolute;bottom:11mm;left:18mm;font-size:10px;color:var(--ink3);font-weight:700;letter-spacing:1px;}
+  .mt{margin-top:14px;}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<section class="page cover">
+  <div>
+    <div class="pin">
+      <svg width="29" height="34" viewBox="0 0 100 118"><path d="M50 4 C24 4 6 22 6 47 c0 23 18 41 38 65 c2 2 4 2 6 2 c2 0 4 0 6-2 c20-24 38-42 38-65 C94 22 76 4 50 4z" fill="#fff"/><circle cx="50" cy="46" r="20" fill="#fa7959"/></svg>
+    </div>
+    <div class="eyebrow" style="color:rgba(255,255,255,.85);margin-top:24px;">Investor Overview · Confidential · 2026</div>
+    <h1>Spotly</h1>
+    <div class="sub">The family-outing platform — discover, plan, remember.</div>
+    <div class="lede">Spotly helps families find genuinely kid-friendly places, plan their outings with AI, and turn the memories into printed keepsakes — while giving local venues a channel to reach those families and sell. A two-sided, multi-revenue platform, GCC-first and built to scale internationally.</div>
+  </div>
+  <div class="foot">
+    <span>Seeking seed investment</span>
+    <span>meetspotly.com</span>
+  </div>
+</section>
+
+<!-- PROBLEM / SOLUTION -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">The opportunity</div><h2>A weekly problem for every family</h2></div>
+  <p class="lead">Families everywhere face the same recurring question — "where do we take the kids?" — and the tools they use weren't built for them. Meanwhile, family venues have no efficient way to reach exactly those parents.</p>
+  <div class="two mt">
+    <div>
+      <div class="tag coral">Problem</div>
+      <ul class="feat">
+        <li><strong>Decision fatigue, every weekend.</strong> Parents default to the same few places.</li>
+        <li><strong>Generic discovery fails families.</strong> Maps surface bars, cafés &amp; adult venues — not age-, diet- or weather-appropriate options.</li>
+        <li><strong>Memories scatter</strong> across thousands of camera-roll photos.</li>
+        <li><strong>Local venues can't target parents</strong> cost-effectively.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="tag sage">Solution</div>
+      <ul class="feat">
+        <li><strong>AI-curated discovery</strong> — every place vetted for kid-friendliness before it's shown.</li>
+        <li><strong>An AI trip planner</strong> tuned to your kids' ages, food &amp; the live weather.</li>
+        <li><strong>A memory map &amp; gallery</strong> that converts into printed albums (recurring, high-margin).</li>
+        <li><strong>A merchant platform + CRM</strong> for listings, offers, bookings &amp; analytics.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <h3>Why now</h3>
+    <p>AI makes it finally possible to curate "family-friendly" at scale and cheaply — a screen-once, reuse-everywhere model. Combined with the GCC's young, mobile-first, high-spend family demographic and an under-served local-experiences market, Spotly can build the default family-outings layer before a generic incumbent does.</p>
+  </div>
+  <div class="foot-brand">SPOTLY · CONFIDENTIAL</div><div class="foot-num">2</div>
+</section>
+
+<!-- MARKET -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Market</div><h2>A large, multi-pocket market</h2></div>
+  <p class="lead">Spotly sits at the intersection of family leisure &amp; experiences, local-services advertising, and personalised photo products — three large markets it monetises simultaneously. Figures below are illustrative, top-down estimates to frame scale.</p>
+  <div class="market mt">
+    <div class="mc"><div class="n">$1.2T+</div><div class="t">TAM</div><div class="d">Global family / kids leisure, travel &amp; experiences spend.</div></div>
+    <div class="mc"><div class="n">~$40B</div><div class="t">SAM</div><div class="d">Family activities, bookings, local advertising &amp; photo-printing across target regions (GCC + EU + US).</div></div>
+    <div class="mc"><div class="n">~$600M</div><div class="t">SOM (5-yr)</div><div class="d">Realistic obtainable slice via subscriptions, commerce take &amp; albums in launch markets.</div></div>
+  </div>
+
+  <div class="eyebrow mt" style="margin-bottom:8px;">Why GCC-first</div>
+  <div class="grid3">
+    <div class="card"><h3>Young families</h3><p>High birth rates, large household sizes and strong weekend family-outing culture.</p></div>
+    <div class="card"><h3>High spend &amp; mobile-first</h3><p>Top-tier smartphone penetration, app spend and disposable income per family.</p></div>
+    <div class="card"><h3>Under-served</h3><p>No bilingual, family-curated discovery + commerce incumbent — and heat/seasonality make weather-aware planning genuinely valuable.</p></div>
+  </div>
+
+  <div class="callout" style="background:var(--sage)">
+    <h3>Beachhead → expansion</h3>
+    <p>Kuwait is already fully AI-screened (~2,700 places processed). The same low-cost pipeline rolls out region by region — Saudi, Qatar, UAE, then EU &amp; US — so each new market launches with a pre-curated catalogue rather than an empty map.</p>
+  </div>
+  <div class="foot-brand">SPOTLY · CONFIDENTIAL</div><div class="foot-num">3</div>
+</section>
+
+<!-- BUSINESS MODEL -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Business model</div><h2>Five reinforcing revenue streams</h2></div>
+  <p class="lead">Spotly monetises both sides of the marketplace. Consumer discovery &amp; bookings stay free to maximise the funnel; revenue comes from subscriptions, transaction take-rates, physical products and merchant services.</p>
+  <div class="streams mt">
+    <div class="stream"><span class="pct">①</span><h3>Spotly Plus subscription</h3><p>Premium tier (~$4.99/mo, $39.99/yr): unlimited memory storage, full map &amp; advanced AI curation. Recurring consumer revenue.</p></div>
+    <div class="stream"><span class="pct">②</span><h3>Printed albums &amp; prints</h3><p>The marquee driver. Custom photo books from a family's gallery — high AOV, high margin, emotionally sticky, repeat-purchase per trip.</p></div>
+    <div class="stream"><span class="pct">③</span><h3>Bookings &amp; voucher commerce</h3><p>A take-rate on prepaid vouchers and booking commissions. Free to the family; monetised on the merchant's GMV.</p></div>
+    <div class="stream"><span class="pct">④</span><h3>Merchant promotion &amp; SaaS</h3><p>Paid promoted placement + a tiered CRM subscription for multi-branch brands (analytics, team, redemption).</p></div>
+  </div>
+  <div class="card mt" style="border-color:var(--coral)"><span style="font-family:Georgia,serif;font-size:18px;color:var(--coralDk);float:right">⑤</span><h3>Data-light partnerships (future)</h3><p>Sponsored family campaigns, tourism-board &amp; brand collaborations, and white-label family discovery for hotels &amp; malls — incremental, high-margin once the network is dense.</p></div>
+
+  <div class="eyebrow mt" style="margin-bottom:8px;">Illustrative unit economics</div>
+  <div class="grid3">
+    <div class="card"><h3>Subscription</h3><p>~$40/yr ARPU at 4–8% conversion of active families; near-100% gross margin (digital).</p></div>
+    <div class="card"><h3>Printed album</h3><p>~$35 AOV, ~$15–18 contribution after print &amp; ship; recurring per outing/season.</p></div>
+    <div class="card"><h3>Commerce take</h3><p>~10% of voucher/booking GMV; scales directly with merchant density &amp; usage.</p></div>
+  </div>
+  <div class="foot-brand">SPOTLY · CONFIDENTIAL</div><div class="foot-num">4</div>
+</section>
+
+<!-- TRACTION -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Traction</div><h2>Built &amp; in testing — not a slide deck</h2></div>
+  <p class="lead">Spotly is a working, feature-complete product across both sides of the marketplace — shipping to TestFlight and Android testers through <strong>49 production builds</strong>, with the hard infrastructure (AI curation, commerce, multi-tier merchant CRM) already live.</p>
+  <div class="grid mt">
+    <div class="card"><div class="tag">Product</div><h3>Two-sided platform live</h3><p>Customer app (discover, AI planner, memories, bookings, vouchers) + merchant app + web CRM — on iOS &amp; Android in test distribution.</p></div>
+    <div class="card"><div class="tag coral">Curation</div><h3>AI-screened catalogue</h3><p>~2,700 Kuwait venues processed; a global screen-once cache that compounds in value and falls in cost as coverage grows.</p></div>
+    <div class="card"><div class="tag sage">Supply</div><h3>Merchant onboarding works</h3><p>Four-tier brand → country → branch hierarchy with invite/claim flows, offers, scan-to-redeem and per-branch analytics; a demo brand runs end-to-end.</p></div>
+    <div class="card"><div class="tag">Monetisation</div><h3>Commerce rails in place</h3><p>Voucher cart, multi-currency, QR passes &amp; redemption, subscription paywall — one integration seam from live payments.</p></div>
+  </div>
+  <div class="callout">
+    <h3>What's left to launch</h3>
+    <p>Switch on live payments (Stripe), sign print-fulfilment partners, finalise the GCC go-live, and run paid-growth. The expensive engineering — the curation pipeline, two-sided data model and CRM — is done.</p>
+  </div>
+  <div class="foot-brand">SPOTLY · CONFIDENTIAL</div><div class="foot-num">5</div>
+</section>
+
+<!-- GTM + MOAT -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Strategy</div><h2>Go-to-market &amp; moat</h2></div>
+  <div class="two">
+    <div>
+      <div class="eyebrow" style="margin-bottom:6px;">Go-to-market</div>
+      <ul class="feat">
+        <li><strong>Land in Kuwait</strong> (pre-screened catalogue) → dense local supply + paid &amp; organic family acquisition.</li>
+        <li><strong>Sign anchor brands</strong> (multi-branch family venues) via the CRM to seed offers &amp; bookings.</li>
+        <li><strong>Memory loop drives retention</strong> — albums &amp; passport keep families returning after each outing.</li>
+        <li><strong>Expand</strong> Saudi → Qatar → UAE → EU/US, each launching pre-curated.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:6px;">Defensibility</div>
+      <ul class="feat">
+        <li><strong>Compounding curated dataset</strong> — screen-once, reuse-everywhere; cost per market falls over time.</li>
+        <li><strong>Two-sided network effects</strong> — more families attract venues; more venues enrich discovery.</li>
+        <li><strong>Memory flywheel &amp; switching cost</strong> — a family's photo history &amp; map live in Spotly.</li>
+        <li><strong>Localisation moat</strong> — bilingual Arabic/RTL, multi-currency, weather-aware: hard for a generic incumbent to retrofit.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="eyebrow mt" style="margin-bottom:8px;">Key assumptions behind the model</div>
+  <div class="grid3">
+    <div class="card"><h3>Acquisition</h3><p>Blended CAC kept low via organic + referral (family invites) + merchant-driven traffic.</p></div>
+    <div class="card"><h3>Engagement</h3><p>Outings are repeat behaviour; the memory loop lifts retention &amp; album attach-rate.</p></div>
+    <div class="card"><h3>Supply density</h3><p>Anchor brands + AI base catalogue make each market useful from day one.</p></div>
+  </div>
+  <div class="foot-brand">SPOTLY · CONFIDENTIAL</div><div class="foot-num">6</div>
+</section>
+
+<!-- FORECAST -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Financial plan</div><h2>3-year illustrative forecast</h2></div>
+  <p class="lead">A bottom-up model of the five revenue streams. <strong>These are illustrative management projections, not actuals</strong> — Spotly is pre-launch (TestFlight / test distribution) with no recorded revenue yet. Figures in USD.</p>
+
+  <table>
+    <thead><tr><th>Driver / stream</th><th>Year 1</th><th>Year 2</th><th>Year 3</th></tr></thead>
+    <tbody>
+      <tr><td class="metric">Active families (MAU)</td><td>15,000</td><td>90,000</td><td>320,000</td></tr>
+      <tr><td class="metric">Plus conversion</td><td>4%</td><td>6%</td><td>8%</td></tr>
+      <tr><td>① Subscriptions</td><td>$24,000</td><td>$216,000</td><td>$1,024,000</td></tr>
+      <tr><td>② Printed albums</td><td>$11,250</td><td>$94,500</td><td>$460,800</td></tr>
+      <tr><td>③ Commerce take (~10% GMV)</td><td>$30,000</td><td>$250,000</td><td>$1,200,000</td></tr>
+      <tr><td>④ Merchant promo &amp; SaaS</td><td>$18,000</td><td>$142,200</td><td>$594,000</td></tr>
+      <tr class="total"><td>Total revenue</td><td>$83K</td><td>$703K</td><td>$3.28M</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid3 mt">
+    <div class="card"><h3>GMV processed</h3><p>~$0.3M → ~$2.5M → ~$12M as merchant density &amp; bookings scale.</p></div>
+    <div class="card"><h3>Paying merchants</h3><p>~30 → ~150 → ~500 brands/branches on promotion or CRM plans.</p></div>
+    <div class="card"><h3>Album orders</h3><p>~750 → ~6,300 → ~25,600 at a growing attach-rate per active family.</p></div>
+  </div>
+
+  <div class="callout" style="margin-top:14px;">
+    <h3>Path to scale</h3>
+    <p>Revenue compounds as (a) more markets come online pre-curated, (b) the album attach-rate and Plus conversion mature with the memory loop, and (c) merchant density lifts the commerce take. The model is gross-margin-favourable: digital streams are near-100% margin; albums carry a healthy physical-product contribution.</p>
+  </div>
+
+  <div class="note"><strong>Disclaimer.</strong> All financial figures, market sizes and operating metrics on this page are forward-looking illustrative estimates prepared by management for discussion only. They are not audited, not guarantees of future performance, and depend on assumptions (acquisition cost, conversion, retention, supply density, fulfilment economics and market timing) that may differ materially from actual results. Spotly has not yet launched publicly or recognised revenue.</div>
+  <div class="foot-brand">SPOTLY · CONFIDENTIAL</div><div class="foot-num">7</div>
+</section>
+
+<!-- THE ASK -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">The ask</div><h2>Investment &amp; use of funds</h2></div>
+  <div class="ask">
+    <div class="eyebrow" style="color:rgba(255,255,255,.85)">Raising</div>
+    <div class="big">$1.0M – $1.5M seed</div>
+    <p>To convert a finished product into a launched, revenue-generating business across the GCC, with the foundations for international expansion.</p>
+    <div class="useoffunds">
+      <div class="uf"><div class="p">40%</div><div class="l">Growth &amp; family acquisition (GCC)</div></div>
+      <div class="uf"><div class="p">30%</div><div class="l">Product &amp; eng: payments, albums, regional curation</div></div>
+      <div class="uf"><div class="p">15%</div><div class="l">Partnerships &amp; merchant BD</div></div>
+      <div class="uf"><div class="p">15%</div><div class="l">Operations &amp; runway</div></div>
+    </div>
+  </div>
+
+  <div class="eyebrow mt" style="margin-bottom:6px;">12–18 month milestones</div>
+  <div class="timeline">
+    <div class="tl"><div class="when">Q1–Q2</div><div class="what">Public GCC launch (Kuwait); live Stripe payments; print-album fulfilment partner signed.</div></div>
+    <div class="tl"><div class="when">Q2–Q3</div><div class="what">Scale to ~90K active families; ~150 paying merchants; album attach-rate &amp; Plus conversion validated.</div></div>
+    <div class="tl"><div class="when">Q3–Q4</div><div class="what">Expand to Saudi, Qatar &amp; UAE with pre-curated catalogues; merchant SaaS tiers live.</div></div>
+    <div class="tl"><div class="when">Q4+</div><div class="what">EU/US pilot; approach Series A on proven unit economics &amp; multi-market traction.</div></div>
+  </div>
+
+  <div class="callout" style="margin-top:16px;">
+    <h3>Why back Spotly now</h3>
+    <p>A working two-sided product, a compounding AI-curated dataset, five reinforcing revenue streams, and a defensible GCC-first beachhead — capital is for go-to-market and payments, not for figuring out whether the product can be built. It already is.</p>
+  </div>
+
+  <div class="note" style="border:none;color:var(--ink3);">Contact · meetspotly.com · partners: meetspotly.com/partners &nbsp;|&nbsp; This document is confidential and intended solely for the named recipient.</div>
+  <div class="foot-brand">SPOTLY · CONFIDENTIAL</div><div class="foot-num">8</div>
+</section>
+
+</body>
+</html>

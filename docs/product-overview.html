@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Spotly — Product Overview</title>
+<style>
+  :root{
+    --bg:#fcfaf6; --ink:#211c17; --ink2:#574d43; --ink3:#8a7f72;
+    --coral:#fa7959; --coralDk:#d8512b; --coralLt:#fdeee7;
+    --indigo:#363a82; --indigo2:#4c51a6; --indigoLt:#ecebf7;
+    --sage:#4f6f53; --sageLt:#e7efe6;
+    --line:#ece6dc; --card:#ffffff;
+  }
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:13px;line-height:1.55;}
+  h1,h2,h3,.serif{font-family:Georgia,"Times New Roman",serif;}
+  @page{size:A4;margin:0;}
+  .page{width:210mm;min-height:297mm;padding:20mm 18mm;position:relative;page-break-after:always;}
+  .page:last-child{page-break-after:auto;}
+  .muted{color:var(--ink3);}
+  .kicker{font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--coralDk);font-weight:700;}
+  .eyebrow{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);font-weight:700;}
+
+  /* Cover */
+  .cover{background:linear-gradient(150deg,#fa7959 0%,#e0552f 48%,#363a82 130%);color:#fff;
+    display:flex;flex-direction:column;justify-content:space-between;}
+  .cover .pin{width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,.16);
+    display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(255,255,255,.5);}
+  .cover h1{font-size:62px;line-height:1.02;margin:18px 0 6px;letter-spacing:-1.5px;}
+  .cover .sub{font-size:19px;opacity:.95;font-weight:600;}
+  .cover .lede{font-size:14.5px;max-width:135mm;opacity:.95;line-height:1.65;margin-top:18px;}
+  .cover .foot{font-size:11px;opacity:.9;border-top:1px solid rgba(255,255,255,.3);padding-top:14px;
+    display:flex;justify-content:space-between;}
+  .pillrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:22px;}
+  .pillrow .p{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.34);
+    border-radius:999px;padding:6px 13px;font-size:11.5px;font-weight:600;}
+
+  /* Section header */
+  .sec-h{border-bottom:2px solid var(--line);padding-bottom:10px;margin-bottom:18px;}
+  .sec-h h2{font-size:27px;margin:6px 0 0;letter-spacing:-.5px;}
+  .lead{font-size:14px;color:var(--ink2);max-width:150mm;}
+
+  /* Cards grid */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 15px;}
+  .card h3{margin:0 0 5px;font-size:15px;}
+  .card p{margin:0;color:var(--ink2);font-size:12.3px;}
+  .tag{display:inline-block;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;font-weight:700;
+    color:var(--indigo);background:var(--indigoLt);border-radius:6px;padding:3px 7px;margin-bottom:8px;}
+  .tag.coral{color:var(--coralDk);background:var(--coralLt);}
+  .tag.sage{color:var(--sage);background:var(--sageLt);}
+
+  ul.feat{margin:6px 0 0;padding-left:18px;}
+  ul.feat li{margin:3px 0;color:var(--ink2);font-size:12.3px;}
+
+  .pillars{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:9px;margin-top:6px;}
+  .pillar{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 10px;text-align:center;}
+  .pillar .dot{width:30px;height:30px;border-radius:9px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+  .pillar h3{font-size:13.5px;margin:0 0 4px;}
+  .pillar p{font-size:10.8px;color:var(--ink3);margin:0;line-height:1.45;}
+
+  .callout{background:var(--indigo);color:#fff;border-radius:16px;padding:18px 20px;margin-top:16px;}
+  .callout h3{margin:0 0 6px;color:#fff;font-size:16px;}
+  .callout p{margin:0;opacity:.92;font-size:12.5px;}
+
+  .statstrip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:6px;}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px;text-align:center;}
+  .stat .n{font-family:Georgia,serif;font-size:25px;color:var(--coralDk);line-height:1;}
+  .stat .l{font-size:10.5px;color:var(--ink3);margin-top:5px;text-transform:uppercase;letter-spacing:.6px;}
+
+  .foot-num{position:absolute;bottom:11mm;right:18mm;font-size:10px;color:var(--ink3);}
+  .foot-brand{position:absolute;bottom:11mm;left:18mm;font-size:10px;color:var(--ink3);font-weight:700;letter-spacing:1px;}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+  .mt{margin-top:16px;}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<section class="page cover">
+  <div>
+    <div class="pin">
+      <svg width="30" height="35" viewBox="0 0 100 118"><path d="M50 4 C24 4 6 22 6 47 c0 23 18 41 38 65 c2 2 4 2 6 2 c2 0 4 0 6-2 c20-24 38-42 38-65 C94 22 76 4 50 4z" fill="#fff"/><circle cx="50" cy="46" r="20" fill="#fa7959"/></svg>
+    </div>
+    <div class="eyebrow" style="color:rgba(255,255,255,.85);margin-top:26px;">Product Overview · 2026</div>
+    <h1>Spotly</h1>
+    <div class="sub">All about the family.</div>
+    <div class="lede">The app that helps families decide <strong>where to take their kids</strong> — AI-curated, location-aware discovery of genuinely kid-friendly places — then <strong>keeps the memories</strong>: a photo gallery and world map of everywhere you've been, turned into custom printed albums.</div>
+    <div class="pillrow">
+      <span class="p">Discover</span><span class="p">AI Trip Planner</span><span class="p">Memory Map</span><span class="p">Gallery → Albums</span><span class="p">Bookings &amp; Vouchers</span><span class="p">Merchant CRM</span>
+    </div>
+  </div>
+  <div class="foot">
+    <span>iOS · Android · Web CRM</span>
+    <span>meetspotly.com</span>
+  </div>
+</section>
+
+<!-- THE PROBLEM / SOLUTION -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">The idea</div><h2>One place for the whole family weekend</h2></div>
+  <p class="lead">Parents waste their limited free time deciding where to go — and end up repeating the same three places. Generic maps surface bars, cafés and shisha lounges; they don't understand a 3-year-old, a halal preference, or 45°C heat at 3 PM. Spotly is built around the family from the first tap.</p>
+
+  <div class="two mt">
+    <div>
+      <div class="tag coral">The problem</div>
+      <ul class="feat">
+        <li>"Where do we take the kids this weekend?" — decision fatigue, every week.</li>
+        <li>Map apps aren't curated for children, ages, dietary needs or weather.</li>
+        <li>Outing photos get lost in a 10,000-photo camera roll.</li>
+        <li>Local family venues struggle to reach the right parents.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="tag sage">The Spotly answer</div>
+      <ul class="feat">
+        <li>Every place is <strong>AI-screened</strong> for genuine kid-friendliness before it's shown.</li>
+        <li>Recommendations adapt to your kids' ages, food preferences &amp; the live weather.</li>
+        <li>A built-in <strong>memory map &amp; gallery</strong> that becomes printed keepsake albums.</li>
+        <li>A merchant side + CRM so venues list, sell and measure — building the network.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="eyebrow mt" style="margin-bottom:8px;">Five pillars · one bottom tab each</div>
+  <div class="pillars">
+    <div class="pillar"><div class="dot" style="background:var(--coralLt)">🧭</div><h3>Discover</h3><p>Curated kid-friendly places near you</p></div>
+    <div class="pillar"><div class="dot" style="background:var(--indigoLt)">✨</div><h3>Plan</h3><p>AI day-by-day trip itineraries</p></div>
+    <div class="pillar"><div class="dot" style="background:var(--sageLt)">🗺️</div><h3>Map</h3><p>Live map + visited "passport"</p></div>
+    <div class="pillar"><div class="dot" style="background:var(--coralLt)">📸</div><h3>Gallery</h3><p>Memories → printed albums</p></div>
+    <div class="pillar"><div class="dot" style="background:var(--indigoLt)">👨‍👩‍👧</div><h3>Profile</h3><p>Family, kids &amp; sharing</p></div>
+  </div>
+
+  <div class="callout">
+    <h3>The flywheel</h3>
+    <p>Discovery brings families in → outings create memories → memories become printed albums (the marquee revenue driver) → a richer family profile makes the next recommendation better. Merchants join to reach those families, deepening the catalogue.</p>
+  </div>
+  <div class="foot-brand">SPOTLY</div><div class="foot-num">2</div>
+</section>
+
+<!-- DISCOVER + PLANNER -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">For families</div><h2>Discover &amp; the AI Trip Planner</h2></div>
+  <div class="grid">
+    <div class="card"><div class="tag coral">Discover</div><h3>AI-screened, family-first feed</h3><p>Live results from Google Places are each judged once by Claude AI for genuine kid-friendliness (parks, play areas, museums, family dining) — filtering out bars, cafés &amp; shisha lounges. Verdicts are cached globally so the catalogue keeps getting smarter.</p></div>
+    <div class="card"><div class="tag coral">Discover</div><h3>Smart filters &amp; context</h3><p>Halal, hotels &amp; resorts, indoor / outdoor, waterparks, price, open-now, "tastes they'll love" dining. A live weather chip, a location picker, "search this area", photo carousels, and an instant-loading feed.</p></div>
+    <div class="card"><div class="tag">AI Planner</div><h3>Plain-language day plans</h3><p>"4 days in Paris with two kids, ~€150/day." Spotly returns a sequenced, age-appropriate, multi-day itinerary with real places, photos, map pins, time slots and estimated costs — saved straight into Plans &amp; your calendar.</p></div>
+    <div class="card"><div class="tag">AI Planner · new</div><h3>Weather-aware &amp; editable</h3><p>The planner now reads the destination's live weather and avoids outdoor stops during peak heat. Swap any stop for another of the same category with one tap (↻), add or remove stops and days, and get a push notification the moment your plan is ready — even if the app is closed.</p></div>
+  </div>
+
+  <div class="eyebrow mt" style="margin-bottom:8px;">What makes the planner different</div>
+  <div class="grid3">
+    <div class="card"><h3>Knows your family</h3><p>Pulls kids' ages, favourite foods and allergies from the profile to bias and exclude suggestions.</p></div>
+    <div class="card"><h3>Runs in the cloud</h3><p>Generation runs on a server job — close the app and a notification brings you back to the finished plan.</p></div>
+    <div class="card"><h3>Real, bookable places</h3><p>Every stop is a real venue with coordinates, photos and a path to booking or directions.</p></div>
+  </div>
+
+  <div class="callout" style="background:var(--coralDk);">
+    <h3>Memory Map &amp; Gallery → Printed Albums</h3>
+    <p>Add a photo + place after each outing; Spotly pins it to your private world map and builds a visited "passport". When the trip's done, turn the gallery into a beautiful custom printed album ("Our France Trip") — physical keepsakes shipped to your door, the long-term growth engine.</p>
+  </div>
+  <div class="foot-brand">SPOTLY</div><div class="foot-num">3</div>
+</section>
+
+<!-- FAMILY, BOOKINGS, COMMERCE -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">For families</div><h2>Family, bookings &amp; commerce</h2></div>
+  <div class="grid">
+    <div class="card"><div class="tag sage">Family</div><h3>Shared family account</h3><p>Multiple adults under one family via deep-link invites (<span class="muted">meetspotly.com/join</span>). Each parent appears as themselves; kids' profiles drive recommendations. Family-wide plans, memories and saves.</p></div>
+    <div class="card"><div class="tag sage">Bookings</div><h3>Request-to-book + QR pass</h3><p>Reserve a place in-app → get a branded confirmation email and a QR pass. Merchants scan to redeem. Add to calendar in one tap.</p></div>
+    <div class="card"><div class="tag coral">Commerce</div><h3>Prepaid vouchers &amp; cart</h3><p>Venues sell prepaid offers (e.g. "pay 10 → get 15 balance"). A global cart spans places, multi-currency (KWD, SAR, AED, USD, EUR…), with a QR voucher pass and "My Purchases".</p></div>
+    <div class="card"><div class="tag coral">Commerce</div><h3>Scan-to-redeem</h3><p>Booking &amp; voucher QR codes are redeemed by the merchant via in-app camera or the web CRM (camera or USB scanner) — closing the loop from discovery to paid visit.</p></div>
+  </div>
+
+  <div class="eyebrow mt" style="margin-bottom:8px;">Built global from day one</div>
+  <div class="grid3">
+    <div class="card"><h3>Arabic &amp; RTL</h3><p>Full English + Arabic localisation with right-to-left layout; GCC-first, internationally ready.</p></div>
+    <div class="card"><h3>Multi-currency</h3><p>Gulf &amp; Western currencies with correct symbols and decimals throughout commerce.</p></div>
+    <div class="card"><h3>Push &amp; analytics</h3><p>Firebase Cloud Messaging campaigns + GA4 analytics wired across both platforms.</p></div>
+  </div>
+
+  <div class="foot-brand">SPOTLY</div><div class="foot-num">4</div>
+</section>
+
+<!-- MERCHANT SIDE -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">For venues</div><h2>The merchant side &amp; CRM</h2></div>
+  <p class="lead">Spotly isn't just a directory — it's a two-sided platform. Family venues claim their listing, sell offers, take bookings and measure performance, both inside the app and through a web CRM at <strong>meetspotly.com/partners</strong>.</p>
+
+  <div class="grid mt">
+    <div class="card"><div class="tag">Hierarchy</div><h3>Brands, countries &amp; branches</h3><p>A four-tier model — Super-admin → Brand owner → Country manager → Branch manager — with permissions enforced at the database level. A branch manager literally cannot see another branch's revenue. Managers onboard by invite or self-claim with owner approval.</p></div>
+    <div class="card"><div class="tag">Analytics</div><h3>Insights, trends &amp; forecasts</h3><p>Tap any metric — views, clicks, bookings, vouchers, revenue, clients — for a 30-day trend chart, a 7-day forecast, a per-branch breakdown and the underlying customer list.</p></div>
+    <div class="card"><div class="tag coral">Growth</div><h3>Promoted placement</h3><p>Merchants can request promotion: a paid placement floats them to the top of Discover with a badge and a highlighted map pin.</p></div>
+    <div class="card"><div class="tag sage">Control</div><h3>Offers &amp; live toggle</h3><p>Manage vouchers and currency, take a branch offline/online instantly, and redeem QR passes — all role-scoped.</p></div>
+  </div>
+
+  <div class="callout">
+    <h3>A self-curating catalogue</h3>
+    <p>Two supply sources reinforce each other: AI screening builds a vetted base of real venues automatically, while merchants opt in to enrich their own listings with offers, photos and bookings. Kuwait is already fully screened; the same pipeline scales region by region.</p>
+  </div>
+  <div class="foot-brand">SPOTLY</div><div class="foot-num">5</div>
+</section>
+
+<!-- STATUS / TECH -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Where it stands</div><h2>Maturity &amp; foundation</h2></div>
+  <div class="statstrip">
+    <div class="stat"><div class="n">49</div><div class="l">Production builds</div></div>
+    <div class="stat"><div class="n">2</div><div class="l">Platforms live in test</div></div>
+    <div class="stat"><div class="n">~2,700</div><div class="l">Kuwait places AI-screened</div></div>
+    <div class="stat"><div class="n">5+</div><div class="l">Revenue streams designed</div></div>
+  </div>
+
+  <div class="eyebrow mt" style="margin-bottom:8px;">Technology foundation</div>
+  <div class="grid">
+    <div class="card"><h3>Mobile &amp; web</h3><p>React Native / Expo (SDK 56, New Architecture) for iOS &amp; Android from one codebase; a static web CRM. Distributed via TestFlight and Firebase App Distribution.</p></div>
+    <div class="card"><h3>Cloud &amp; data</h3><p>Firebase (Auth, Firestore, Storage, Cloud Messaging). Google Places (New) + Google Weather APIs. An async planner &amp; AI-screening service.</p></div>
+    <div class="card"><h3>AI curation</h3><p>Claude judges every venue once against a family-friendliness rubric (incl. Arabic &amp; "vanity-mislabel" checks); verdicts are cached globally so cost falls as coverage grows.</p></div>
+    <div class="card"><h3>Engineered to scale</h3><p>Screen-once-reuse-everywhere caching, role-scoped security rules, and a region-by-region sweep model keep marginal cost low as new markets come online.</p></div>
+  </div>
+
+  <div class="callout" style="background:var(--sage);">
+    <h3>Status: pre-launch, in active testing</h3>
+    <p>The product is feature-complete across discovery, planning, memories, commerce and the merchant CRM, shipping to TestFlight + Android testers at build #49. Next: public launch in the GCC, live payments (Stripe), print-album fulfilment partners, and regional catalogue expansion.</p>
+  </div>
+  <div class="foot-brand">SPOTLY · meetspotly.com</div><div class="foot-num">6</div>
+</section>
+
+</body>
+</html>

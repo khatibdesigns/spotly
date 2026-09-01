@@ -10,10 +10,20 @@ import { useFamily } from './family';
 export type Kid = {
   id: string;
   name: string;
-  age: number;
+  age: number; // kept for back-compat; when `dob` is set, prefer kidAge(dob)
+  dob?: string; // ISO yyyy-mm-dd — drives live age + birthday-offer targeting
   favFoods?: string[]; // foods this child loves
   avoidFoods?: string[]; // foods to avoid (allergies / not allowed)
   photoUrl?: string; // this child's photo
+};
+
+// Where printed albums ship to (entered at album checkout, reused next time).
+export type ShippingAddress = {
+  name?: string;
+  line1?: string;
+  city?: string;
+  country?: string;
+  phone?: string;
 };
 
 // An adult member of the family (the parents). Each signed-in adult who is in
@@ -30,6 +40,7 @@ export type Profile = {
   locationEnabled: boolean;
   plus: boolean;
   photoUrl?: string; // family profile photo (header avatar)
+  shippingAddress?: ShippingAddress; // for printed-album delivery
   stats: { spots: number; countries: number; weekends: number };
   createdAt: number;
 };

@@ -5,14 +5,17 @@ import { C, F, SH } from '../lib/theme';
 import { Icons } from './icons';
 import { TabId, useStore } from '../lib/store';
 import { useI18n } from '../lib/i18n';
+import { GALLERY_ENABLED } from '../lib/flags';
 
-const TABS: { id: TabId; key: string; icon: (p: any) => React.ReactNode }[] = [
+const ALL_TABS: { id: TabId; key: string; icon: (p: any) => React.ReactNode }[] = [
   { id: 'discover', key: 'tab.discover', icon: Icons.compass },
   { id: 'plan', key: 'tab.plan', icon: Icons.calendar },
   { id: 'map', key: 'tab.map', icon: Icons.pin },
   { id: 'gallery', key: 'tab.gallery', icon: Icons.album },
   { id: 'profile', key: 'tab.profile', icon: Icons.user },
 ];
+// Phase 1: the Gallery tab (memories + printed albums) is hidden.
+const TABS = ALL_TABS.filter((t) => GALLERY_ENABLED || t.id !== 'gallery');
 
 export function TabBar({ bottomInset = 0 }: { bottomInset?: number }) {
   const { tab, setTab } = useStore();

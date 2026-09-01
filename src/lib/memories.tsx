@@ -16,12 +16,20 @@ export type Memory = {
   city?: string;
   country?: string;
   note?: string;
-  photoUrl: string;
+  photoUrl: string; // cover / first photo (back-compat — every consumer can use this)
+  photoUrls?: string[]; // all photos in this memory (one outing can have several)
   lat?: number;
   lng?: number;
   tone?: string;
   createdAt?: any;
 };
+
+// Every photo in a memory (falls back to the single cover for older memories).
+export function memoryPhotos(m: Memory | null | undefined): string[] {
+  if (!m) return [];
+  if (m.photoUrls?.length) return m.photoUrls;
+  return m.photoUrl ? [m.photoUrl] : [];
+}
 
 export type VisitedPlace = {
   key: string;
@@ -35,7 +43,7 @@ export type VisitedPlace = {
 };
 
 export type AddMemoryInput = {
-  photoUri: string;
+  photoUris: string[];
   placeName: string;
   note?: string;
   city?: string;
@@ -95,22 +103,29 @@ export function MemoriesProvider({ children }: { children: React.ReactNode }) {
   const addMemory = useCallback(
     async (input: AddMemoryInput) => {
       if (!user || !firestore || !storage || !familyId) throw new Error('Not signed in');
+      const uris = (input.photoUris || []).filter(Boolean);
+      if (!uris.length) throw new Error('Pick at least one photo.');
       setUploading(true);
       try {
         // RN-reliable local-file → Blob (fetch().blob() is flaky in Hermes).
-        const blob: Blob = await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.onload = () => resolve(xhr.response);
-          xhr.onerror = () => reject(new Error('Could not read the selected photo.'));
-          xhr.responseType = 'blob';
-          xhr.open('GET', input.photoUri, true);
-          xhr.send(null);
-        });
-        const path = `families/${familyId}/memories/${Date.now()}.jpg`;
-        const r = ref(storage, path);
-        await uploadBytes(r, blob, { contentType: 'image/jpeg' });
-        try { (blob as any).close?.(); } catch {}
-        const photoUrl = await getDownloadURL(r);
+        const toBlob = (uri: string): Promise<Blob> =>
+          new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.onload = () => resolve(xhr.response);
+            xhr.onerror = () => reject(new Error('Could not read the selected photo.'));
+            xhr.responseType = 'blob';
+            xhr.open('GET', uri, true);
+            xhr.send(null);
+          });
+        const stamp = Date.now();
+        const photoUrls: string[] = [];
+        for (let i = 0; i < uris.length; i++) {
+          const blob = await toBlob(uris[i]);
+          const r = ref(storage, `families/${familyId}/memories/${stamp}-${i}.jpg`);
+          await uploadBytes(r, blob, { contentType: 'image/jpeg' });
+          try { (blob as any).close?.(); } catch {}
+          photoUrls.push(await getDownloadURL(r));
+        }
         await addDoc(collection(firestore, 'families', familyId, 'memories'), {
           placeId: input.placeId || null,
           placeName: input.placeName,
@@ -121,7 +136,8 @@ export function MemoriesProvider({ children }: { children: React.ReactNode }) {
           lat: input.lat ?? null,
           lng: input.lng ?? null,
           tone: input.tone || 'sun',
-          photoUrl,
+          photoUrl: photoUrls[0],
+          photoUrls,
           createdAt: serverTimestamp(),
         });
       } finally {

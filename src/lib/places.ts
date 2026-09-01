@@ -5,7 +5,20 @@ import { collection, getDocs, query, where, documentId } from 'firebase/firestor
 import { firestore } from './firebase';
 import { Voucher } from './currency';
 
-const KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+// Places REST calls go out as plain fetch(), and photo URLs are loaded by the
+// native <Image> component — NEITHER can attach the iOS bundle-id / Android
+// package headers that the native Maps SDK uses. So an APPLICATION-restricted
+// key (iOS-app / Android-app allowlist) returns 403 API_KEY_IOS_APP_BLOCKED for
+// every Places call AND every photo URL → an empty feed with no images. The
+// Places key MUST therefore be a key WITHOUT an application restriction (an API
+// restriction limiting it to Places/Maps/Weather is fine and recommended).
+// Prefer a dedicated Places key; fall back to the project's non-app-restricted
+// maps key, then the legacy key. (EXPO_PUBLIC_GOOGLE_MAPS_API_KEY was locked to
+// an iOS bundle that isn't com.khd.spotly, which is what broke Discover.)
+const KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY ||
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY ||
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 // Default center when location is unavailable.
 export const KUWAIT_CITY = { latitude: 29.3759, longitude: 47.9774 };
@@ -136,6 +149,14 @@ const KID_CULTURE_TYPES = [
 // tags shisha/hookah lounges as cafe, and cafes/coffee shops aren't the focus.
 const DINING_TYPES = ['restaurant', 'bakery', 'ice_cream_shop'];
 
+// Cost-optimised: ALL kid-activity types in ONE Nearby Search (Google allows up
+// to 50 includedTypes per call). Replaces the old per-theme split + the paginated
+// text "coverage boosters" — see getSpots for the rationale and the tradeoff.
+const KID_ACTIVITY_TYPES = Array.from(new Set([
+  ...KID_NATURE_TYPES, ...KID_FUN_THRILLS_TYPES, ...KID_WATER_TYPES,
+  ...KID_PLAY_TYPES, ...KID_CULTURE_TYPES,
+]));
+
 // Type → amenity tag. The amenity tag is what `CATEGORIES` tiles + the
 // Filters sheet check against, so every kid-relevant type MUST map to one.
 const TYPE_AMENITY: Record<string, string> = {
@@ -217,9 +238,10 @@ export function photoUrl(name: string, w = 800): string {
 
 const FIELD_MASK =
   'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.types,places.primaryType,places.primaryTypeDisplayName,places.photos,places.currentOpeningHours.openNow';
-// Pricier "Atmosphere/Enterprise" fields — appended ONLY for food searches so
-// parks/museums calls stay on the cheaper SKU.
-const ATMOSPHERE_FIELDS = ',places.goodForChildren,places.menuForChildren';
+// NOTE: atmosphere fields (goodForChildren/menuForChildren) are deliberately NOT
+// requested — they push search calls onto Google's priciest SKU (Enterprise +
+// Atmosphere). Kid-friendliness curation is handled by the EC2 /screen layer
+// (fail-open) instead, so the search SKU stays at Enterprise.
 
 function mapPlace(p: any, loc: UserLoc, kind: SpotKind, shopAmenity = false): Spot {
   const lat = p.location?.latitude;
@@ -395,7 +417,7 @@ async function searchHalal(loc: UserLoc): Promise<Spot[]> {
   try {
     const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK + ATMOSPHERE_FIELDS },
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': FIELD_MASK },
       body: JSON.stringify({
         textQuery: 'halal family restaurant',
         maxResultCount: 15,
@@ -468,7 +490,7 @@ async function fetchCurated(loc: UserLoc): Promise<Spot[]> {
 
 // Look up a single place by name/text (used to enrich AI-suggested itinerary
 // stops with real coordinates + a photo). Returns null if nothing matches.
-export type FoundPlace = { name: string; lat?: number; lng?: number; photoUrl?: string; category?: string; address?: string; rating?: number };
+export type FoundPlace = { id?: string; name: string; lat?: number; lng?: number; photoUrl?: string; photoUrls?: string[]; category?: string; address?: string; rating?: number; reviews?: number };
 export async function findPlace(query: string, near?: string): Promise<FoundPlace | null> {
   if (!KEY || !query.trim()) return null;
   try {
@@ -477,7 +499,7 @@ export async function findPlace(query: string, near?: string): Promise<FoundPlac
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': KEY,
-        'X-Goog-FieldMask': 'places.displayName,places.location,places.photos,places.primaryTypeDisplayName,places.formattedAddress,places.rating',
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.photos,places.primaryTypeDisplayName,places.formattedAddress,places.rating,places.userRatingCount',
       },
       body: JSON.stringify({ textQuery: near ? `${query}, ${near}` : query, maxResultCount: 1 }),
     });
@@ -485,13 +507,77 @@ export async function findPlace(query: string, near?: string): Promise<FoundPlac
     const p = data?.places?.[0];
     if (!p) return null;
     return {
+      id: p.id,
       name: p.displayName?.text || query,
       lat: p.location?.latitude,
       lng: p.location?.longitude,
       photoUrl: p.photos?.[0]?.name ? photoUrl(p.photos[0].name, 600) : undefined,
+      photoUrls: Array.isArray(p.photos) ? p.photos.slice(0, 8).map((ph: any) => (ph?.name ? photoUrl(ph.name, 800) : null)).filter(Boolean) as string[] : undefined,
       category: p.primaryTypeDisplayName?.text,
       address: p.formattedAddress,
       rating: p.rating,
+      reviews: p.userRatingCount,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Live establishment details for the Place screen — reviews, hours, contact,
+// summary. Fetched on-demand (not cached/persisted, per Google ToS — reviews &
+// photos are shown live with attribution). Returns null for non-Google ids
+// (manual curated docs) or on any failure, so the screen degrades gracefully.
+export type PlaceReview = { author?: string; authorPhoto?: string; rating?: number; text?: string; relativeTime?: string };
+export type PlaceDetails = {
+  rating?: number;
+  reviews?: number;
+  price?: string;
+  phone?: string;
+  website?: string;
+  summary?: string;
+  weekdayHours?: string[];
+  openNow?: boolean;
+  reviewList: PlaceReview[];
+  goodForChildren?: boolean;
+  photoUrls?: string[];
+};
+export async function getPlaceDetails(placeId?: string): Promise<PlaceDetails | null> {
+  // Google place_ids are long opaque tokens; skip obvious non-ids (a curated
+  // doc keyed by a name) to avoid a guaranteed 404.
+  if (!KEY || !placeId || placeId.length < 15 || /\s/.test(placeId)) return null;
+  try {
+    const fields = [
+      'rating', 'userRatingCount', 'priceLevel',
+      'nationalPhoneNumber', 'internationalPhoneNumber', 'websiteUri',
+      'editorialSummary', 'regularOpeningHours.weekdayDescriptions', 'currentOpeningHours.openNow',
+      'reviews', 'goodForChildren', 'photos',
+    ].join(',');
+    const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=en`, {
+      headers: { 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': fields },
+    });
+    if (!res.ok) return null;
+    const p = await res.json();
+    const reviewList: PlaceReview[] = Array.isArray(p.reviews)
+      ? p.reviews.slice(0, 5).map((r: any) => ({
+          author: r.authorAttribution?.displayName,
+          authorPhoto: r.authorAttribution?.photoUri,
+          rating: r.rating,
+          text: (r.text?.text || r.originalText?.text || '').trim(),
+          relativeTime: r.relativePublishTimeDescription,
+        }))
+      : [];
+    return {
+      rating: p.rating,
+      reviews: p.userRatingCount,
+      price: p.priceLevel ? PRICE[p.priceLevel] : undefined,
+      phone: p.nationalPhoneNumber || p.internationalPhoneNumber,
+      website: p.websiteUri,
+      summary: p.editorialSummary?.text,
+      weekdayHours: p.regularOpeningHours?.weekdayDescriptions,
+      openNow: p.currentOpeningHours?.openNow,
+      reviewList,
+      goodForChildren: p.goodForChildren,
+      photoUrls: Array.isArray(p.photos) ? (p.photos.slice(0, 8).map((ph: any) => (ph?.name ? photoUrl(ph.name) : null)).filter(Boolean) as string[]) : undefined,
     };
   } catch {
     return null;
@@ -566,36 +652,21 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
   // call so a flood of one type can't crowd out another. This is what makes
   // a close-but-modestly-reviewed place like Pokiddo show — POPULARITY rank
   // was burying it behind famous places kilometres away.
-  const [
-    nature, thrills, water, play, culture,
-    funText, playText, eatPlay, natureText,
-    dining, diningText, shops, halal, curated,
-  ] = await Promise.all([
-    searchNearby(loc, KID_NATURE_TYPES, 'activity', 20, 'DISTANCE'),
-    searchNearby(loc, KID_FUN_THRILLS_TYPES, 'activity', 20, 'DISTANCE'),
-    searchNearby(loc, KID_WATER_TYPES, 'activity', 10, 'DISTANCE'),
-    searchNearby(loc, KID_PLAY_TYPES, 'activity', 20, 'DISTANCE'),
-    searchNearby(loc, KID_CULTURE_TYPES, 'activity', 20, 'DISTANCE'),
-    // Coverage boosters: searchText paginates (3 pages ≈ 60 results) so dense
-    // areas like a big mall (The Avenues) aren't capped at the 20 a single
-    // searchNearby returns. Merged + de-duped + distance-sorted below.
-    searchByText(loc, 'amusement park kids entertainment center', 'amusement_park', 'activity', 3),
-    searchByText(loc, 'kids indoor play area soft play', null, 'activity', 3),
-    // Restaurants WITH a kids' play area — Google has no such type, so query
-    // by intent and tag eatPlay so the new "Eat & play" filter can find them.
-    // Atmosphere fields requested so we can drop goodForChildren=false places.
-    searchByText(loc, 'family restaurant with kids play area', 'restaurant', 'dining', 3, ['eatPlay', 'foodOnSite'], ATMOSPHERE_FIELDS),
-    // Outdoor booster — parks/gardens/playgrounds beyond the 20-cap nearby call.
-    searchByText(loc, 'family park garden playground', null, 'activity', 2),
-    searchNearby(loc, DINING_TYPES, 'dining', 15, 'DISTANCE', 1, ATMOSPHERE_FIELDS),
-    // Dining booster — more sit-down family restaurants than the 20-cap nearby
-    // call returns. Atmosphere fields so goodForChildren=false gets dropped.
-    searchByText(loc, 'family restaurant kids friendly', 'restaurant', 'dining', 2, ['foodOnSite'], ATMOSPHERE_FIELDS),
+  // COST-OPTIMISED FAN-OUT (build 69): one Nearby Search for activities + one for
+  // dining, plus the shops/halal intent searches — 4 billable Google requests.
+  // This replaced a ~15-20-request fan-out (5 nearby + several 2-3-page paginated
+  // text "coverage boosters") that fired on every launch/refresh and was the bulk
+  // of the app's Places cost. Tradeoff: no per-theme guaranteed slots and no >20
+  // "far niche" coverage (e.g. a distant Pokiddo) — the feed is simply the nearest
+  // matches across all kid types. Filters, curated/claimed places, and the map's
+  // "search this area" all still work.
+  const [activities, dining, shops, halal, curated] = await Promise.all([
+    searchNearby(loc, KID_ACTIVITY_TYPES, 'activity', 20, 'DISTANCE'),
+    searchNearby(loc, DINING_TYPES, 'dining', 20, 'DISTANCE'),
     searchShops(loc),
     searchHalal(loc),
     fetchCurated(loc),
   ]);
-  const activities = [...nature, ...thrills, ...funText, ...water, ...play, ...playText, ...culture, ...natureText];
   const stays: Spot[] = []; // kept as an empty array so the merge loop below still typechecks
   // A curated doc may be a "claim record" linked to a Google place_id (the
   // merchant claimed their real listing). Match Google results to those claims
@@ -619,9 +690,9 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
   // Halal before dining so a halal-tagged restaurant isn't shadowed by its
   // untagged duplicate from the generic dining search.
   const google: Spot[] = [];
-  // eatPlay (tagged) before generic dining so a restaurant that's in both
-  // lists keeps its 'eatPlay' tag when de-duped by place_id.
-  for (const g of [...activities, ...eatPlay, ...halal, ...dining, ...diningText, ...shops, ...stays]) {
+  // Halal (tagged) before generic dining so a halal restaurant keeps its 'halal'
+  // tag when de-duped by place_id against its untagged dining-search duplicate.
+  for (const g of [...activities, ...halal, ...dining, ...shops, ...stays]) {
     if (seenIds.has(g.id)) continue; // same place returned by multiple type searches
     seenIds.add(g.id);
     if (hiddenGoogleIds.has(g.id)) continue; // merchant took this branch offline
@@ -652,6 +723,10 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
       consumed.add(g.id);
       continue;
     }
+    // Never show a Google place with no cover photo — that's the "place with no
+    // home image" bug. (Claimed/curated places above are kept; merchants opt in
+    // and supply their own image.) Mirrors the offline rescreen's drop-no-photo.
+    if (!g.photoUrl) continue;
     // Otherwise drop Google duplicates of manually-curated places (by name).
     const k = g.name.toLowerCase();
     if (seenNames.has(k)) continue;
@@ -673,7 +748,11 @@ export async function getSpots(loc: UserLoc): Promise<Spot[]> {
       standaloneCurated.push(c);
     }
   }
-  const merged = [...standaloneCurated, ...google];
+  // NEVER show a place without a cover photo — anywhere. The non-claim Google
+  // branch already drops them; this also catches curated/claimed/standalone
+  // docs (e.g. seeded claims like "Al Shaheed Park" that Google didn't return
+  // a photo for) so they never render as a striped placeholder.
+  const merged = [...standaloneCurated, ...google].filter((s) => !!s.photoUrl);
   // Promoted places float to the top; otherwise nearest first.
   merged.sort((a, b) => {
     if (!!a.promoted !== !!b.promoted) return a.promoted ? -1 : 1;

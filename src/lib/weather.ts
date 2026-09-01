@@ -11,7 +11,13 @@
 // isn't enabled yet, so the app degrades gracefully instead of going blank.
 export type Weather = { tempC: number; emoji: string; label: string };
 
-const KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+// Resolve the same non-application-restricted key as places.ts — an iOS/Android
+// app-restricted key 403s a plain fetch() (which is why the homepage temp was
+// silently coming from the Open-Meteo fallback, not Google).
+const KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY ||
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY ||
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 // Map Google Weather's `weatherCondition.type` to an emoji + short label.
 // We collapse the long enum (CLEAR, MOSTLY_CLEAR, …, RAIN_PERIODICALLY_HEAVY)

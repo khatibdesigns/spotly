@@ -10,7 +10,10 @@ import { CircBtn, SectionLabel, Btn } from '../components/ui';
 import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { useProfile } from '../lib/profile';
+import { ageFromDob } from '../lib/dob';
+import { COMMERCE_ENABLED, GALLERY_ENABLED, PLUS_ENABLED } from '../lib/flags';
 import { useFamily, buildInviteUrl } from '../lib/family';
+import { logEvent } from '../lib/analytics';
 import { useI18n } from '../lib/i18n';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useMemories } from '../lib/memories';
@@ -86,11 +89,35 @@ function StatCard({ n, l, c }: { n: number; l: string; c: string }) {
 export function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { push, setTab } = useStore();
-  const { user, signOut } = useAuth();
+  const { user, signOut, deleteAccount } = useAuth();
+  function confirmDeleteAccount() {
+    Alert.alert(t('profile.deleteAccount'), t('profile.deleteConfirmMsg'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('profile.deleteAccount'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteAccount();
+          } catch (e: any) {
+            if (e?.code === 'auth/requires-recent-login') {
+              Alert.alert(t('profile.deleteAccount'), t('profile.deleteReauth'));
+              try { await signOut(); } catch {}
+            } else {
+              Alert.alert(t('profile.deleteAccount'), e?.message || 'Could not delete account.');
+            }
+          }
+        },
+      },
+    ]);
+  }
   const { profile, saveProfile, uploadAvatar, uploadImage } = useProfile();
   const { stats, memories, visited } = useMemories();
   const { t, lang, setLang } = useI18n();
   const { isOwnFamily, inviteToFamily, joinFamily, leaveFamily } = useFamily();
+  // Solo = nobody has accepted an invite yet, so the referral card is worth its
+  // space. `members` is the list of adults on the family doc.
+  const soloFamily = isOwnFamily && (profile?.members?.length ?? 1) <= 1;
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
@@ -153,12 +180,18 @@ export function ProfileScreen() {
     }
   };
 
-  const onInvite = async () => {
+  // The referral loop. Instrumented end-to-end (started → sheet result) because
+  // "invites opened: 0" told us nothing about WHERE it died — offered, tapped,
+  // or shared. `from` marks which surface drove it so we can compare placements.
+  const onInvite = async (from: string = 'row') => {
     try {
+      logEvent('invite_started', { from });
       const code = await inviteToFamily();
       const url = buildInviteUrl(code);
-      await Share.share({ message: t('family.shareMsg', { code, url }), url }).catch(() => {});
+      const res = await Share.share({ message: t('family.shareMsg', { code, url }), url }).catch(() => null);
+      logEvent(res && (res as any).action === 'sharedAction' ? 'invite_shared' : 'invite_dismissed', { from });
     } catch (e: any) {
+      logEvent('invite_failed', { from });
       Alert.alert(t('family.couldNotJoin'), e?.message || '');
     }
   };
@@ -223,8 +256,25 @@ export function ProfileScreen() {
           </View>
         </View>
 
-        {/* Spotly Plus card hidden for the free launch — re-enable when paid
-            tiers go live. PaywallScreen + usePurchases() are kept intact. */}
+        {/* Spotly Plus — reachable upgrade entry point (digital subscription). */}
+        {PLUS_ENABLED && (isPlus ? (
+          <View style={[{ backgroundColor: C.premium, borderRadius: R.lg, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, marginBottom: 18 }, SH.card]}>
+            <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}>{Icons.sparkle({ size: 20, color: '#fff' })}</View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 15 }}>{t('profile.plusMember')}</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.85)', fontFamily: F.regular, fontSize: 12.5, marginTop: 1 }}>{t('profile.plusMemberSub')}</Text>
+            </View>
+          </View>
+        ) : (
+          <Pressable onPress={() => push('paywall')} style={[{ backgroundColor: C.premium, borderRadius: R.lg, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, marginBottom: 18 }, SH.card]}>
+            <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}>{Icons.sparkle({ size: 20, color: '#fff' })}</View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 15 }}>{t('profile.upgradeTitle')}</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.85)', fontFamily: F.regular, fontSize: 12.5, marginTop: 1 }}>{t('profile.upgradeSub')}</Text>
+            </View>
+            <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 22, fontFamily: F.regular }}>›</Text>
+          </Pressable>
+        ))}
 
         {/* Family members — every adult + the kids */}
         <SectionLabel>{t('profile.family')}</SectionLabel>
@@ -252,7 +302,7 @@ export function ProfileScreen() {
                 key={k.id}
                 icon={<EditableAvatar letter={initial(k.name, '?')} color={KID_COLORS[i % KID_COLORS.length]} photoUrl={k.photoUrl} busy={photoBusy === k.id} onPress={() => setKidPhoto(k.id)} />}
                 title={k.name || `Child ${i + 1}`}
-                sub={`${t('profile.ageFmt', { age: k.age })} · ${foodSub}`}
+                sub={`${t('profile.ageFmt', { age: ageFromDob(k.dob) ?? k.age })} · ${foodSub}`}
                 onPress={() => push('kidFood', { kidId: k.id })}
               />
             );
@@ -260,9 +310,36 @@ export function ProfileScreen() {
           <Row icon={<IconBox ic={Icons.plus} c={C.sage} />} title={t('setup.addChild')} sub={t('profile.addChildSub')} onPress={() => setAddKidOpen(true)} last />
         </View>
 
-        {/* Invite / join family */}
+        {/* Invite / join family.
+            A solo family gets a full-bleed CARD, not a text row: this is the
+            referral loop and it was previously a grey line buried under "add a
+            child" — 20 families produced 1 second adult. Once the family is
+            actually shared the card is pointless, so it collapses back to rows. */}
+        {soloFamily ? (
+          <Pressable
+            onPress={() => onInvite('card')}
+            accessibilityRole="button"
+            accessibilityLabel={t('family.inviteCardTitle')}
+            style={({ pressed }) => [{ marginTop: 12, borderRadius: R.lg, overflow: 'hidden', opacity: pressed ? 0.92 : 1 }, SH.card]}
+          >
+            <LinearGradient colors={[C.coral, C.coralDk]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ padding: 18 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icons.user size={22} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 16, letterSpacing: -0.2 }}>{t('family.inviteCardTitle')}</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.9)', fontFamily: F.regular, fontSize: 12.5, marginTop: 3, lineHeight: 17 }}>{t('family.inviteCardSub')}</Text>
+                </View>
+                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 22, fontFamily: F.regular }}>›</Text>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        ) : null}
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden', marginTop: 10 }, SH.card]}>
-          <Row icon={<IconBox ic={Icons.user} c={C.coral} />} title={t('family.invite')} sub={t('family.inviteSub')} onPress={onInvite} />
+          {!soloFamily ? (
+            <Row icon={<IconBox ic={Icons.user} c={C.coral} />} title={t('family.invite')} sub={t('family.inviteSub')} onPress={() => onInvite('row')} />
+          ) : null}
           {isOwnFamily ? (
             <Row icon={<IconBox ic={Icons.plus} c={C.sage} />} title={t('family.join')} sub={t('family.joinSub')} onPress={() => setJoinOpen(true)} last />
           ) : (
@@ -281,10 +358,16 @@ export function ProfileScreen() {
         {/* Activity */}
         <SectionLabel>{t('profile.activity')}</SectionLabel>
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden' }, SH.card]}>
-          <Row icon={<IconBox ic={Icons.bag} c={C.coral} />} title={t('profile.myPurchases')} det={String(voucherOrders.length)} onPress={() => push('purchases')} />
-          <Row icon={<IconBox ic={Icons.bookmark} c={C.coral} />} title={t('profile.savedSpots')} det={String(saved.length)} onPress={() => push('saved')} />
-          <Row icon={<IconBox ic={Icons.clock} c={C.sage} />} title={t('profile.placesVisited')} det={String(visited.length)} onPress={() => setTab('gallery')} />
-          <Row icon={<IconBox ic={Icons.album} c={C.plum} />} title={t('profile.memories')} det={String(memories.length)} onPress={() => setTab('gallery')} last />
+          {COMMERCE_ENABLED ? (
+            <Row icon={<IconBox ic={Icons.bag} c={C.coral} />} title={t('profile.myPurchases')} det={String(voucherOrders.length)} onPress={() => push('purchases')} />
+          ) : null}
+          <Row icon={<IconBox ic={Icons.bookmark} c={C.coral} />} title={t('profile.savedSpots')} det={String(saved.length)} onPress={() => push('saved')} last={!GALLERY_ENABLED} />
+          {GALLERY_ENABLED ? (
+            <Row icon={<IconBox ic={Icons.clock} c={C.sage} />} title={t('profile.placesVisited')} det={String(visited.length)} onPress={() => setTab('gallery')} />
+          ) : null}
+          {GALLERY_ENABLED ? (
+            <Row icon={<IconBox ic={Icons.album} c={C.plum} />} title={t('profile.memories')} det={String(memories.length)} onPress={() => setTab('gallery')} last />
+          ) : null}
         </View>
 
         {/* Settings */}
@@ -296,9 +379,10 @@ export function ProfileScreen() {
           <Row icon={<IconBox ic={Icons.sparkle} c={C.ink2} />} title={t('profile.notifications')} onPress={() => Linking.openSettings().catch(() => {})} last />
         </View>
 
-        {/* Sign out */}
+        {/* Sign out + delete account (account deletion is required by Apple/Play) */}
         <View style={[{ backgroundColor: C.surface, borderRadius: R.lg, overflow: 'hidden', marginTop: 16 }, SH.card]}>
-          <Row icon={<IconBox ic={Icons.arrowL} c={C.coralDk} />} title={t('profile.signOut')} onPress={() => signOut()} danger last />
+          <Row icon={<IconBox ic={Icons.arrowL} c={C.coralDk} />} title={t('profile.signOut')} onPress={() => signOut()} danger />
+          <Row icon={<IconBox ic={Icons.trash} c={C.coralDk} />} title={t('profile.deleteAccount')} onPress={confirmDeleteAccount} danger last />
         </View>
       </ScrollView>
 

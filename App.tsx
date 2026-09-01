@@ -1,5 +1,5 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -52,6 +52,21 @@ export default function App() {
     Fraunces_500Medium,
     Fraunces_600SemiBold,
   });
+
+  // Clear the iOS app-icon badge whenever the app comes to the foreground (and
+  // on launch). Push notifications can bump the badge while the app is closed;
+  // without this it stays stuck on 1, 2, 3… even after the user opens the app.
+  useEffect(() => {
+    let N: any;
+    try { N = require('expo-notifications'); } catch { return; }
+    const clear = () => {
+      try { N.setBadgeCountAsync(0); } catch {}
+      try { N.dismissAllNotificationsAsync(); } catch {}
+    };
+    clear();
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') clear(); });
+    return () => { try { sub.remove(); } catch {} };
+  }, []);
 
   if (!loaded) {
     return <View style={{ flex: 1, backgroundColor: C.bg }} />;

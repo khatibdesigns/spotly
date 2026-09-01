@@ -13,6 +13,7 @@ import { useAuth } from '../lib/auth';
 import { usePlaces, filterHasResults } from '../lib/placesStore';
 import { useSaves } from '../lib/saves';
 import { useVouchers } from '../lib/vouchers';
+import { COMMERCE_ENABLED } from '../lib/flags';
 import { useI18n } from '../lib/i18n';
 import { Spot, formatDistance, searchPlaces, PlaceSearchResult } from '../lib/places';
 import { getWeather, Weather } from '../lib/weather';
@@ -300,7 +301,8 @@ export function DiscoverScreen() {
               </View>
             ) : null}
           </Pressable>
-          {/* Global cart — buy vouchers from multiple places */}
+          {/* Global cart — buy vouchers from multiple places (Phase 1: hidden) */}
+          {COMMERCE_ENABLED ? (
           <Pressable onPress={() => push('cart')} style={[{ width: 46, height: 46, borderRadius: 23, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }, SH.pill]}>
             {Icons.bag({ size: 19, color: C.ink })}
             {cartCount > 0 ? (
@@ -309,6 +311,7 @@ export function DiscoverScreen() {
               </View>
             ) : null}
           </Pressable>
+          ) : null}
         </View>
       </View>
 

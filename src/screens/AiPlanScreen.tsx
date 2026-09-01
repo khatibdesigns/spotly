@@ -14,11 +14,29 @@ import { usePlans } from '../lib/plans';
 import { usePlanner } from '../lib/planner';
 import { useI18n } from '../lib/i18n';
 import { Itinerary, ItStop, ItDay, dayDateLabel } from '../lib/aiPlan';
-import { searchPlaces, PlaceSearchResult, getUserLocation } from '../lib/places';
+import { searchPlaces, PlaceSearchResult, getUserLocation, SpotKind } from '../lib/places';
+import { kidAge } from '../lib/dob';
 import { usePlaces } from '../lib/placesStore';
 import * as Location from 'expo-location';
+import { usePurchases } from '../lib/purchases';
+import { useAuth } from '../lib/auth';
+import { PLUS_ENABLED, FREE_AI_PLANS } from '../lib/flags';
+import { aiPlansUsed, bumpAiPlansUsed } from '../lib/planGate';
 
 const SUGGESTION_KEYS = ['ai.s1', 'ai.s2', 'ai.s3', 'ai.s4'];
+
+// Optional one-tap refinements. The label is an i18n key shown on the chip; the
+// constraint is the plain-English rule sent to the planner (the model reads English
+// constraints fine regardless of the app's language).
+const PLAN_PREFS: { key: string; labelKey: string; constraint: string }[] = [
+  { key: 'halal', labelKey: 'ai.pref.halal', constraint: 'halal food only' },
+  { key: 'noAlcohol', labelKey: 'ai.pref.noAlcohol', constraint: 'no alcohol anywhere on the trip' },
+  { key: 'noNightlife', labelKey: 'ai.pref.noNightlife', constraint: 'no bars, pubs, nightclubs or nightlife' },
+  { key: 'adultsOnly', labelKey: 'ai.pref.adultsOnly', constraint: 'adults only, no children — do not force kid-only stops' },
+  { key: 'relaxed', labelKey: 'ai.pref.relaxed', constraint: 'a relaxed, unhurried pace with fewer stops per day' },
+  { key: 'nature', labelKey: 'ai.pref.nature', constraint: 'lean toward nature and the outdoors' },
+  { key: 'foodie', labelKey: 'ai.pref.foodie', constraint: 'include standout local food experiences' },
+];
 
 const PROGRESS_STEPS = [
   'Asking the planner…',
@@ -30,13 +48,17 @@ const PROGRESS_STEPS = [
 
 export function AiPlanScreen() {
   const insets = useSafeAreaInsets();
-  const { pop, setTab, popToRoot } = useStore();
+  const { pop, setTab, popToRoot, push } = useStore();
+  const { isPlus } = usePurchases();
+  const { user } = useAuth();
   const { profile } = useProfile();
-  const { loc } = usePlaces();
-  const { saveItinerary } = usePlans();
+  const { loc, spots } = usePlaces();
+  const { plans, saveItinerary } = usePlans();
   const { status, result, error, startedAt, lastInput, generate, retry, reset } = usePlanner();
   const { t } = useI18n();
   const [text, setText] = useState('');
+  const [prefs, setPrefs] = useState<string[]>([]);
+  const togglePref = (k: string) => setPrefs((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
   // The user's current area (for location-aware suggestions) — reverse-geocoded
   // from their location, falling back to their home city.
   const [area, setArea] = useState<string>('');
@@ -97,6 +119,71 @@ export function AiPlanScreen() {
       copy.days[dayIdx].stops.push(stop);
       return copy;
     });
+  };
+
+  // Regenerate (swap) a single stop with another place of the same category —
+  // preferring already-screened, kid-friendly places we've loaded nearby, then
+  // falling back to a live Google search. Keeps the time slot; never repeats a
+  // place already in the plan.
+  const [regenKey, setRegenKey] = useState<string | null>(null);
+  const kindForCategory = (category?: string): SpotKind => {
+    const c = (category || '').toLowerCase();
+    if (/(restaurant|caf|coffee|food|dining|eat|bakery|ice ?cream|grill|dessert|brunch|lunch|dinner|bistro|diner|pizz|burger|steak|sushi|shawarma|kebab)/.test(c)) return 'dining';
+    if (/(mall|shop|store|market|sou[qk]|boutique|outlet|bazaar)/.test(c)) return 'shop';
+    if (/(hotel|resort|stay|lodge|chalet|villa|inn)/.test(c)) return 'stay';
+    return 'activity';
+  };
+  const distKm = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+    const R = 6371, dLat = ((bLat - aLat) * Math.PI) / 180, dLng = ((bLng - aLng) * Math.PI) / 180;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  };
+  const regenerateStop = async (dayIdx: number, stopIdx: number) => {
+    const plan = edited;
+    const stop = plan?.days?.[dayIdx]?.stops?.[stopIdx];
+    if (!plan || !stop) return;
+    const key = `${dayIdx}:${stopIdx}`;
+    setRegenKey(key);
+    try {
+      const used = new Set<string>();
+      plan.days.forEach((d) => d.stops.forEach((s) => used.add((s.name || '').trim().toLowerCase())));
+      const kind = kindForCategory(stop.category);
+      const center = stop.lat != null && stop.lng != null ? { latitude: stop.lat, longitude: stop.lng } : near;
+
+      let next: ItStop | null = null;
+      // 1) Screened, kid-friendly places we've already loaded nearby.
+      let pool = spots.filter((s) => s.kind === kind && s.lat != null && s.lng != null && !used.has((s.name || '').trim().toLowerCase()));
+      if (center) pool = pool.sort((a, b) => distKm(center.latitude, center.longitude, a.lat, a.lng) - distKm(center.latitude, center.longitude, b.lat, b.lng));
+      const nearestFew = pool.slice(0, 6);
+      if (nearestFew.length) {
+        const s = nearestFew[Math.floor(Math.random() * nearestFew.length)];
+        next = { name: s.name, category: s.category || stop.category, photoUrl: s.photoUrl, lat: s.lat, lng: s.lng };
+      } else {
+        // 2) Fallback: live Google search for the same category near the stop.
+        const q = stop.category?.trim() || (kind === 'dining' ? 'family restaurant' : kind === 'shop' ? 'shopping mall' : 'family attraction');
+        const results = await searchPlaces(q, center);
+        const fresh = results.filter((r) => !used.has((r.name || '').trim().toLowerCase()));
+        const r = fresh[Math.floor(Math.random() * Math.min(fresh.length, 6))] || fresh[0];
+        if (r) next = { name: r.name, category: r.category || stop.category, photoUrl: r.photoUrl, lat: r.lat, lng: r.lng };
+      }
+
+      if (!next) { Alert.alert(t('ai.noAlt'), t('ai.noAltBody')); return; }
+      const picked = next;
+      setEdited((it) => {
+        if (!it) return it;
+        const copy: Itinerary = JSON.parse(JSON.stringify(it));
+        const prev = copy.days[dayIdx]?.stops?.[stopIdx];
+        if (!prev) return it;
+        // Keep the time slot + placeholder tone; drop note/estCost (they were
+        // specific to the old place).
+        copy.days[dayIdx].stops[stopIdx] = { ...picked, time: prev.time, tone: prev.tone || 'sage' };
+        return copy;
+      });
+    } catch {
+      Alert.alert(t('ai.noAlt'), t('ai.noAltBody'));
+    } finally {
+      setRegenKey(null);
+    }
   };
 
   // Edit trip duration before saving: add/remove whole days. Day numbers (used
@@ -179,29 +266,58 @@ export function AiPlanScreen() {
     return /weekend/i.test(s) ? 2 : 1;
   };
   const parseDest = (s: string) => {
-    const m = s.match(/\b(?:in|to|around|near)\s+([A-Z][A-Za-zÀ-ſ'’\- ]+?)(?:[,.]|\s+with|\s+for|\s+\d|$)/);
-    return (m ? m[1] : '').trim() || (profile?.homeCity || 'near me');
+    // Case-insensitive so a lowercase "to munich" is honored (the old /[A-Z]/ rule
+    // silently fell back to homeCity). The server also re-derives the destination
+    // from the raw notes, so this is a best-effort hint we capitalize for display.
+    const m = s.match(/\b(?:in|to|around|near|visiting)\s+([A-Za-zÀ-ÿ'’\- ]+?)(?:[,.;]|\s+(?:with|for|in|on|during|this|next|over|mid|early|late)\b|\s+\d|$)/i);
+    const raw = (m ? m[1] : '').trim();
+    // "near me" / "around here" aren't destinations — fall back to home/coords.
+    if (!raw || /^(me|here|us|home|there|now|today|tomorrow)$/i.test(raw)) return profile?.homeCity || 'near me';
+    return raw.split(' ').map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
   };
 
+  // Local Y-M-D — NOT toISOString(), which converts to UTC and shifts a day earlier
+  // in +UTC zones (e.g. Kuwait UTC+3), which is what made plan dates look "off".
+  const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   // Day-1 date for the plan: the first date in the prompt ("tomorrow", "26 May",
   // "May 26"), else this coming Saturday so days still show real dates.
   const nextSaturdayISO = () => {
     const d = new Date();
     d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
-    return d.toISOString().slice(0, 10);
+    return isoLocal(d);
   };
   const parseStartDate = (s: string): string => {
     const lower = s.toLowerCase();
-    if (/\btomorrow\b|غدًا|غدا|بكرة/.test(lower)) { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); }
-    if (/\btoday\b|اليوم/.test(lower)) return new Date().toISOString().slice(0, 10);
+    if (/\btomorrow\b|غدًا|غدا|بكرة/.test(lower)) { const d = new Date(); d.setDate(d.getDate() + 1); return isoLocal(d); }
+    if (/\btoday\b|اليوم/.test(lower)) return isoLocal(new Date());
     const MN = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
     const MI: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    // Resolve to the soonest FUTURE occurrence (e.g. "September" asked in June → this
+    // year; "January" → next year) instead of a hardcoded 2026.
+    const now = new Date();
+    const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const isoFor = (mon: number, day: number) => {
+      let y = now.getFullYear();
+      if (new Date(y, mon, day) < todayMid) y += 1;
+      return isoLocal(new Date(y, mon, day));
+    };
+    // "12 September" / "September 12"
     const re = new RegExp(`(?:(\\d{1,2})(?:st|nd|rd|th)?\\s*(${MN})[a-z]*)|(?:(${MN})[a-z]*\\s*(\\d{1,2})(?:st|nd|rd|th)?)`, 'i');
     const m = s.match(re);
     if (m) {
       const day = m[1] ? parseInt(m[1], 10) : parseInt(m[4], 10);
       const mon = MI[(m[2] || m[3]).slice(0, 3).toLowerCase()];
-      if (day >= 1 && day <= 31) return new Date(2026, mon, day).toISOString().slice(0, 10);
+      if (day >= 1 && day <= 31) return isoFor(mon, day);
+    }
+    // Month with no day but a timing cue ("in September", "mid September", "early
+    // October") → 5th/15th/25th. The cue requirement avoids matching "may" the verb.
+    const monthWord = '(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)';
+    const bm = lower.match(new RegExp(`\\b(?:in|by|around|on|during|this|next|early|mid|late)\\s+(?:early\\s+|mid\\s+|late\\s+)?${monthWord}\\b`, 'i'));
+    if (bm) {
+      const seg = bm[0].toLowerCase();
+      const mon = MI[bm[1].slice(0, 3)];
+      const day = /\bearly\b/.test(seg) ? 5 : /\blate\b/.test(seg) ? 25 : 15;
+      if (mon != null) return isoFor(mon, day);
     }
     return nextSaturdayISO();
   };
@@ -222,17 +338,33 @@ export function AiPlanScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onGenerate = () => {
+  const onGenerate = async () => {
     if (!text.trim()) return;
+    // Free-tier gate: free families can keep up to FREE_AI_PLANS plans, then the
+    // Spotly Plus paywall opens. Spotly Plus members are never gated.
+    // Gate on the actual number of saved plans (real Firestore data — survives
+    // reinstalls and never desyncs), with the per-user counter as a backstop so
+    // a family can't farm unlimited generations by deleting plans between tries.
+    if (PLUS_ENABLED && !isPlus) {
+      const used = user ? await aiPlansUsed(user.uid) : 0;
+      if (plans.length >= FREE_AI_PLANS || used >= FREE_AI_PLANS) { push('paywall'); return; }
+      if (user) bumpAiPlansUsed(user.uid);
+    }
     const food = familyFood(profile);
     generate({
       destination: parseDest(text),
       days: parseDays(text),
-      kids: profile?.kids,
+      // Prefer live age from DOB (kept fresh) over the stored manual age.
+      kids: profile?.kids?.map((k) => ({ name: k.name, age: kidAge(k) })),
       notes: text.trim(),
       favFoods: food.likes,
       avoidFoods: food.avoid,
+      constraints: PLAN_PREFS.filter((p) => prefs.includes(p.key)).map((p) => p.constraint),
       startDate: parseStartDate(text),
+      // Coords let the planner fetch current weather (e.g. "near me" trips, where
+      // there's no place name to geocode) so it avoids midday outdoor stops in heat.
+      lat: near?.latitude ?? loc?.latitude,
+      lng: near?.longitude ?? loc?.longitude,
     });
   };
 
@@ -267,11 +399,11 @@ export function AiPlanScreen() {
           {status === 'generating' ? (
             <Generating mmss={mmss} progressMsg={progressMsg} />
           ) : status === 'ready' && (edited || result) ? (
-            <ItineraryPreview it={(edited || result)!} onRemoveStop={removeStop} onOpenAdder={openAdder} onRemoveDay={removeDay} onAddDay={addDay} />
+            <ItineraryPreview it={(edited || result)!} onRemoveStop={removeStop} onOpenAdder={openAdder} onRemoveDay={removeDay} onAddDay={addDay} onRegenStop={regenerateStop} regenKey={regenKey} />
           ) : status === 'error' ? (
             <ErrorState message={error} />
           ) : (
-            <Idle text={text} setText={setText} profile={profile} place={place} />
+            <Idle text={text} setText={setText} profile={profile} place={place} prefs={prefs} togglePref={togglePref} />
           )}
       </KeyboardAwareScrollView>
 
@@ -330,7 +462,7 @@ export function AiPlanScreen() {
   );
 }
 
-function Idle({ text, setText, profile, place }: { text: string; setText: (s: string) => void; profile: any; place: string }) {
+function Idle({ text, setText, profile, place, prefs, togglePref }: { text: string; setText: (s: string) => void; profile: any; place: string; prefs: string[]; togglePref: (k: string) => void }) {
   const { t } = useI18n();
   const forKids = profile?.kids?.length ? t('ai.forKids', { names: profile.kids.map((k: any) => k.name || 'your child').join(' & ') }) : '';
   return (
@@ -348,6 +480,21 @@ function Idle({ text, setText, profile, place }: { text: string; setText: (s: st
           multiline
           style={{ fontFamily: F.medium, fontSize: 15.5, color: C.ink, minHeight: 96, textAlignVertical: 'top', lineHeight: 22 }}
         />
+      </View>
+      <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 18, marginBottom: 10 }}>{t('ai.refine')}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {PLAN_PREFS.map((p) => {
+          const on = prefs.includes(p.key);
+          return (
+            <Pressable
+              key={p.key}
+              onPress={() => togglePref(p.key)}
+              style={{ backgroundColor: on ? C.premium : C.surface, borderRadius: 999, borderWidth: 1, borderColor: on ? C.premium : C.line, paddingVertical: 9, paddingHorizontal: 14 }}
+            >
+              <Text style={{ fontFamily: F.semibold, fontSize: 13.5, color: on ? '#fff' : C.ink2 }}>{t(p.labelKey)}</Text>
+            </Pressable>
+          );
+        })}
       </View>
       <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 18, marginBottom: 10 }}>{t('ai.try')}</Text>
       <View style={{ gap: 8 }}>
@@ -398,7 +545,7 @@ function ErrorState({ message }: { message: string | null }) {
   );
 }
 
-function ItineraryPreview({ it, onRemoveStop, onOpenAdder, onRemoveDay, onAddDay }: { it: Itinerary; onRemoveStop: (d: number, s: number) => void; onOpenAdder: (d: number) => void; onRemoveDay: (d: number) => void; onAddDay: () => void }) {
+function ItineraryPreview({ it, onRemoveStop, onOpenAdder, onRemoveDay, onAddDay, onRegenStop, regenKey }: { it: Itinerary; onRemoveStop: (d: number, s: number) => void; onOpenAdder: (d: number) => void; onRemoveDay: (d: number) => void; onAddDay: () => void; onRegenStop: (d: number, s: number) => void; regenKey: string | null }) {
   const { t } = useI18n();
   return (
     <View style={{ marginTop: 16 }}>
@@ -436,9 +583,14 @@ function ItineraryPreview({ it, onRemoveStop, onOpenAdder, onRemoveDay, onAddDay
                   {s.category ? <Text numberOfLines={1} style={{ fontSize: 12, color: C.ink3, fontFamily: F.regular, marginTop: 1 }}>{s.category}</Text> : null}
                   {s.note ? <Text numberOfLines={2} style={{ fontSize: 12.5, color: C.ink2, fontFamily: F.regular, marginTop: 3, lineHeight: 17 }}>{s.note}</Text> : null}
                 </View>
-                <Pressable onPress={() => onRemoveStop(di, i)} hitSlop={6} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.coralLt, alignItems: 'center', justifyContent: 'center' }}>
-                  {Icons.close({ size: 14, color: C.coralDk })}
-                </Pressable>
+                <View style={{ gap: 6 }}>
+                  <Pressable onPress={() => onRegenStop(di, i)} disabled={regenKey === `${di}:${i}`} hitSlop={6} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#ecebf7', alignItems: 'center', justifyContent: 'center' }}>
+                    {regenKey === `${di}:${i}` ? <ActivityIndicator size="small" color={C.premium} /> : Icons.refresh({ size: 13, color: C.premium })}
+                  </Pressable>
+                  <Pressable onPress={() => onRemoveStop(di, i)} hitSlop={6} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.coralLt, alignItems: 'center', justifyContent: 'center' }}>
+                    {Icons.close({ size: 14, color: C.coralDk })}
+                  </Pressable>
+                </View>
               </View>
             ))}
             <Pressable onPress={() => onOpenAdder(di)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 11, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, borderStyle: 'dashed' }}>

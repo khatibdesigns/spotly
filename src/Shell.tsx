@@ -7,6 +7,7 @@ import { useStore, RouteName } from './lib/store';
 import { useAuth } from './lib/auth';
 import { useFamily } from './lib/family';
 import { registerPush } from './lib/push';
+import { logScreen } from './lib/analytics';
 import { useProfile } from './lib/profile';
 import { useMerchant } from './lib/merchant';
 import { PlacesProvider } from './lib/placesStore';
@@ -26,7 +27,7 @@ import { ProfileScreen } from './screens/ProfileScreen';
 import { PlaceScreen } from './screens/PlaceScreen';
 import { BookingScreen, BookingConfirmedScreen } from './screens/BookingScreen';
 import { FiltersSheet } from './screens/FiltersSheet';
-import { AlbumEditorScreen, AlbumCheckoutScreen } from './screens/AlbumScreens';
+import { AlbumEditorScreen, AlbumPreviewScreen, AlbumCheckoutScreen } from './screens/AlbumScreens';
 import { PaywallScreen } from './screens/PaywallScreen';
 import { AiPlanScreen } from './screens/AiPlanScreen';
 import { SavedScreen } from './screens/SavedScreen';
@@ -49,6 +50,7 @@ const OVERLAYS: Record<RouteName, React.ComponentType> = {
   bookingConfirmed: BookingConfirmedScreen,
   filters: FiltersSheet,
   albumEditor: AlbumEditorScreen,
+  albumPreview: AlbumPreviewScreen,
   albumCheckout: AlbumCheckoutScreen,
   paywall: PaywallScreen,
   aiPlan: AiPlanScreen,
@@ -122,17 +124,26 @@ export function Shell() {
     if (user?.uid) registerPush(user.uid, familyId || undefined);
   }, [user?.uid, familyId]);
 
+  // Log a GA4 screen_view whenever the active screen changes. The app uses a
+  // state-based nav (no router integration), so per-screen analytics is tracked
+  // here: the top of the overlay stack, or the current tab when none is open.
+  useEffect(() => {
+    logScreen(stack.length ? stack[stack.length - 1].name : tab);
+  }, [tab, stack.length]);
+
   // Tapping a planner notification opens the AI planner.
   useEffect(() => {
     let sub: any;
     try {
       const N = require('expo-notifications');
       sub = N.addNotificationResponseReceivedListener((resp: any) => {
-        if (resp?.notification?.request?.content?.data?.type === 'aiPlan') push('aiPlan');
+        const type = resp?.notification?.request?.content?.data?.type;
+        if (type === 'aiPlan') push('aiPlan');
+        else if (type === 'birthday') setTab('discover'); // birthday push → browse ideas
       });
     } catch {}
     return () => { try { sub?.remove?.(); } catch {} };
-  }, [push]);
+  }, [push, setTab]);
 
   if (authLoading) return <Splash />;
   if (!user) return <OnboardingScreen />;

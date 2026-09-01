@@ -201,7 +201,7 @@ export function Stars({ value = 4.6, size = 12, color = C.coral }: { value?: num
 }
 
 // Frosted circular icon button (used on photo heroes / dark maps).
-export function CircBtn({ children, onPress, size = 38 }: { children: React.ReactNode; onPress?: () => void; size?: number }) {
+export function CircBtn({ children, onPress, size = 38, style }: { children: React.ReactNode; onPress?: () => void; size?: number; style?: any }) {
   return (
     <Pressable
       onPress={onPress}
@@ -215,6 +215,7 @@ export function CircBtn({ children, onPress, size = 38 }: { children: React.Reac
           justifyContent: 'center',
         },
         SH.pill,
+        style,
       ]}
     >
       {children}

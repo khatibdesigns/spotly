@@ -89,8 +89,33 @@ export function useBookings(): BookingsState {
   return v;
 }
 
-// Album orders — no in-app list needed yet; the CRM reads the `orders` collection.
-export async function createAlbumOrder(uid: string, data: { title: string; size: string; cover: string; total: string; pages?: number }) {
+// Album orders — the CRM reads the `orders` collection. Now carries the real
+// album contents (title, cover photo, selected photo URLs) + the delivery
+// address so a printing partner has everything needed to fulfil. Payment is not
+// collected yet (no gateway chosen) — orders land as 'pending_payment'.
+export type AlbumOrderInput = {
+  title: string;
+  subtitle?: string;
+  size: string;
+  cover: string;
+  total: string;
+  currency?: string;
+  pages?: number;
+  photoCount?: number;
+  coverUrl?: string;
+  photoUrls?: string[];
+  shipTo?: { name?: string; line1?: string; city?: string; country?: string; phone?: string };
+};
+export async function createAlbumOrder(uid: string, data: AlbumOrderInput) {
   if (!firestore) throw new Error('Not configured');
-  await addDoc(collection(firestore, 'orders'), { ...data, uid, type: 'album', status: 'received', createdAt: serverTimestamp() });
+  // Cap embedded photo URLs so the order doc never bloats past Firestore limits.
+  const photoUrls = (data.photoUrls || []).slice(0, 60);
+  await addDoc(collection(firestore, 'orders'), {
+    ...data,
+    photoUrls,
+    uid,
+    type: 'album',
+    status: 'pending_payment',
+    createdAt: serverTimestamp(),
+  });
 }

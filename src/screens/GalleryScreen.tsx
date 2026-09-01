@@ -1,6 +1,6 @@
 // Spotly — Gallery. Real family memories (photos in Storage + Firestore).
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, Image, Modal, TextInput, ActivityIndicator, Alert, Platform, Linking } from 'react-native';
+import { View, Text, ScrollView, Pressable, Image, Modal, TextInput, ActivityIndicator, Alert, Platform, Linking, useWindowDimensions } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,10 +9,12 @@ import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Btn, CircBtn, TitleHeader } from '../components/ui';
 import { useStore } from '../lib/store';
-import { useMemories, Memory } from '../lib/memories';
+import { useMemories, Memory, memoryPhotos } from '../lib/memories';
 import { usePlaces } from '../lib/placesStore';
 import { searchPlaces, PlaceSearchResult } from '../lib/places';
-import { choosePhoto } from '../lib/pickImage';
+import { choosePhotos } from '../lib/pickImage';
+import { ALBUMS_ENABLED } from '../lib/flags';
+import { maybeAskForReview } from '../lib/review';
 import { useI18n } from '../lib/i18n';
 
 export function GalleryScreen() {
@@ -21,11 +23,14 @@ export function GalleryScreen() {
   const { memories, visited, addMemory, uploading } = useMemories();
   const { loc } = usePlaces();
   const { t } = useI18n();
-  const [picked, setPicked] = useState<string | null>(null);
+  const [pickedUris, setPickedUris] = useState<string[]>([]);
   const [placeName, setPlaceName] = useState('');
   const [city, setCity] = useState('');
   const [note, setNote] = useState('');
   const [viewing, setViewing] = useState<Memory | null>(null);
+  const [viewIdx, setViewIdx] = useState(0);
+  const { width: winW } = useWindowDimensions();
+  useEffect(() => { setViewIdx(0); }, [viewing?.id]);
   // Google Places search for "Where was this?" — picking a result captures the
   // place's coords so the memory lands on the map too.
   const [results, setResults] = useState<PlaceSearchResult[]>([]);
@@ -34,7 +39,7 @@ export function GalleryScreen() {
 
   // Debounced search as the user types (skips the change made by picking).
   useEffect(() => {
-    if (!picked) return; // only while the add-memory modal is open
+    if (!pickedUris.length) return; // only while the add-memory modal is open
     const q = placeName.trim();
     if (chosen.current || q.length < 2) { setResults([]); setSearching(false); return; }
     setSearching(true);
@@ -45,7 +50,7 @@ export function GalleryScreen() {
       setSearching(false);
     }, 350);
     return () => clearTimeout(id);
-  }, [placeName, picked, loc?.latitude, loc?.longitude]);
+  }, [placeName, pickedUris.length, loc?.latitude, loc?.longitude]);
 
   const onPlaceChange = (text: string) => { chosen.current = null; setPlaceName(text); };
   const pickPlace = (r: PlaceSearchResult) => {
@@ -66,22 +71,28 @@ export function GalleryScreen() {
     if (m) setViewing(m);
   };
 
+  const photoLabels = () => ({ title: t('photo.title'), camera: t('photo.take'), library: t('photo.library'), cancel: t('common.cancel'), permTitle: t('gallery.permTitle'), permMsg: t('gallery.permMsg') });
   const pick = async () => {
-    const uri = await choosePhoto({ labels: { title: t('photo.title'), camera: t('photo.take'), library: t('photo.library'), cancel: t('common.cancel'), permTitle: t('gallery.permTitle'), permMsg: t('gallery.permMsg') } });
-    if (!uri) return;
-    setPicked(uri);
+    const uris = await choosePhotos({ labels: photoLabels() });
+    if (!uris.length) return;
+    setPickedUris(uris);
     setPlaceName('');
     setCity('');
     setNote('');
     setResults([]);
     chosen.current = null;
   };
+  const addMore = async () => {
+    const uris = await choosePhotos({ labels: photoLabels() });
+    if (uris.length) setPickedUris((p) => [...p, ...uris]);
+  };
+  const removePicked = (uri: string) => setPickedUris((p) => p.filter((u) => u !== uri));
 
   const save = async () => {
-    if (!picked || !placeName.trim()) return;
+    if (!pickedUris.length || !placeName.trim()) return;
     try {
       await addMemory({
-        photoUri: picked,
+        photoUris: pickedUris,
         placeName: placeName.trim(),
         city: city.trim() || undefined,
         note: note.trim() || undefined,
@@ -90,7 +101,8 @@ export function GalleryScreen() {
         lat: chosen.current?.lat,
         lng: chosen.current?.lng,
       });
-      setPicked(null);
+      setPickedUris([]);
+      maybeAskForReview(); // saving a memory is a good moment to ask for a rating
     } catch (e: any) {
       Alert.alert('Could not save', e?.message || 'Please try again.');
     }
@@ -121,31 +133,55 @@ export function GalleryScreen() {
           </View>
         ) : (
           <>
-            {/* Album CTA */}
+            {/* Album CTA — Phase 1: the printed-album flow is hidden, so show a
+                capture-memories prompt instead (families still add photos). */}
             <LinearGradient colors={[C.sage, '#2a6b5b']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[{ marginTop: 8, borderRadius: R.xxl, padding: 20, overflow: 'hidden' }, SH.card]}>
               <View style={{ position: 'absolute', right: -10, top: -10, opacity: 0.18, transform: [{ rotate: '8deg' }] }}>
-                {Icons.album({ size: 160, color: '#fff', filled: true })}
+                {(ALBUMS_ENABLED ? Icons.album : Icons.camera)({ size: 160, color: '#fff', filled: true })}
               </View>
-              <Text style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' }}>{t('gallery.keepsake')}</Text>
-              <Text style={{ fontFamily: F.serif, fontSize: 24, color: '#fff', marginTop: 6, lineHeight: 27, letterSpacing: -0.5 }}>{t('gallery.turnInto', { n: memories.length })}</Text>
-              <View style={{ marginTop: 14, flexDirection: 'row', gap: 8 }}>
-                <Btn kind="dark" size="sm" style={{ backgroundColor: '#fff' }} onPress={() => push('albumEditor')} icon={Icons.album({ size: 14, color: C.sage, filled: true })}>
-                  <Text style={{ color: C.sage, fontFamily: F.bold, fontSize: 13.5 }}>{t('gallery.makeAlbum')}</Text>
-                </Btn>
-                <Btn kind="ghost" size="sm" style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'transparent' }} onPress={pick}>
-                  <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 13.5 }}>{t('gallery.addMore')}</Text>
-                </Btn>
-              </View>
+              {ALBUMS_ENABLED ? (
+                <>
+                  <Text style={{ fontFamily: F.mono, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' }}>{t('gallery.keepsake')}</Text>
+                  <Text style={{ fontFamily: F.serif, fontSize: 24, color: '#fff', marginTop: 6, lineHeight: 27, letterSpacing: -0.5 }}>{t('gallery.turnInto', { n: memories.length })}</Text>
+                  <View style={{ marginTop: 14, flexDirection: 'row', gap: 8 }}>
+                    <Btn kind="dark" size="sm" style={{ backgroundColor: '#fff' }} onPress={() => push('albumEditor')} icon={Icons.album({ size: 14, color: C.sage, filled: true })}>
+                      <Text style={{ color: C.sage, fontFamily: F.bold, fontSize: 13.5 }}>{t('gallery.makeAlbum')}</Text>
+                    </Btn>
+                    <Btn kind="ghost" size="sm" style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'transparent' }} onPress={pick}>
+                      <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 13.5 }}>{t('gallery.addMore')}</Text>
+                    </Btn>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={{ fontFamily: F.serif, fontSize: 24, color: '#fff', lineHeight: 27, letterSpacing: -0.5 }}>{t('gallery.captureTitle')}</Text>
+                  <Text style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.9)', fontFamily: F.regular, marginTop: 6, lineHeight: 19, maxWidth: 250 }}>{t('gallery.captureSub')}</Text>
+                  <View style={{ marginTop: 14 }}>
+                    <Btn kind="dark" size="sm" style={{ backgroundColor: '#fff', alignSelf: 'flex-start' }} onPress={pick} icon={Icons.camera({ size: 14, color: C.sage })}>
+                      <Text style={{ color: C.sage, fontFamily: F.bold, fontSize: 13.5 }}>{t('gallery.addMemory')}</Text>
+                    </Btn>
+                  </View>
+                </>
+              )}
             </LinearGradient>
 
             {/* Timeline grid */}
             <Text style={{ fontFamily: F.serif, fontSize: 22, letterSpacing: -0.4, color: C.ink, marginTop: 26 }}>{t('gallery.recent')}</Text>
             <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {memories.map((m) => (
-                <Pressable key={m.id} onPress={() => setViewing(m)} style={{ width: '32%', aspectRatio: 1, borderRadius: R.md, overflow: 'hidden', backgroundColor: C.surface2 }}>
-                  <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                </Pressable>
-              ))}
+              {memories.map((m) => {
+                const count = memoryPhotos(m).length;
+                return (
+                  <Pressable key={m.id} onPress={() => setViewing(m)} style={{ width: '32%', aspectRatio: 1, borderRadius: R.md, overflow: 'hidden', backgroundColor: C.surface2 }}>
+                    <Image source={{ uri: m.photoUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    {count > 1 ? (
+                      <View style={{ position: 'absolute', top: 6, right: 6, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 9, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        {Icons.album({ size: 10, color: '#fff', filled: true })}
+                        <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 10 }}>{count}</Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
             </View>
 
             {/* By place */}
@@ -171,13 +207,30 @@ export function GalleryScreen() {
       </ScrollView>
 
       {/* Add memory modal */}
-      <Modal visible={!!picked} transparent animationType="slide" onRequestClose={() => setPicked(null)}>
+      <Modal visible={pickedUris.length > 0} transparent animationType="slide" onRequestClose={() => setPickedUris([])}>
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: 'rgba(20,15,10,0.45)', justifyContent: 'flex-end' }}>
           <ScrollView keyboardShouldPersistTaps="handled" bounces={false} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: insets.bottom + 22 }}>
             <View style={{ width: 42, height: 4, borderRadius: 2, backgroundColor: C.line, alignSelf: 'center', marginBottom: 16 }} />
-            <Text style={{ fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>{t('gallery.addMemory')}</Text>
-            {picked ? <Image source={{ uri: picked }} style={{ width: '100%', height: 180, borderRadius: R.lg, marginTop: 14, backgroundColor: C.surface2 }} resizeMode="cover" /> : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontFamily: F.serif, fontSize: 24, letterSpacing: -0.5, color: C.ink }}>{t('gallery.addMemory')}</Text>
+              {pickedUris.length ? <Text style={{ marginLeft: 'auto', fontFamily: F.bold, fontSize: 12.5, color: C.coralDk }}>{t('gallery.photoCount', { n: pickedUris.length })}</Text> : null}
+            </View>
+            {/* Photo strip — several photos per memory */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 14 }}>
+              {pickedUris.map((uri) => (
+                <View key={uri} style={{ width: 116, height: 150, borderRadius: R.lg, overflow: 'hidden', backgroundColor: C.surface2 }}>
+                  <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  <Pressable onPress={() => removePicked(uri)} hitSlop={6} style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
+                    {Icons.close({ size: 14, color: '#fff' })}
+                  </Pressable>
+                </View>
+              ))}
+              <Pressable onPress={addMore} style={{ width: 116, height: 150, borderRadius: R.lg, borderWidth: 1.5, borderColor: C.line, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                {Icons.plus({ size: 22, color: C.coralDk })}
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.coralDk }}>{t('gallery.addMore')}</Text>
+              </Pressable>
+            </ScrollView>
             <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 16, marginBottom: 6 }}>{t('gallery.place')} *</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface, borderRadius: R.md, paddingHorizontal: 12, borderWidth: 1, borderColor: C.line }}>
               {Icons.search({ size: 16, color: C.ink3 })}
@@ -202,7 +255,7 @@ export function GalleryScreen() {
             <Text style={{ fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 12, marginBottom: 6 }}>{t('gallery.note')}</Text>
             <TextInput value={note} onChangeText={setNote} placeholder={t('gallery.noteHint')} placeholderTextColor={C.ink3} style={[inputStyle, { height: 70 }]} multiline />
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-              <Btn kind="ghost" style={{ flex: 1 }} onPress={() => setPicked(null)}>{t('common.cancel')}</Btn>
+              <Btn kind="ghost" style={{ flex: 1 }} onPress={() => setPickedUris([])}>{t('common.cancel')}</Btn>
               <Btn kind="sage" style={{ flex: 1.6 }} onPress={save}>{uploading ? t('gallery.saving') : t('gallery.saveMemory')}</Btn>
             </View>
             {uploading ? <ActivityIndicator color={C.sage} style={{ marginTop: 12 }} /> : null}
@@ -218,7 +271,32 @@ export function GalleryScreen() {
           <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 18 }}>
             {viewing ? (
               <>
-                <Image source={{ uri: viewing.photoUrl }} style={{ width: '100%', height: '62%', borderRadius: R.xl, backgroundColor: C.surface2 }} resizeMode="cover" />
+                {(() => {
+                  const photos = memoryPhotos(viewing);
+                  const pageW = winW - 36;
+                  return (
+                    <View style={{ height: '62%' }}>
+                      <ScrollView
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        onScroll={(e) => { const i = Math.round(e.nativeEvent.contentOffset.x / pageW); if (i !== viewIdx) setViewIdx(i); }}
+                        scrollEventThrottle={16}
+                      >
+                        {photos.map((uri, i) => (
+                          <Image key={i} source={{ uri }} style={{ width: pageW, height: '100%', borderRadius: R.xl, backgroundColor: C.surface2 }} resizeMode="cover" />
+                        ))}
+                      </ScrollView>
+                      {photos.length > 1 ? (
+                        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 }}>
+                          {photos.map((_, i) => (
+                            <View key={i} style={{ width: i === viewIdx ? 18 : 6, height: 6, borderRadius: 3, backgroundColor: i === viewIdx ? '#fff' : 'rgba(255,255,255,0.4)' }} />
+                          ))}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })()}
                 <View style={{ marginTop: 16 }}>
                   <Text style={{ fontFamily: F.serif, fontSize: 24, color: '#fff', letterSpacing: -0.4 }}>{viewing.placeName}</Text>
                   {viewing.city || viewing.createdAt?.toDate ? (

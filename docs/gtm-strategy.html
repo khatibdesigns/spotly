@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Spotly — Go-to-Market Strategy</title>
+<style>
+  :root{
+    --bg:#fcfaf6; --ink:#211c17; --ink2:#574d43; --ink3:#8a7f72;
+    --coral:#fa7959; --coralDk:#d8512b; --coralLt:#fdeee7;
+    --indigo:#363a82; --indigo2:#4c51a6; --indigoLt:#ecebf7;
+    --sage:#4f6f53; --sageLt:#e7efe6;
+    --line:#ece6dc; --card:#ffffff;
+  }
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;}
+  h1,h2,h3,.serif{font-family:Georgia,"Times New Roman",serif;}
+  @page{size:A4;margin:0;}
+  .page{width:210mm;min-height:297mm;padding:18mm 17mm 16mm;position:relative;page-break-after:always;}
+  .page:last-child{page-break-after:auto;}
+  .muted{color:var(--ink3);}
+  .kicker{font-size:9.5px;letter-spacing:2.5px;text-transform:uppercase;color:var(--coralDk);font-weight:700;}
+  .eyebrow{font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);font-weight:700;}
+  .cover{background:linear-gradient(150deg,#fa7959 0%,#e0552f 46%,#363a82 128%);color:#fff;display:flex;flex-direction:column;justify-content:space-between;}
+  .cover .pin{width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(255,255,255,.5);}
+  .cover h1{font-size:54px;line-height:1.02;margin:16px 0 4px;letter-spacing:-1.4px;}
+  .cover .sub{font-size:18px;opacity:.95;font-weight:600;}
+  .cover .lede{font-size:14px;max-width:140mm;opacity:.95;line-height:1.6;margin-top:16px;}
+  .cover .foot{font-size:11px;opacity:.9;border-top:1px solid rgba(255,255,255,.3);padding-top:13px;display:flex;justify-content:space-between;}
+  .sec-h{border-bottom:2px solid var(--line);padding-bottom:9px;margin-bottom:14px;}
+  .sec-h h2{font-size:24px;margin:5px 0 0;letter-spacing:-.5px;}
+  .lead{font-size:13.5px;color:var(--ink2);max-width:155mm;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px 14px;}
+  .card h3{margin:0 0 5px;font-size:14px;}
+  .card p{margin:0;color:var(--ink2);font-size:11.8px;}
+  .tag{display:inline-block;font-size:9px;letter-spacing:1px;text-transform:uppercase;font-weight:700;color:var(--indigo);background:var(--indigoLt);border-radius:6px;padding:3px 7px;margin-bottom:7px;}
+  .tag.coral{color:var(--coralDk);background:var(--coralLt);}
+  .tag.sage{color:var(--sage);background:var(--sageLt);}
+  ul.feat{margin:5px 0 0;padding-left:17px;}
+  ul.feat li{margin:4px 0;color:var(--ink2);font-size:12px;}
+  ul.feat li b{color:var(--ink);}
+  .callout{background:var(--indigo);color:#fff;border-radius:15px;padding:16px 18px;margin-top:13px;}
+  .callout h3{margin:0 0 6px;color:#fff;font-size:15px;}
+  .callout p{margin:0;opacity:.92;font-size:12.2px;}
+  table{width:100%;border-collapse:collapse;margin-top:9px;font-size:11.6px;}
+  th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top;}
+  thead th{background:var(--indigo);color:#fff;font-size:10px;letter-spacing:.4px;text-transform:uppercase;border:none;}
+  thead th:first-child{border-top-left-radius:9px;} thead th:last-child{border-top-right-radius:9px;}
+  td.k{font-weight:700;color:var(--ink);white-space:nowrap;}
+  .pill{display:inline-block;font-size:10px;font-weight:800;border-radius:999px;padding:2px 9px;}
+  .pill.free{background:var(--sageLt);color:var(--sage);}
+  .pill.paid{background:var(--coralLt);color:var(--coralDk);}
+  .foot-num{position:absolute;bottom:10mm;right:17mm;font-size:9.5px;color:var(--ink3);}
+  .foot-brand{position:absolute;bottom:10mm;left:17mm;font-size:9.5px;color:var(--ink3);font-weight:700;letter-spacing:1px;}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .mt{margin-top:13px;}
+  .step{display:flex;gap:11px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--line);}
+  .step .n{min-width:26px;height:26px;border-radius:50%;background:var(--coral);color:#fff;font-family:Georgia,serif;font-size:13px;display:flex;align-items:center;justify-content:center;}
+  .step .t{font-size:12px;color:var(--ink2);}
+  .step .t b{color:var(--ink);}
+  .wk{display:flex;gap:12px;padding:7px 0;border-bottom:1px dashed var(--line);}
+  .wk .d{min-width:74px;font-weight:800;color:var(--coralDk);font-size:11.5px;}
+  .wk .w{font-size:11.8px;color:var(--ink2);}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<section class="page cover">
+  <div>
+    <div class="pin"><svg width="28" height="33" viewBox="0 0 100 118"><path d="M50 4 C24 4 6 22 6 47 c0 23 18 41 38 65 c2 2 4 2 6 2 c2 0 4 0 6-2 c20-24 38-42 38-65 C94 22 76 4 50 4z" fill="#fff"/><circle cx="50" cy="46" r="20" fill="#fa7959"/></svg></div>
+    <div class="eyebrow" style="color:rgba(255,255,255,.85);margin-top:24px;">Go-to-Market Strategy · GCC-first · 2026</div>
+    <h1>Spotly</h1>
+    <div class="sub">Discover. Plan. Remember.</div>
+    <div class="lede">How we take a finished, two-sided family-outings platform to market — acquiring families, onboarding establishments, and ranking in search — starting in Kuwait and scaling across the GCC.</div>
+  </div>
+  <div class="foot"><span>Confidential — internal strategy</span><span>meetspotly.com</span></div>
+</section>
+
+<!-- 1. THE SUPPLY MODEL (the key nuance) -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">The model, precisely</div><h2>Two layers of supply — and what each earns</h2></div>
+  <p class="lead">Spotly is useful the moment it opens because the catalogue already exists (~2,700 AI-screened kid-friendly places in Kuwait). But it's important to be exact about what makes money: <strong>discovery is free and universal; a venue only generates sales once we onboard it and add its vouchers/booking.</strong></p>
+
+  <div class="two mt">
+    <div>
+      <div class="tag sage">Layer 1 — Free discovery (no onboarding)</div>
+      <ul class="feat">
+        <li>Every AI-screened place appears in Discover, the Map, and the AI planner.</li>
+        <li>Families <b>find, plan, save, visit and remember</b> — full value, zero merchant action.</li>
+        <li>This drives <b>engagement</b> → which powers the revenue that needs <i>no</i> merchant.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="tag coral">Layer 2 — Commerce (must be onboarded)</div>
+      <ul class="feat">
+        <li>To <b>sell on Spotly</b>, a venue must be claimed/onboarded with <b>vouchers or bookings</b> added.</li>
+        <li>Only these places show "View offers / Book" and generate transaction revenue.</li>
+        <li>So <b>merchant onboarding is the revenue critical path</b> — even though usage isn't gated on it.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="eyebrow mt" style="margin-bottom:7px;">Which revenue needs merchants — and which doesn't</div>
+  <table>
+    <thead><tr><th>Revenue stream</th><th>Needs onboarding?</th><th>Why it matters at launch</th></tr></thead>
+    <tbody>
+      <tr><td class="k">Spotly Plus subscription</td><td><span class="pill free">No</span></td><td>Monetises every family from day one — independent of any merchant.</td></tr>
+      <tr><td class="k">Printed albums &amp; prints</td><td><span class="pill free">No</span></td><td>The marquee earner; needs only family photos, not merchants. De-risked base.</td></tr>
+      <tr><td class="k">Voucher commerce (take-rate)</td><td><span class="pill paid">Yes</span></td><td>Needs the venue onboarded + vouchers live. Cash-upfront hook for merchants.</td></tr>
+      <tr><td class="k">Booking commission</td><td><span class="pill paid">Yes</span></td><td>Needs the venue accepting bookings on Spotly.</td></tr>
+      <tr><td class="k">Promoted placement / merchant SaaS</td><td><span class="pill paid">Yes</span></td><td>Sold to onboarded brands; scales with merchant density.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <h3>The two consequences that shape the whole plan</h3>
+    <p><b>1.</b> Because Plus + albums need no merchants, <b>we can launch and earn with families alone</b> — growth is not blocked by the chicken-and-egg.<br/>
+    <b>2.</b> Because transaction revenue needs onboarding, we run a <b>concentrated merchant push for density</b> — onboard the venues families already view most so "buy/book" feels alive, rather than scattering thinly.</p>
+  </div>
+  <div class="foot-brand">SPOTLY · GTM</div><div class="foot-num">2</div>
+</section>
+
+<!-- 2. THESIS + PHASING -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Sequencing</div><h2>Lead with demand, concentrate supply, then expand</h2></div>
+  <p class="lead">Most marketplaces stall on cold-start. Spotly's free directory removes the family-side risk, so we lead with families and use real traffic as the lever to onboard venues for the commerce layer.</p>
+  <table class="mt">
+    <thead><tr><th>Phase</th><th>Goal</th><th>Primary motion</th></tr></thead>
+    <tbody>
+      <tr><td class="k">P0 · Pre-launch<br/>(4–8 wks)</td><td>Waitlist + 5–10 anchor brands + SEO/ASO foundation</td><td>Beta, founding-partner outreach, programmatic SEO build, listings</td></tr>
+      <tr><td class="k">P1 · Kuwait launch</td><td>Prove activation &amp; retention; seed commerce density</td><td>Influencers, schools/nurseries, paid social, PR + onboard top-viewed venues</td></tr>
+      <tr><td class="k">P2 · Monetise &amp; loop</td><td>Turn usage into revenue + virality</td><td>Albums, Plus, vouchers, referral engine, birthday offers</td></tr>
+      <tr><td class="k">P3 · GCC expansion</td><td>Saudi → UAE → Qatar, each pre-screened</td><td>Repeat playbook; AI sweep seeds each new market</td></tr>
+    </tbody>
+  </table>
+  <div class="callout" style="background:var(--sage);">
+    <h3>Win Kuwait decisively first</h3>
+    <p>A dense, beloved single market — strong retention, live commerce in popular areas, a referral loop that compounds — beats five thin markets. Each new GCC market launches pre-curated by the same AI sweep (~$20 of Google calls + Claude screening), so expansion is cheap once the playbook works.</p>
+  </div>
+
+  <div class="eyebrow mt" style="margin-bottom:7px;">Launch-readiness gates (close before paid acquisition)</div>
+  <div class="grid3">
+    <div class="card"><h3>Secure the stack</h3><p>EC2 proxy → HTTPS; rotate the exposed APNs key + service accounts before listings go public.</p></div>
+    <div class="card"><h3>Payments live</h3><p>Stripe wired before marketing vouchers/albums as purchasable (currently mock).</p></div>
+    <div class="card"><h3>Listings + analytics</h3><p>Bilingual ASO live; GA4 events defined so launch isn't flown blind.</p></div>
+  </div>
+  <div class="foot-brand">SPOTLY · GTM</div><div class="foot-num">3</div>
+</section>
+
+<!-- 3. DEMAND -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Demand side</div><h2>Acquiring families</h2></div>
+  <p class="lead">GCC parents are mobile-first and high-spend, living on Instagram, TikTok and <strong>Snapchat</strong> (don't skip Snap in the Gulf). Ranked by leverage:</p>
+  <div class="grid mt">
+    <div class="card"><div class="tag sage">Built-in loops · cheapest</div><h3>Virality already in the app</h3><p><b>Memory sharing</b> (share a finished album/memory card — every share is an ad parents <i>want</i> to post), <b>family invites</b> (deep links, incentivised), and a <b>referral program</b> (free album mini / KWD off both sides).</p></div>
+    <div class="card"><div class="tag">Community · best ROI</div><h3>Where Gulf parents already are</h3><p><b>Nurseries, schools, KGs</b> (one director = dozens of families; co-branded weekend guides / class albums), <b>WhatsApp &amp; IG mom-communities</b>, <b>pediatric clinics &amp; kids' salons</b> (QR in waiting rooms).</p></div>
+    <div class="card"><div class="tag">Creators</div><h3>Family micro-influencers</h3><p>10k–100k mom/family creators beat mega-influencers here. Give them a personalised AI plan + a free album of their kids; they post the <i>output</i>, not an ad read.</p></div>
+    <div class="card"><div class="tag coral">Paid · after PMF signals</div><h3>Performance, once retention's proven</h3><p>Geo-targeted Meta / TikTok / <b>Snap</b> to parents 25–45; Apple Search Ads + Google App campaigns. Creative = the memory book &amp; the AI plan, not feature lists. Keep small until LTV:CAC is understood.</p></div>
+  </div>
+  <div class="callout">
+    <h3>Activation is the job, not just installs</h3>
+    <p>An install only counts once a family completes setup and takes a first action (save a place, generate a plan, add a memory). Optimise the first session for one "wow" — the AI plan or the first memory — and prompt a review right after it.</p>
+  </div>
+  <div class="foot-brand">SPOTLY · GTM</div><div class="foot-num">4</div>
+</section>
+
+<!-- 4. SUPPLY / MERCHANT ONBOARDING -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Supply side</div><h2>Onboarding establishments (the revenue path)</h2></div>
+  <p class="lead">They're already listed (AI-screened), so this is <strong>land-and-expand, not cold seeding</strong>. The wedge is their own data: <em>"Families on Spotly are already discovering you — claim your listing free, see who's viewing you, then add offers to convert them."</em> The merchant analytics you built <em>is</em> the sales tool.</p>
+
+  <div class="eyebrow mt" style="margin-bottom:6px;">Target order — density &gt; breadth</div>
+  <div class="step"><div class="n">1</div><div class="t"><b>Multi-branch family brands</b> (edutainment, indoor play, trampoline parks, family F&amp;B with play areas). One deal = many branches via the brand→country→branch hierarchy. Highest BD leverage.</div></div>
+  <div class="step"><div class="n">2</div><div class="t"><b>Malls</b> — aggregate dozens of family tenants + double as a marketing channel. A mall partnership = bulk supply.</div></div>
+  <div class="step"><div class="n">3</div><div class="t"><b>The most-viewed places</b> in the app — use analytics to target the venues families already look at most. Highest-converting onboarding targets; they create commerce density where attention already is.</div></div>
+  <div class="step"><div class="n">4</div><div class="t"><b>Independents</b> via the self-serve claim flow — scalable, near-zero sales cost.</div></div>
+
+  <div class="two mt">
+    <div>
+      <div class="tag coral">The sharpest pitch</div>
+      <ul class="feat">
+        <li><b>Cash upfront:</b> "Sell prepaid vouchers on Spotly and get paid <i>before</i> the family visits." Cash-flow + new customers is an easy SME yes.</li>
+        <li><b>Their own traffic:</b> show view/click/booking trends — proof, not promises.</li>
+        <li><b>Done-for-you onboarding:</b> claim + add vouchers in the first meeting.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="tag sage">Founding Partner program</div>
+      <ul class="feat">
+        <li>First ~50 venues: <b>free promoted placement 3–6 months</b> + free CRM tier + "Founding Partner" badge.</li>
+        <li>Trade free promotion for a <b>social shout-out</b> → reverse-acquires families.</li>
+        <li>Relationship-led, in-person BD (Gulf B2B isn't won over email).</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout">
+    <h3>Why density matters</h3>
+    <p>If only a handful of venues have live vouchers, families rarely hit a "buy" moment and commerce revenue stays flat. Concentrate onboarding so popular areas/categories feel <b>shoppable</b> — then transaction revenue compounds with usage.</p>
+  </div>
+  <div class="foot-brand">SPOTLY · GTM</div><div class="foot-num">5</div>
+</section>
+
+<!-- 5. SEO / ASO -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Search</div><h2>SEO &amp; ASO — your most defensible channel</h2></div>
+  <p class="lead">You own a curated dataset competitors don't — that's a moat for both the app stores and the web.</p>
+  <div class="grid mt">
+    <div class="card"><div class="tag">ASO</div><h3>Rank in the app stores (drives installs)</h3><p>Bilingual EN + AR listings. Keywords: <i>kids activities Kuwait, things to do with kids, family outings, indoor play, kid-friendly restaurants</i> + Arabic (<i>أماكن عائلية, أنشطة الأطفال, أماكن ترفيهية للأطفال</i>). Outcome-led screenshots. <b>Reviews are the #1 lever</b> — prompt after a great moment.</p></div>
+    <div class="card"><div class="tag coral">Programmatic web SEO</div><h3>Local-intent landing pages at scale</h3><p>From your data: <i>"Best kid-friendly places in [Area]", "Indoor activities for kids in Kuwait", "Halal family restaurants in [Area]", "Birthday venues in Kuwait"</i> — hundreds of long-tail pages, bilingual, each funnelling into the app.</p></div>
+    <div class="card"><div class="tag sage">Content / guides</div><h3>Evergreen parenting intent</h3><p>Weekend guides, hot-/rainy-day indoor lists (ties to the weather-aware planner), birthday-party planning, "new to Kuwait with kids." Earns links + ranks long-tail.</p></div>
+    <div class="card"><div class="tag">Off-page</div><h3>Local + links</h3><p>Google Business Profile, structured data on venue pages, backlinks from schools, nurseries, parenting sites, malls &amp; press — sourced via the same partnership outreach.</p></div>
+  </div>
+  <div class="callout" style="background:var(--coralDk);">
+    <h3>⚠ Compliance guardrail (build it in from day one)</h3>
+    <p>Google Places terms let you persist only the <b>place_id + your own verdict</b> — <b>not</b> Google's place content (names, photos, reviews). So programmatic pages must be built from <b>Spotly's own curation/descriptions</b> (or live API calls rendered client-side), never republished Google data. This is a feature, not a limit: original, genuinely-helpful curation ranks better and is defensible.</p>
+  </div>
+  <div class="foot-brand">SPOTLY · GTM</div><div class="foot-num">6</div>
+</section>
+
+<!-- 6. RETENTION + METRICS -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Keep &amp; grow</div><h2>Retention, lifecycle &amp; metrics</h2></div>
+  <div class="two">
+    <div>
+      <div class="eyebrow" style="margin-bottom:6px;">Retention loops (mostly built)</div>
+      <ul class="feat">
+        <li><b>Memory loop:</b> more outings logged → stickier + more album revenue. Nudge "add a memory" after a visit.</li>
+        <li><b>Birthday engine (DOB):</b> the highest-intent moment of a family's year — a push (and later a merchant-funded offer) on the child's birthday. Also a merchant product.</li>
+        <li><b>Lifecycle push:</b> "this weekend near you," weather-aware ("too hot Saturday — indoor picks"), re-engagement.</li>
+        <li><b>Plus prompts</b> at value moments (storage cap, full map).</li>
+      </ul>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:6px;">Metrics to instrument now (GA4)</div>
+      <ul class="feat">
+        <li><b>North Star:</b> weekly active families taking a meaningful action (save / plan / memory / book).</li>
+        <li><b>Funnel:</b> install → activate → habit (week-2 return / memory) → monetise → refer.</li>
+        <li><b>Watch:</b> activation %, D7/D30 retention, <b>K-factor</b> (invites + album shares, aim &gt;0.5), album attach-rate, Plus conversion, merchant claim rate, <b>LTV:CAC ≥ 3:1</b>.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout">
+    <h3>Two revenue engines, two dashboards</h3>
+    <p>Track the <b>merchant-independent</b> engine (Plus + albums per active family) and the <b>merchant-dependent</b> engine (voucher/booking GMV × take-rate, gated on onboarding density) separately. They scale on different inputs — families vs. partner onboarding — and conflating them hides where to push.</p>
+  </div>
+  <div class="foot-brand">SPOTLY · GTM</div><div class="foot-num">7</div>
+</section>
+
+<!-- 7. 90-DAY PLAYBOOK -->
+<section class="page">
+  <div class="sec-h"><div class="kicker">Execution</div><h2>First 90 days — Kuwait</h2></div>
+  <div class="eyebrow" style="margin-bottom:4px;">Days 0–30 · Foundation</div>
+  <div class="wk"><div class="d">Stack</div><div class="w">Close launch-readiness gates (HTTPS, rotate secrets, Stripe, GA4 events).</div></div>
+  <div class="wk"><div class="d">Search</div><div class="w">Finalise bilingual ASO; build programmatic SEO pages + 8–10 cornerstone guides.</div></div>
+  <div class="wk"><div class="d">Demand</div><div class="w">Recruit 50–100 beta families via mom-communities + nurseries; stand up referral + memory-share loops.</div></div>
+  <div class="wk"><div class="d">Supply</div><div class="w">Founder-led outreach: sign <b>5–10 anchor brands + 1–2 malls</b>; done-for-you voucher onboarding.</div></div>
+  <div class="wk"><div class="d">Lifecycle</div><div class="w">Ship the birthday push worker so it's live from day one.</div></div>
+
+  <div class="eyebrow mt" style="margin-bottom:4px;">Days 30–60 · Soft launch</div>
+  <div class="wk"><div class="d">Launch</div><div class="w">Open to waitlist + beta; turn on memory-share + referral incentives.</div></div>
+  <div class="wk"><div class="d">Creators</div><div class="w">Seed 10–15 family micro-influencers with personalised plans + free albums.</div></div>
+  <div class="wk"><div class="d">Paid test</div><div class="w">Small Snap/IG/TikTok test to learn creative + CAC; begin review-prompting.</div></div>
+  <div class="wk"><div class="d">Supply</div><div class="w">Onboard the most-viewed venues (analytics-led) for commerce density.</div></div>
+
+  <div class="eyebrow mt" style="margin-bottom:4px;">Days 60–90 · Scale what works</div>
+  <div class="wk"><div class="d">Double down</div><div class="w">Pour budget into the 1–2 channels with best CAC + activation.</div></div>
+  <div class="wk"><div class="d">PR moment</div><div class="w">Launch event at an anchor venue (doubles as family + merchant acquisition).</div></div>
+  <div class="wk"><div class="d">Monetise</div><div class="w">Birthday + weekend lifecycle campaigns; push albums &amp; Plus; expand self-serve merchant claims.</div></div>
+  <div class="wk"><div class="d">Next market</div><div class="w">Run the Saudi AI sweep to pre-seed P3.</div></div>
+
+  <div class="callout" style="margin-top:14px;">
+    <h3>The one line</h3>
+    <p>Lead with families (the free directory makes the app useful instantly + Plus/albums earn with zero merchants), use the curated dataset for an SEO/ASO moat, and onboard establishments for density — starting with multi-branch brands &amp; malls — so the commerce layer comes alive where attention already is.</p>
+  </div>
+  <div class="foot-brand">SPOTLY · GTM · meetspotly.com</div><div class="foot-num">8</div>
+</section>
+
+</body>
+</html>

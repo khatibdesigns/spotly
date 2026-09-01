@@ -1,6 +1,6 @@
 // Spotly — Paywall (Spotly Plus) backed by RevenueCat.
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, F, R, SH } from '../lib/theme';
@@ -33,9 +33,14 @@ export function PaywallScreen() {
   const [sel, setSel] = useState<'annual' | 'monthly'>('annual');
   const [busy, setBusy] = useState(false);
 
-  const monthly = packages.find((p: any) => p.packageType === 'MONTHLY');
-  const annual = packages.find((p: any) => p.packageType === 'ANNUAL');
-  const selPkg = sel === 'annual' ? annual : monthly;
+  // Match by standard RevenueCat package type first, then fall back to identifier
+  // hints — so the paywall still finds the right plan when the offering uses
+  // CUSTOM package identifiers (e.g. "spotly_plus_monthly"/"_yearly") instead of
+  // the built-in $rc_monthly/$rc_annual. Last resort: any 2 packages by position.
+  const hint = (re: RegExp) => packages.find((p: any) => re.test(p.identifier || '') || re.test(p.product?.identifier || ''));
+  const monthly = packages.find((p: any) => p.packageType === 'MONTHLY') || hint(/month/i) || packages[0];
+  const annual = packages.find((p: any) => p.packageType === 'ANNUAL') || hint(/year|annual/i) || packages.find((p: any) => p !== monthly);
+  const selPkg = (sel === 'annual' ? annual : monthly) || annual || monthly;
   const monthlyPrice = monthly?.product?.priceString || '€4.99';
   const annualPrice = annual?.product?.priceString || '€39.99';
 
@@ -112,7 +117,7 @@ export function PaywallScreen() {
 
           <Text style={{ marginTop: 14, textAlign: 'center', fontSize: 11, color: C.ink3, fontFamily: F.regular, lineHeight: 16 }}>
             {t('pw.legal')}{'\n'}
-            <Text onPress={() => {}}>{t('pw.terms')}</Text> · <Text>{t('pw.privacy')}</Text>
+            <Text style={{ textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://meetspotly.com/eula.html')}>{t('pw.terms')}</Text> · <Text style={{ textDecorationLine: 'underline' }} onPress={() => Linking.openURL('https://meetspotly.com/privacy.html')}>{t('pw.privacy')}</Text>
           </Text>
         </View>
       </ScrollView>

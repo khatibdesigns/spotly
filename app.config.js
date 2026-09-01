@@ -8,16 +8,16 @@ export default {
   expo: {
     name: 'Spotly',
     slug: 'spotly',
-    version: '1.0.0',
+    version: '1.0.2',
     orientation: 'portrait',
     icon: './assets/icon.png',
     scheme: 'spotly',
     userInterfaceStyle: 'light',
     backgroundColor: '#fcfaf6',
     ios: {
-      supportsTablet: true,
+      supportsTablet: false,
       bundleIdentifier: 'com.khd.spotly',
-      buildNumber: '48',
+      buildNumber: '70',
       usesAppleSignIn: true,
       googleServicesFile: './GoogleService-Info.plist', // Firebase (FCM + Analytics)
       // Universal Links — tapping https://meetspotly.com/join?code=… opens the
@@ -39,7 +39,7 @@ export default {
     },
     android: {
       package: 'com.khd.spotly',
-      versionCode: 48,
+      versionCode: 70,
       googleServicesFile: './google-services.json', // Firebase (FCM + Analytics)
       // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
       usesCleartextTraffic: true,
@@ -81,7 +81,7 @@ export default {
         'expo-image-picker',
         {
           photosPermission: 'Spotly needs access to your photos so you can add family memories.',
-          cameraPermission: 'Spotly needs camera access so you can take photos for memories and profiles.',
+          cameraPermission: 'Spotly uses the camera so you can take a photo of your outing to save as a family memory or set a profile picture. For example, snap a photo at a park and attach it to that place in your gallery.',
         },
       ],
       [

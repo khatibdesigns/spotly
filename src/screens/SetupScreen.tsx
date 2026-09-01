@@ -10,6 +10,8 @@ import { useAuth } from '../lib/auth';
 import { useProfile, Kid, EMPTY_STATS } from '../lib/profile';
 import { useI18n } from '../lib/i18n';
 import { useStore } from '../lib/store';
+import { DobPicker } from '../components/DobPicker';
+import { ageFromDob, formatDob, kidAge } from '../lib/dob';
 
 const KID_COLORS = [C.sky, C.plum, C.sun, C.sage, C.coral];
 let _kidSeq = 0;
@@ -33,6 +35,7 @@ export function SetupScreen() {
   const { setAuthIntent } = useStore();
   const [step, setStep] = useState<0 | 1>(0);
   const [busy, setBusy] = useState(false);
+  const [dobKidId, setDobKidId] = useState<string | null>(null);
 
   const [familyName, setFamilyName] = useState('');
   const [parentName, setParentName] = useState(user?.displayName || '');
@@ -101,16 +104,13 @@ export function SetupScreen() {
                     />
                     <Pressable onPress={() => removeKid(k.id)}>{Icons.close({ size: 18, color: C.ink3 })}</Pressable>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                    <Text style={{ fontFamily: F.semibold, fontSize: 13, color: C.ink3 }}>{t('setup.age')}</Text>
-                    <Pressable onPress={() => setKid(k.id, { age: Math.max(0, k.age - 1) })} style={stepBtn}>
-                      <Text style={{ color: C.ink2, fontSize: 18 }}>–</Text>
-                    </Pressable>
-                    <Text style={{ fontFamily: F.extrabold, fontSize: 16, color: C.ink, minWidth: 22, textAlign: 'center' }}>{k.age}</Text>
-                    <Pressable onPress={() => setKid(k.id, { age: Math.min(17, k.age + 1) })} style={[stepBtn, { backgroundColor: C.coral }]}>
-                      <Text style={{ color: '#fff', fontSize: 18 }}>+</Text>
-                    </Pressable>
-                  </View>
+                  <Pressable onPress={() => setDobKidId(k.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface2, borderRadius: R.md, paddingVertical: 9, paddingHorizontal: 12 }}>
+                    {Icons.calendar({ size: 15, color: C.coralDk })}
+                    <Text style={{ fontFamily: F.semibold, fontSize: 13.5, color: k.dob ? C.ink : C.ink3, flex: 1 }}>
+                      {k.dob ? `${formatDob(k.dob)}  ·  ${t('profile.ageFmt', { age: kidAge(k) })}` : t('setup.setBirthday')}
+                    </Text>
+                    {Icons.chevR({ size: 14, color: C.ink3 })}
+                  </Pressable>
                 </View>
               ))}
               <Pressable onPress={addKid} style={{ borderWidth: 1.5, borderColor: C.line, borderStyle: 'dashed', borderRadius: R.xl, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
@@ -162,6 +162,13 @@ export function SetupScreen() {
           <Btn kind="primary" size="lg" full onPress={finish}>{busy ? t('setup.settingUp') : t('setup.showPlaces')}</Btn>
         )}
       </View>
+
+      <DobPicker
+        visible={dobKidId != null}
+        value={kids.find((k) => k.id === dobKidId)?.dob}
+        onClose={() => setDobKidId(null)}
+        onSelect={(iso) => { if (dobKidId) setKid(dobKidId, { dob: iso, age: ageFromDob(iso) ?? 0 }); }}
+      />
     </View>
   );
 }

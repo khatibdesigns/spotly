@@ -1,6 +1,6 @@
 // Spotly — Place detail for a real selected place (Google/curated).
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, Alert, Linking, Share, Platform, Pressable, LayoutAnimation, UIManager, useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { View, Text, ScrollView, Alert, Linking, Share, Platform, Pressable, Image, LayoutAnimation, UIManager, useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker } from 'react-native-maps';
@@ -13,11 +13,12 @@ import { usePlans } from '../lib/plans';
 import { useSaves } from '../lib/saves';
 import { useProfile, familyFood } from '../lib/profile';
 import { useI18n } from '../lib/i18n';
-import { formatDistance } from '../lib/places';
+import { formatDistance, getPlaceDetails, PlaceDetails } from '../lib/places';
 import { bumpPlaceStat } from '../lib/stats';
 import { logEvent } from '../lib/analytics';
 import { useVouchers } from '../lib/vouchers';
 import { currencyFor, formatMoney, Voucher } from '../lib/currency';
+import { COMMERCE_ENABLED } from '../lib/flags';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -56,7 +57,22 @@ export function PlaceScreen() {
   const showAllergy = spot?.kind === 'dining' && avoid.length > 0;
 
   const vouchers = spot?.vouchers || [];
-  const hasOffers = vouchers.length > 0;
+  // Phase 1: commerce off → no offers/cart even if a place carries vouchers.
+  // (When COMMERCE_ENABLED is true, offers stay data-gated on the place's doc.)
+  const hasOffers = COMMERCE_ENABLED && vouchers.length > 0;
+
+  // Live establishment details (reviews, hours, contact, summary) — fetched
+  // on-demand from Google for this place; degrades gracefully to the list data.
+  const [details, setDetails] = useState<PlaceDetails | null>(null);
+  useEffect(() => {
+    let cancel = false;
+    setDetails(null);
+    if (spot?.id) getPlaceDetails(spot.id).then((d) => { if (!cancel) setDetails(d); }).catch(() => {});
+    return () => { cancel = true; };
+  }, [spot?.id]);
+  const rating = details?.rating ?? spot?.rating;
+  const reviewCount = details?.reviews ?? spot?.reviews;
+  const openNow = details?.openNow ?? spot?.openNow;
   const cur = currencyFor(spot?.currencyCode);
   const [offersOpen, setOffersOpen] = useState(false);
   const [justAdded, setJustAdded] = useState<string | null>(null);
@@ -185,17 +201,17 @@ export function PlaceScreen() {
                 {spot?.category}{spot?.distanceKm != null ? ` · ${formatDistance(spot.distanceKm)} away` : ''}
               </Text>
             </View>
-            {spot?.openNow != null ? (
-              <Text style={{ backgroundColor: spot.openNow ? C.good : C.ink3, color: '#fff', fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>
-                {spot.openNow ? t('place.openNow') : t('place.closed')}
+            {openNow != null ? (
+              <Text style={{ backgroundColor: openNow ? C.good : C.ink3, color: '#fff', fontSize: 10, fontFamily: F.extrabold, paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, letterSpacing: 0.6, overflow: 'hidden' }}>
+                {openNow ? t('place.openNow') : t('place.closed')}
               </Text>
             ) : null}
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 }}>
-            {spot?.rating ? <Stars value={spot.rating.toFixed(1)} /> : null}
-            {spot?.reviews ? <Text style={{ color: C.ink3, fontSize: 12, fontFamily: F.regular }}>· {t('place.reviews', { n: spot.reviews })}</Text> : null}
-            {spot?.price ? <Text style={{ color: C.ink3, fontSize: 12, fontFamily: F.regular }}>· {spot.price}</Text> : null}
+            {rating ? <Stars value={rating.toFixed(1)} /> : null}
+            {reviewCount ? <Text style={{ color: C.ink3, fontSize: 12, fontFamily: F.regular }}>· {t('place.reviews', { n: reviewCount })}</Text> : null}
+            {(details?.price ?? spot?.price) ? <Text style={{ color: C.ink3, fontSize: 12, fontFamily: F.regular }}>· {details?.price ?? spot?.price}</Text> : null}
             {spot?.ages ? <Text style={{ marginLeft: 'auto', backgroundColor: C.sageLt, color: C.sage, fontSize: 10.5, fontFamily: F.extrabold, paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.pill, overflow: 'hidden' }}>AGE {spot.ages}</Text> : null}
           </View>
 
@@ -229,6 +245,63 @@ export function PlaceScreen() {
                     </View>
                   );
                 })}
+              </View>
+            </>
+          ) : null}
+
+          {/* About — Google editorial summary */}
+          {details?.summary ? (
+            <Text style={{ marginTop: 20, fontSize: 14, color: C.ink2, fontFamily: F.regular, lineHeight: 21 }}>{details.summary}</Text>
+          ) : null}
+
+          {/* Contact — call / website */}
+          {details?.phone || details?.website ? (
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+              {details.phone ? (
+                <Btn kind="soft" size="sm" style={{ flex: 1 }} icon={Icons.phone({ size: 14, color: C.ink })} onPress={() => Linking.openURL(`tel:${details.phone}`).catch(() => {})}>{t('place.call')}</Btn>
+              ) : null}
+              {details.website ? (
+                <Btn kind="soft" size="sm" style={{ flex: 1 }} icon={Icons.globe({ size: 14, color: C.ink })} onPress={() => Linking.openURL(details.website!).catch(() => {})}>{t('place.website')}</Btn>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Opening hours */}
+          {details?.weekdayHours?.length ? (
+            <>
+              <Text style={{ marginTop: 22, fontFamily: F.mono, fontSize: 11, color: C.ink3, letterSpacing: 1, textTransform: 'uppercase' }}>{t('place.hours')}</Text>
+              <View style={[{ marginTop: 12, backgroundColor: C.surface, borderRadius: R.lg, paddingVertical: 12, paddingHorizontal: 14 }, SH.card]}>
+                {details.weekdayHours.map((h, i) => (
+                  <Text key={i} style={{ fontSize: 12.5, color: C.ink2, fontFamily: F.regular, lineHeight: 20 }}>{h}</Text>
+                ))}
+              </View>
+            </>
+          ) : null}
+
+          {/* Reviews — live from Google (shown with attribution) */}
+          {details?.reviewList?.length ? (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24 }}>
+                <Text style={{ fontFamily: F.serif, fontSize: 19, color: C.ink, letterSpacing: -0.4 }}>{t('place.reviewsTitle')}</Text>
+                <View style={{ flex: 1 }} />
+                <Text style={{ fontSize: 10.5, color: C.ink3, fontFamily: F.semibold }}>{t('place.viaGoogle')}</Text>
+              </View>
+              <View style={{ gap: 10, marginTop: 12 }}>
+                {details.reviewList.map((r, i) => (
+                  <View key={i} style={[{ backgroundColor: C.surface, borderRadius: R.lg, padding: 14 }, SH.card]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                      <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: C.surface2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+                        {r.authorPhoto ? <Image source={{ uri: r.authorPhoto }} style={{ width: 30, height: 30 }} /> : <Text style={{ fontFamily: F.bold, color: C.ink3, fontSize: 13 }}>{(r.author || '?').trim()[0]?.toUpperCase()}</Text>}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{r.author || t('place.guest')}</Text>
+                        {r.relativeTime ? <Text style={{ fontSize: 11, color: C.ink3, fontFamily: F.regular }}>{r.relativeTime}</Text> : null}
+                      </View>
+                      {r.rating ? <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: C.ink2 }}><Text style={{ color: C.sun }}>★</Text> {r.rating}</Text> : null}
+                    </View>
+                    {r.text ? <Text numberOfLines={6} style={{ fontSize: 12.5, color: C.ink2, fontFamily: F.regular, marginTop: 8, lineHeight: 18 }}>{r.text}</Text> : null}
+                  </View>
+                ))}
               </View>
             </>
           ) : null}
@@ -302,8 +375,8 @@ export function PlaceScreen() {
         </View>
       </View>
 
-      {/* Cart pill — appears once vouchers are in the cart */}
-      {cartCount > 0 ? (
+      {/* Cart pill — appears once vouchers are in the cart (Phase 1: hidden) */}
+      {COMMERCE_ENABLED && cartCount > 0 ? (
         <Pressable
           onPress={() => push('cart')}
           style={[{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 92, height: 48, backgroundColor: C.ink, borderRadius: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10 }, SH.pop]}
