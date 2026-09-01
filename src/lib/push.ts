@@ -29,6 +29,27 @@ async function askAndroidPostNotifications(): Promise<boolean> {
 // Permission → APNs registration (iOS) → FCM token → store in Firestore.
 export async function registerPush(uid: string, familyId?: string): Promise<void> {
   if (!firestore || !uid) return;
+
+  // Write the identity record FIRST, before any permission gate.
+  //
+  // users/{uid} is the only link between a person and their family, and it used to be
+  // created solely at the end of this function — so anyone who declined the notification
+  // prompt got no user document at all. Their family doc still appeared through normal
+  // use, leaving a family nothing could ever reach: invisible to the lifecycle worker,
+  // uncountable, unreachable. Firestore showed 10 such families on 2026-09-01, five of
+  // them created in the preceding month, so it was still happening.
+  //
+  // Identity does not depend on push consent. Only the token does.
+  try {
+    await setDoc(
+      doc(firestore, 'users', uid),
+      { platform: Platform.OS, familyId: familyId || uid },
+      { merge: true },
+    );
+  } catch (e) {
+    console.log('[push] identity write failed:', String(e).slice(0, 200));
+  }
+
   try {
     if (!(await askAndroidPostNotifications())) {
       console.log('[push] Android POST_NOTIFICATIONS denied');
@@ -60,6 +81,17 @@ export async function registerPush(uid: string, familyId?: string): Promise<void
     try { await subscribeToTopic(m, 'all'); } catch {}
   } catch (e) {
     console.log('[push] registerPush failed:', String(e).slice(0, 200));
+  }
+}
+
+// Current device FCM token (cached by the native SDK). Used by the AI planner
+// to hand the proxy a push target so it can notify when the plan is ready even
+// if the app is fully closed. Returns null if messaging isn't available yet.
+export async function getCurrentFcmToken(): Promise<string | null> {
+  try {
+    return await getToken(getMessaging(getApp()));
+  } catch {
+    return null;
   }
 }
 
