@@ -98,6 +98,14 @@ export function VouchersProvider({ children }: { children: React.ReactNode }) {
       ...c,
       { key: `${arg.placeId || 'p'}-${arg.voucher.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...arg },
     ]);
+    // GA4 money funnel: `value` is what the customer pays (price), not the credit.
+    logEvent('add_to_cart', {
+      place: arg.placeName,
+      place_id: arg.placeId || null,
+      label: arg.voucher.label || null,
+      value: arg.voucher.price,
+      currency: arg.currencyCode,
+    });
   }, []);
   const removeFromCart = useCallback((key: string) => setCart((c) => c.filter((x) => x.key !== key)), []);
   const clearCart = useCallback(() => setCart([]), []);
@@ -105,6 +113,12 @@ export function VouchersProvider({ children }: { children: React.ReactNode }) {
   const checkout = useCallback(async () => {
     if (!user || !firestore || !familyId) throw new Error('Not signed in');
     if (cart.length === 0) return [];
+    // A cart is single-currency in practice, so cart[0]'s code stands for the whole total.
+    logEvent('begin_checkout', {
+      items: cart.length,
+      value: cart.reduce((sum, x) => sum + x.voucher.price, 0),
+      currency: cart[0].currencyCode,
+    });
     const ids: string[] = [];
     for (const item of cart) {
       const code = makeCode();
@@ -125,7 +139,14 @@ export function VouchersProvider({ children }: { children: React.ReactNode }) {
       };
       const ref = await addDoc(collection(firestore, 'voucherOrders'), payload);
       ids.push(ref.id);
-      logEvent('voucher_purchase', { place: item.placeName, value: item.voucher.value, currency: item.currencyCode });
+      logEvent('purchase', {
+        transaction_id: ref.id,
+        value: item.voucher.price,
+        currency: item.currencyCode,
+        place: item.placeName,
+        place_id: item.placeId || null,
+        label: item.voucher.label || null,
+      });
       if (user.email) {
         sendVoucherEmail({
           to: user.email,

@@ -7,6 +7,7 @@ import { firestore } from './firebase';
 import { useAuth } from './auth';
 import { useFamily } from './family';
 import { sendBookingEmail } from './email';
+import { logEvent } from './analytics';
 
 export type BookingInput = {
   placeId?: string;
@@ -71,6 +72,7 @@ export function BookingsProvider({ children }: { children: React.ReactNode }) {
       const code = makeCode();
       const payload = { ...input, uid: user.uid, familyId, status: 'requested', code, createdAt: serverTimestamp() };
       const ref = await addDoc(collection(firestore, 'bookings'), payload);
+      logEvent('booking_request', { place: input.placeName, booking_id: ref.id });
       setLast({ id: ref.id, status: 'requested', code, ...input });
       // Branded confirmation email (sends once the EC2 /email endpoint is live).
       if (user.email) {
