@@ -44,6 +44,18 @@ function makeCode(): string {
   return `SPOT-${s}`;
 }
 
+// GA4 ecommerce item. `price` is the money paid, not the voucher's face value.
+function gaItem(item: CartItem | AddArg) {
+  return {
+    item_id: item.voucher.id,
+    item_name: item.voucher.label || item.placeName,
+    item_category: 'voucher',
+    item_brand: item.placeName,
+    price: item.voucher.price,
+    quantity: 1,
+  };
+}
+
 type AddArg = {
   placeId?: string;
   placeOwnerUid?: string;
@@ -98,46 +110,67 @@ export function VouchersProvider({ children }: { children: React.ReactNode }) {
       ...c,
       { key: `${arg.placeId || 'p'}-${arg.voucher.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...arg },
     ]);
+    logEvent('add_to_cart', { currency: arg.currencyCode, value: arg.voucher.price, items: [gaItem(arg)] });
   }, []);
   const removeFromCart = useCallback((key: string) => setCart((c) => c.filter((x) => x.key !== key)), []);
   const clearCart = useCallback(() => setCart([]), []);
 
   const checkout = useCallback(async () => {
-    if (!user || !firestore || !familyId) throw new Error('Not signed in');
+    if (!user || !firestore || !familyId) {
+      logEvent('purchase_failed', { step: 'not_signed_in' });
+      throw new Error('Not signed in');
+    }
     if (cart.length === 0) return [];
+    logEvent('begin_checkout', {
+      currency: cart[0].currencyCode,
+      value: cart.reduce((s, it) => s + it.voucher.price, 0),
+      items: cart.map(gaItem),
+    });
     const ids: string[] = [];
-    for (const item of cart) {
-      const code = makeCode();
-      const payload: any = {
-        uid: user.uid,
-        familyId,
-        placeId: item.placeId || null,
-        placeOwnerUid: item.placeOwnerUid || null,
-        placeName: item.placeName,
-        photoUrl: item.photoUrl || null,
-        currencyCode: item.currencyCode,
-        price: item.voucher.price,
-        value: item.voucher.value,
-        label: item.voucher.label || null,
-        code,
-        status: 'paid',
-        createdAt: serverTimestamp(),
-      };
-      const ref = await addDoc(collection(firestore, 'voucherOrders'), payload);
-      ids.push(ref.id);
-      logEvent('voucher_purchase', { place: item.placeName, value: item.voucher.value, currency: item.currencyCode });
-      if (user.email) {
-        sendVoucherEmail({
-          to: user.email,
+    try {
+      for (const item of cart) {
+        const code = makeCode();
+        const payload: any = {
+          uid: user.uid,
+          familyId,
+          placeId: item.placeId || null,
+          placeOwnerUid: item.placeOwnerUid || null,
           placeName: item.placeName,
-          label: item.voucher.label,
+          photoUrl: item.photoUrl || null,
+          currencyCode: item.currencyCode,
           price: item.voucher.price,
           value: item.voucher.value,
-          currencyCode: item.currencyCode,
+          label: item.voucher.label || null,
           code,
-          orderId: ref.id,
+          status: 'paid',
+          createdAt: serverTimestamp(),
+        };
+        const ref = await addDoc(collection(firestore, 'voucherOrders'), payload);
+        ids.push(ref.id);
+        logEvent('voucher_purchase', { place: item.placeName, face_value: item.voucher.value, currency: item.currencyCode });
+        logEvent('purchase', {
+          transaction_id: ref.id,
+          affiliation: item.placeName,
+          currency: item.currencyCode,
+          value: item.voucher.price,
+          items: [gaItem(item)],
         });
+        if (user.email) {
+          sendVoucherEmail({
+            to: user.email,
+            placeName: item.placeName,
+            label: item.voucher.label,
+            price: item.voucher.price,
+            value: item.voucher.value,
+            currencyCode: item.currencyCode,
+            code,
+            orderId: ref.id,
+          });
+        }
       }
+    } catch (e: any) {
+      logEvent('purchase_failed', { step: 'order_write', reason: String(e?.code || e?.message || e), written: ids.length });
+      throw e;
     }
     setLastOrderId(ids[0] || null);
     setCart([]);

@@ -3,9 +3,17 @@
 // module and no-ops until it ships in a rebuild, so it's safe to call anywhere.
 import { NativeModules } from 'react-native';
 
+let warnedUnlinked = false;
+
 function analytics(): any | null {
   // No-op until the RNFirebase native module is linked (next rebuild).
-  if (!NativeModules.RNFBAppModule) return null;
+  if (!NativeModules.RNFBAppModule) {
+    if (!warnedUnlinked) {
+      warnedUnlinked = true;
+      console.warn('[analytics] Firebase Analytics native module is not linked — no events are being recorded.');
+    }
+    return null;
+  }
   try {
     return require('@react-native-firebase/analytics').default();
   } catch {
