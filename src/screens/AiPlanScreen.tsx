@@ -22,6 +22,7 @@ import { usePurchases } from '../lib/purchases';
 import { useAuth } from '../lib/auth';
 import { PLUS_ENABLED, FREE_AI_PLANS } from '../lib/flags';
 import { aiPlansUsed, bumpAiPlansUsed } from '../lib/planGate';
+import { logEvent } from '../lib/analytics';
 
 const SUGGESTION_KEYS = ['ai.s1', 'ai.s2', 'ai.s3', 'ai.s4'];
 
@@ -347,7 +348,7 @@ export function AiPlanScreen() {
     // a family can't farm unlimited generations by deleting plans between tries.
     if (PLUS_ENABLED && !isPlus) {
       const used = user ? await aiPlansUsed(user.uid) : 0;
-      if (plans.length >= FREE_AI_PLANS || used >= FREE_AI_PLANS) { push('paywall'); return; }
+      if (plans.length >= FREE_AI_PLANS || used >= FREE_AI_PLANS) { logEvent('ai_plan_gated', { plans: plans.length, used }); push('paywall', { source: 'ai_plan_gate' }); return; }
       if (user) bumpAiPlansUsed(user.uid);
     }
     const food = familyFood(profile);

@@ -266,7 +266,7 @@ export function ProfileScreen() {
             </View>
           </View>
         ) : (
-          <Pressable onPress={() => push('paywall')} style={[{ backgroundColor: C.premium, borderRadius: R.lg, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, marginBottom: 18 }, SH.card]}>
+          <Pressable onPress={() => push('paywall', { source: 'profile_upgrade_tile' })} style={[{ backgroundColor: C.premium, borderRadius: R.lg, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, marginBottom: 18 }, SH.card]}>
             <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}>{Icons.sparkle({ size: 20, color: '#fff' })}</View>
             <View style={{ flex: 1 }}>
               <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 15 }}>{t('profile.upgradeTitle')}</Text>

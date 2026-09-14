@@ -1,5 +1,5 @@
 // Spotly — Paywall (Spotly Plus) backed by RevenueCat.
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,8 +7,9 @@ import { C, F, R, SH } from '../lib/theme';
 import { Icons } from '../components/icons';
 import { Btn, CircBtn } from '../components/ui';
 import { useStore } from '../lib/store';
-import { usePurchases } from '../lib/purchases';
+import { usePurchases, gaSubItem, pkgMoney } from '../lib/purchases';
 import { useI18n } from '../lib/i18n';
+import { logEvent } from '../lib/analytics';
 
 function PlanCard({ t, p, sub, badge, sel, onPress }: { t: string; p: string; sub: string; badge?: string; sel?: boolean; onPress?: () => void }) {
   return (
@@ -27,11 +28,24 @@ function PlanCard({ t, p, sub, badge, sel, onPress }: { t: string; p: string; su
 
 export function PaywallScreen() {
   const insets = useSafeAreaInsets();
-  const { pop } = useStore();
+  const { pop, stack } = useStore();
   const { packages, purchase, restore, isPlus } = usePurchases();
   const { t } = useI18n();
   const [sel, setSel] = useState<'annual' | 'monthly'>('annual');
   const [busy, setBusy] = useState(false);
+
+  // Which entry point opened the paywall — so we can tell an upgrade tile tap
+  // apart from an AI-plan gate when reading the funnel.
+  const source: string = stack[stack.length - 1]?.params?.source || 'unknown';
+
+  // One view per mount (the ref survives re-renders from sel/busy).
+  const viewed = useRef(false);
+  useEffect(() => {
+    if (viewed.current) return;
+    viewed.current = true;
+    logEvent('paywall_view', { source, is_plus: isPlus, packages: packages.length });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Match by standard RevenueCat package type first, then fall back to identifier
   // hints — so the paywall still finds the right plan when the offering uses
@@ -54,9 +68,10 @@ export function PaywallScreen() {
 
   const onBuy = async () => {
     if (isPlus) { pop(); return; }
-    if (!selPkg) { Alert.alert(t('pw.almostReady'), t('pw.almostReadyMsg')); return; }
+    if (!selPkg) { logEvent('purchase_failed', { step: 'no_package', source }); Alert.alert(t('pw.almostReady'), t('pw.almostReadyMsg')); return; }
     setBusy(true);
     try {
+      logEvent('begin_checkout', { source, plan: sel, ...pkgMoney(selPkg), items: [gaSubItem(selPkg)] });
       await purchase(selPkg);
       Alert.alert(t('pw.welcome'), t('pw.welcomeMsg'), [{ text: t('common.done'), onPress: pop }]);
     } catch (e: any) {
@@ -110,8 +125,8 @@ export function PaywallScreen() {
 
           {!isPlus ? (
             <View style={{ marginTop: 22, flexDirection: 'row', gap: 10 }}>
-              <PlanCard t={t('pw.monthly')} p={monthlyPrice} sub={t('pw.perMonth')} sel={sel === 'monthly'} onPress={() => setSel('monthly')} />
-              <PlanCard t={t('pw.yearly')} p={annualPrice} sub={t('pw.freeTrial')} badge={t('pw.best')} sel={sel === 'annual'} onPress={() => setSel('annual')} />
+              <PlanCard t={t('pw.monthly')} p={monthlyPrice} sub={t('pw.perMonth')} sel={sel === 'monthly'} onPress={() => { setSel('monthly'); logEvent('select_item', { item_list_name: 'spotly_plus', plan: 'monthly', source }); }} />
+              <PlanCard t={t('pw.yearly')} p={annualPrice} sub={t('pw.freeTrial')} badge={t('pw.best')} sel={sel === 'annual'} onPress={() => { setSel('annual'); logEvent('select_item', { item_list_name: 'spotly_plus', plan: 'annual', source }); }} />
             </View>
           ) : null}
 
