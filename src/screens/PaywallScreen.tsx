@@ -11,7 +11,7 @@ import { usePurchases, gaSubItem, pkgMoney } from '../lib/purchases';
 import { useI18n } from '../lib/i18n';
 import { logEvent } from '../lib/analytics';
 
-function PlanCard({ t, p, sub, badge, sel, onPress }: { t: string; p: string; sub: string; badge?: string; sel?: boolean; onPress?: () => void }) {
+function PlanCard({ t, p, sub, badge, sel, onPress }: { t: string; p?: string; sub: string; badge?: string; sel?: boolean; onPress?: () => void }) {
   return (
     <Pressable onPress={onPress} style={[{ flex: 1, paddingVertical: 16, paddingHorizontal: 14, borderRadius: R.xl, backgroundColor: sel ? '#fff' : 'transparent', borderWidth: 2, borderColor: sel ? C.premium : C.line }, sel && SH.card]}>
       {badge ? (
@@ -29,7 +29,7 @@ function PlanCard({ t, p, sub, badge, sel, onPress }: { t: string; p: string; su
 export function PaywallScreen() {
   const insets = useSafeAreaInsets();
   const { pop, stack } = useStore();
-  const { packages, purchase, restore, isPlus } = usePurchases();
+  const { packages, purchase, restore, isPlus, refreshOfferings, offeringsStatus } = usePurchases();
   const { t } = useI18n();
   const [sel, setSel] = useState<'annual' | 'monthly'>('annual');
   const [busy, setBusy] = useState(false);
@@ -43,7 +43,10 @@ export function PaywallScreen() {
   useEffect(() => {
     if (viewed.current) return;
     viewed.current = true;
-    logEvent('paywall_view', { source, is_plus: isPlus, packages: packages.length });
+    logEvent('paywall_view', { source, is_plus: isPlus, packages: packages.length, offerings_status: offeringsStatus });
+    // A cold start that failed to fetch offerings leaves us with nothing to
+    // sell — retry here rather than show a paywall nobody can buy from.
+    if (packages.length === 0) refreshOfferings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -55,8 +58,8 @@ export function PaywallScreen() {
   const monthly = packages.find((p: any) => p.packageType === 'MONTHLY') || hint(/month/i) || packages[0];
   const annual = packages.find((p: any) => p.packageType === 'ANNUAL') || hint(/year|annual/i) || packages.find((p: any) => p !== monthly);
   const selPkg = (sel === 'annual' ? annual : monthly) || annual || monthly;
-  const monthlyPrice = monthly?.product?.priceString || '€4.99';
-  const annualPrice = annual?.product?.priceString || '€39.99';
+  const monthlyPrice = monthly?.product?.priceString;
+  const annualPrice = annual?.product?.priceString;
 
   const feats = [
     { ic: Icons.album, t: t('pw.f1t'), d: t('pw.f1d') },
@@ -68,7 +71,14 @@ export function PaywallScreen() {
 
   const onBuy = async () => {
     if (isPlus) { pop(); return; }
-    if (!selPkg) { logEvent('purchase_failed', { step: 'no_package', source }); Alert.alert(t('pw.almostReady'), t('pw.almostReadyMsg')); return; }
+    if (!selPkg) {
+      logEvent('purchase_failed', { step: 'no_package', source, offerings_status: offeringsStatus });
+      // One more fetch before we tell them to come back later — the offering is
+      // usually there and it was only the cold-start call that missed it.
+      const list = await refreshOfferings();
+      if (!list.length) Alert.alert(t('pw.almostReady'), t('pw.almostReadyMsg'));
+      return;
+    }
     setBusy(true);
     try {
       logEvent('begin_checkout', { source, plan: sel, ...pkgMoney(selPkg), items: [gaSubItem(selPkg)] });
@@ -124,10 +134,29 @@ export function PaywallScreen() {
           </View>
 
           {!isPlus ? (
-            <View style={{ marginTop: 22, flexDirection: 'row', gap: 10 }}>
-              <PlanCard t={t('pw.monthly')} p={monthlyPrice} sub={t('pw.perMonth')} sel={sel === 'monthly'} onPress={() => { setSel('monthly'); logEvent('select_item', { item_list_name: 'spotly_plus', plan: 'monthly', source }); }} />
-              <PlanCard t={t('pw.yearly')} p={annualPrice} sub={t('pw.freeTrial')} badge={t('pw.best')} sel={sel === 'annual'} onPress={() => { setSel('annual'); logEvent('select_item', { item_list_name: 'spotly_plus', plan: 'annual', source }); }} />
-            </View>
+            selPkg ? (
+              <View style={{ marginTop: 22, flexDirection: 'row', gap: 10 }}>
+                <PlanCard t={t('pw.monthly')} p={monthlyPrice} sub={t('pw.perMonth')} sel={sel === 'monthly'} onPress={() => { setSel('monthly'); logEvent('select_item', { item_list_name: 'spotly_plus', plan: 'monthly', source }); }} />
+                <PlanCard t={t('pw.yearly')} p={annualPrice} sub={t('pw.freeTrial')} badge={t('pw.best')} sel={sel === 'annual'} onPress={() => { setSel('annual'); logEvent('select_item', { item_list_name: 'spotly_plus', plan: 'annual', source }); }} />
+              </View>
+            ) : (
+              // No offering yet: say so instead of showing a price nobody can buy.
+              <View style={{ marginTop: 22, alignItems: 'center', gap: 10 }}>
+                {offeringsStatus === 'loading' ? (
+                  <>
+                    <ActivityIndicator color={C.premium} />
+                    <Text style={{ fontSize: 12.5, color: C.ink3, fontFamily: F.semibold }}>{t('auth.pleaseWait')}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={{ fontSize: 12.5, color: C.ink3, fontFamily: F.regular, textAlign: 'center', lineHeight: 18 }}>{t('pw.almostReadyMsg')}</Text>
+                    <Pressable onPress={() => refreshOfferings()} style={{ paddingHorizontal: 16, paddingVertical: 9, borderRadius: R.pill, borderWidth: 2, borderColor: C.line }}>
+                      <Text style={{ fontSize: 12.5, color: C.ink, fontFamily: F.bold }}>{t('common.retry')}</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            )
           ) : null}
 
           <Text style={{ marginTop: 14, textAlign: 'center', fontSize: 11, color: C.ink3, fontFamily: F.regular, lineHeight: 16 }}>
@@ -139,7 +168,7 @@ export function PaywallScreen() {
 
       <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 14 }}>
         <Btn kind="premium" size="lg" full onPress={onBuy}>
-          {busy ? t('auth.pleaseWait') : isPlus ? t('pw.onPlusDone') : sel === 'annual' ? t('pw.startTrial') : t('pw.subscribeMonthly')}
+          {busy ? t('auth.pleaseWait') : isPlus ? t('pw.onPlusDone') : !selPkg && offeringsStatus !== 'loading' ? t('common.retry') : sel === 'annual' ? t('pw.startTrial') : t('pw.subscribeMonthly')}
         </Btn>
         {busy ? <ActivityIndicator color="#fff" style={{ marginTop: 10 }} /> : null}
       </View>

@@ -20,6 +20,8 @@ type PurchasesState = {
   available: boolean;
   isPlus: boolean;
   packages: Pkg[];
+  offeringsStatus: 'loading' | 'ready' | 'error';
+  refreshOfferings: () => Promise<Pkg[]>;
   purchase: (pkg: Pkg) => Promise<void>;
   restore: () => Promise<void>;
 };
@@ -55,8 +57,33 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [isPlus, setIsPlus] = useState(false);
   const [packages, setPackages] = useState<Pkg[]>([]);
+  const [offeringsStatus, setOfferingsStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const P = getRC();
   const available = !!P && !!KEY;
+
+  // A cold-start fetch that fails must not leave the paywall priceless forever,
+  // so this is callable again from the paywall. Every empty result is logged —
+  // an unbuyable paywall should look different from no demand in GA4.
+  const refreshOfferings = useCallback(async (): Promise<Pkg[]> => {
+    if (!available) {
+      setOfferingsStatus('error');
+      return [];
+    }
+    setOfferingsStatus('loading');
+    try {
+      const o: any = await P.getOfferings?.();
+      const list: Pkg[] = o?.current?.availablePackages || [];
+      setPackages(list);
+      setOfferingsStatus('ready');
+      if (!list.length) logEvent('offerings_unavailable', { reason: 'empty' });
+      return list;
+    } catch (e: any) {
+      setOfferingsStatus('error');
+      logEvent('offerings_unavailable', { reason: String(e?.code || e?.message || e) });
+      return [];
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [available]);
 
   useEffect(() => {
     if (!available) return;
@@ -64,7 +91,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     const listener = (ci: any) => setIsPlus(hasPlus(ci));
     try { P.addCustomerInfoUpdateListener(listener); } catch {}
     P.getCustomerInfo?.().then((ci: any) => setIsPlus(hasPlus(ci))).catch(() => {});
-    P.getOfferings?.().then((o: any) => setPackages(o?.current?.availablePackages || [])).catch(() => {});
+    refreshOfferings();
     return () => { try { P.removeCustomerInfoUpdateListener?.(listener); } catch {} };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [available]);
@@ -110,7 +137,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [available]);
 
-  return <Ctx.Provider value={{ available, isPlus, packages, purchase, restore }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ available, isPlus, packages, offeringsStatus, refreshOfferings, purchase, restore }}>{children}</Ctx.Provider>;
 }
 
 export function usePurchases(): PurchasesState {
