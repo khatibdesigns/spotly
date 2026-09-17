@@ -1,6 +1,6 @@
 // Spotly — AI itinerary planner. Generation runs globally (PlannerProvider) so
 // you can leave this screen; a sound notification fires when it's ready.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Alert, Modal, Image } from 'react-native';
 import { KeyboardAwareScrollView, KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -339,6 +339,35 @@ export function AiPlanScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Free-plan meter: how many AI plans this family has left, shown on the idle
+  // editor so the upsell lands before the wall, not after it. Reads the same two
+  // sources as the gate below (saved plans + the per-user counter) so the number
+  // on screen can never disagree with when the paywall actually opens.
+  const [used, setUsed] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!(PLUS_ENABLED && !isPlus && user)) return;
+        const n = await aiPlansUsed(user.uid);
+        if (!cancelled) setUsed(n);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [user?.uid, isPlus]);
+  const meterOn = PLUS_ENABLED && !isPlus;
+  const remaining = Math.max(0, FREE_AI_PLANS - Math.max(plans.length, used ?? 0));
+  const meterSeen = useRef(false);
+  useEffect(() => {
+    if (!meterOn || used === null || meterSeen.current) return;
+    meterSeen.current = true;
+    logEvent('upsell_view', { source: 'ai_plan_meter', remaining });
+  }, [meterOn, used, remaining]);
+  const onUpgrade = () => {
+    logEvent('upsell_click', { source: 'ai_plan_meter', remaining });
+    push('paywall', { source: 'ai_plan_meter' });
+  };
+
   const onGenerate = async () => {
     if (!text.trim()) return;
     // Free-tier gate: free families can keep up to FREE_AI_PLANS plans, then the
@@ -350,6 +379,7 @@ export function AiPlanScreen() {
       const used = user ? await aiPlansUsed(user.uid) : 0;
       if (plans.length >= FREE_AI_PLANS || used >= FREE_AI_PLANS) { logEvent('ai_plan_gated', { plans: plans.length, used }); push('paywall', { source: 'ai_plan_gate' }); return; }
       if (user) bumpAiPlansUsed(user.uid);
+      setUsed((n) => (n ?? 0) + 1);
     }
     const food = familyFood(profile);
     generate({
@@ -404,7 +434,7 @@ export function AiPlanScreen() {
           ) : status === 'error' ? (
             <ErrorState message={error} />
           ) : (
-            <Idle text={text} setText={setText} profile={profile} place={place} prefs={prefs} togglePref={togglePref} />
+            <Idle text={text} setText={setText} profile={profile} place={place} prefs={prefs} togglePref={togglePref} meter={meterOn && used !== null ? { remaining, onUpgrade } : null} />
           )}
       </KeyboardAwareScrollView>
 
@@ -463,7 +493,7 @@ export function AiPlanScreen() {
   );
 }
 
-function Idle({ text, setText, profile, place, prefs, togglePref }: { text: string; setText: (s: string) => void; profile: any; place: string; prefs: string[]; togglePref: (k: string) => void }) {
+function Idle({ text, setText, profile, place, prefs, togglePref, meter }: { text: string; setText: (s: string) => void; profile: any; place: string; prefs: string[]; togglePref: (k: string) => void; meter?: { remaining: number; onUpgrade: () => void } | null }) {
   const { t } = useI18n();
   const forKids = profile?.kids?.length ? t('ai.forKids', { names: profile.kids.map((k: any) => k.name || 'your child').join(' & ') }) : '';
   return (
@@ -472,6 +502,17 @@ function Idle({ text, setText, profile, place, prefs, togglePref }: { text: stri
       <Text style={{ fontSize: 15, color: C.ink2, fontFamily: F.regular, marginTop: 8, lineHeight: 22 }}>
         {t('ai.idleSub', { forKids })}
       </Text>
+      {meter ? (
+        <View style={{ marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: C.surface, borderRadius: R.pill, borderWidth: 1, borderColor: C.line, paddingVertical: 8, paddingHorizontal: 12 }}>
+          {Icons.sparkle({ size: 14, color: C.premium })}
+          <Text style={{ fontFamily: F.semibold, fontSize: 13, color: C.ink2 }}>
+            {meter.remaining > 0 ? t('ai.freeLeft', { n: meter.remaining, total: FREE_AI_PLANS }) : t('ai.freeUsedUp')}
+          </Text>
+          <Pressable onPress={meter.onUpgrade} hitSlop={8}>
+            <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.premium }}>{t('ai.freeUpgrade')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <View style={{ marginTop: 18, backgroundColor: C.surface, borderRadius: R.xl, borderWidth: 1, borderColor: C.line, padding: 14 }}>
         <TextInput
           value={text}
