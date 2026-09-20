@@ -127,6 +127,8 @@ const EN: Record<string, string> = {
   'discover.clearFilters': 'Clear filters',
   'discover.editorPick': 'EDITOR’S PICK',
   'discover.nearYouTag': 'NEAR YOU',
+  'discover.plusTitle': 'Try Spotly Plus free for 7 days',
+  'discover.plusSub': 'Unlimited AI plans, full memory map & photo storage',
   // plan
   'plan.title': 'Plan',
   'plan.eyebrow': 'Your weekends, sorted',
@@ -743,6 +745,8 @@ const AR: Record<string, string> = {
   'discover.clearFilters': 'مسح الفلاتر',
   'discover.editorPick': 'اختيار المحرّر',
   'discover.nearYouTag': 'بالقرب منك',
+  'discover.plusTitle': 'جرّب سبوتلي بلس مجانًا ٧ أيام',
+  'discover.plusSub': 'خطط ذكاء اصطناعي بلا حدود، خريطة ذكريات كاملة وتخزين صور',
   // plan
   'plan.title': 'الخطة',
   'plan.eyebrow': 'عطلاتك مرتّبة',

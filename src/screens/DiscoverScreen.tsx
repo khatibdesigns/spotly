@@ -13,7 +13,9 @@ import { useAuth } from '../lib/auth';
 import { usePlaces, filterHasResults } from '../lib/placesStore';
 import { useSaves } from '../lib/saves';
 import { useVouchers } from '../lib/vouchers';
-import { COMMERCE_ENABLED } from '../lib/flags';
+import { COMMERCE_ENABLED, PLUS_ENABLED } from '../lib/flags';
+import { usePurchases } from '../lib/purchases';
+import { logEvent } from '../lib/analytics';
 import { useI18n } from '../lib/i18n';
 import { Spot, formatDistance, searchPlaces, PlaceSearchResult } from '../lib/places';
 import { getWeather, Weather } from '../lib/weather';
@@ -202,6 +204,16 @@ export function DiscoverScreen() {
   const [q, setQ] = useState('');
   const scrollRef = useRef<ScrollView>(null);
   const feedY = useRef(0);
+  // Spotly Plus entry point in the feed — Discover is the tab families open
+  // first, so the upsell lives here as well as on Profile / the AI-plan gate.
+  const { isPlus } = usePurchases();
+  const showPlusCard = PLUS_ENABLED && !isPlus;
+  const plusSeen = useRef(false);
+  useEffect(() => {
+    if (!showPlusCard || plusSeen.current) return;
+    plusSeen.current = true;
+    logEvent('upsell_view', { source: 'discover_card' });
+  }, [showPlusCard]);
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = () => { setRefreshing(true); Promise.resolve(reload()).finally(() => setRefreshing(false)); };
   // Lazy-render the feed in chunks (Android jank with 100s of cards) + a
@@ -272,8 +284,7 @@ export function DiscoverScreen() {
               <Text numberOfLines={1} style={{ fontSize: 12, fontFamily: F.bold, color: C.ink, maxWidth: 130 }}>{areaLabel || (locationGranted ? t('discover.nearYou') : profile?.homeCity || 'Kuwait')}</Text>
               {Icons.chevD({ size: 12, color: C.ink3 })}
             </Pressable>
-            {/* Spotly Plus sparkle hidden for free launch — re-enable when paid
-                tiers go live. PaywallScreen still routable from elsewhere. */}
+            {/* Spotly Plus entry lives as a card in the feed below, not here. */}
           </View>
         </View>
 
@@ -364,6 +375,21 @@ export function DiscoverScreen() {
               <CatTile key={`${c.id}-${i}`} ic={c.ic} color={c.color} label={t(c.key)} active={filters.has(c.id)} onPress={() => setOnlyFilter(c.id)} />
             ))}
           </ScrollView>
+
+          {/* Spotly Plus — upgrade entry for free families */}
+          {showPlusCard ? (
+            <Pressable
+              onPress={() => { logEvent('upsell_click', { source: 'discover_card' }); push('paywall', { source: 'discover_card' }); }}
+              style={[{ backgroundColor: C.premium, borderRadius: R.lg, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 20, marginBottom: 18 }, SH.card]}
+            >
+              <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}>{Icons.sparkle({ size: 20, color: '#fff' })}</View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#fff', fontFamily: F.extrabold, fontSize: 15 }}>{t('discover.plusTitle')}</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.85)', fontFamily: F.regular, fontSize: 12.5, marginTop: 1 }}>{t('discover.plusSub')}</Text>
+              </View>
+              <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 22, fontFamily: F.regular }}>›</Text>
+            </Pressable>
+          ) : null}
 
           {/* Tastes they'll love — food-aware dining rail */}
           {tasteRail.length ? (
