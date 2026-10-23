@@ -1,7 +1,7 @@
 // Spotly — booking confirmation email. Posts to a small /email endpoint on the
 // EC2 box, which renders a Spotly-branded HTML email and sends it via the
 // configured mail provider. Fire-and-forget: never blocks or breaks a booking.
-const API_URL = (process.env.EXPO_PUBLIC_PLAN_API_URL || 'http://16.16.79.251:8090').replace(/\/$/, '');
+const API_URL = (process.env.EXPO_PUBLIC_PLAN_API_URL || 'https://ai.khatibdesigns.com').replace(/\/$/, '');
 
 export type BookingEmail = {
   to: string;

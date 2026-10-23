@@ -8,7 +8,7 @@ export default {
   expo: {
     name: 'Spotly',
     slug: 'spotly',
-    version: '1.0.2',
+    version: '1.0.3',
     orientation: 'portrait',
     icon: './assets/icon.png',
     scheme: 'spotly',
@@ -17,7 +17,7 @@ export default {
     ios: {
       supportsTablet: false,
       bundleIdentifier: 'com.khd.spotly',
-      buildNumber: '70',
+      buildNumber: '72',
       usesAppleSignIn: true,
       googleServicesFile: './GoogleService-Info.plist', // Firebase (FCM + Analytics)
       // Universal Links — tapping https://meetspotly.com/join?code=… opens the
@@ -25,24 +25,12 @@ export default {
       associatedDomains: ['applinks:meetspotly.com'],
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
-        // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
-        // Same exception the Caption app uses. Move to HTTPS before launch.
-        NSAppTransportSecurity: {
-          NSExceptionDomains: {
-            '16.16.79.251': {
-              NSExceptionAllowsInsecureHTTPLoads: true,
-              NSIncludesSubdomains: false,
-            },
-          },
-        },
       },
     },
     android: {
       package: 'com.khd.spotly',
-      versionCode: 70,
+      versionCode: 72,
       googleServicesFile: './google-services.json', // Firebase (FCM + Analytics)
-      // Allow the cleartext-HTTP call to the EC2 Claude proxy (AI planner).
-      usesCleartextTraffic: true,
       // App Links — tapping https://meetspotly.com/join?code=… opens the app
       // (family invites). autoVerify uses the hosted assetlinks.json.
       intentFilters: [
@@ -93,8 +81,6 @@ export default {
       [
         'expo-build-properties',
         {
-          // Allow cleartext HTTP in release builds (EC2 Claude proxy / AI planner).
-          android: { usesCleartextTraffic: true },
           // @react-native-firebase needs static frameworks on iOS.
           ios: { useFrameworks: 'static' },
         },

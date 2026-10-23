@@ -4,7 +4,7 @@
 import { findPlace } from './places';
 import { getWeather } from './weather';
 
-const API_URL = (process.env.EXPO_PUBLIC_PLAN_API_URL || 'http://16.16.79.251:8090').replace(/\/$/, '');
+const API_URL = (process.env.EXPO_PUBLIC_PLAN_API_URL || 'https://ai.khatibdesigns.com').replace(/\/$/, '');
 const PLAN_START_ENDPOINT = `${API_URL}/plan/start`;
 const PLAN_RESULT_ENDPOINT = `${API_URL}/plan/result`;
 const PLAN_ENDPOINT = `${API_URL}/plan`; // legacy fallback (single long request)

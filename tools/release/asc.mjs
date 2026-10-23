@@ -73,23 +73,11 @@ async function waitForBuild(appId) {
 
 // Release notes. Apple blocks an update with an empty whatsNew, and the failure reads as
 // a generic "not ready" rather than naming the field, so it is worth checking explicitly.
-const NOTES = `Plan the day your way
-• Tell Spotly what matters — halal, no alcohol, quieter places, nature or food — and it plans around it.
-• Don't like a suggestion? Swap it for another without starting over.
-• Get a nudge when it's time to leave, and let Spotly re-time the rest of your day if you run late.
+const NOTES = `Faster, more reliable planning
+• The AI day planner and place screening now run on a new, secure connection.
+• Fewer failed plans when your connection is slow.
 
-Know before you go
-• Place pages now show opening hours, phone, website and Google reviews.
-
-Memories
-• A smoother way to pick photos, name an album and order it.
-• Clearer gallery capture, with photo counts.
-
-Family & account
-• Invite your family with a shareable card.
-• Manage your membership, and delete your account, from Profile.
-
-Also: Arabic throughout, and a fix for notifications not reaching some families.`
+Also: general stability improvements.`
 
 const cmd = process.argv[2] || 'status'
 const APPLY = process.argv.includes('--apply') || process.argv.includes('--submit')

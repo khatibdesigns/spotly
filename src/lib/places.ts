@@ -781,7 +781,7 @@ export type SpotEvent = {
 // cached in Firestore `screenedPlaces/{id}`. The app reads the cache to hide
 // non-kid-friendly places (fish-only restaurants, shisha cafes, gyms…) and
 // sends never-seen places to the screener in the background.
-const SCREEN_API = (process.env.EXPO_PUBLIC_PLAN_API_URL || 'http://16.16.79.251:8090').replace(/\/$/, '') + '/screen';
+const SCREEN_API = (process.env.EXPO_PUBLIC_PLAN_API_URL || 'https://ai.khatibdesigns.com').replace(/\/$/, '') + '/screen';
 
 // id -> keep(boolean). Absent from the map = not yet screened.
 export async function getScreenVerdicts(ids: string[]): Promise<Map<string, boolean>> {
