@@ -36,7 +36,7 @@ echo "──── [3/3] upload ────"
 OUT=$(xcrun iTMSTransporter -m upload -assetFile "$IPA" -apiKey "$KEY_ID" -apiIssuer "$ISSUER" 2>&1) || true
 echo "$OUT" | tail -8
 # iTMSTransporter can exit 0 on a rejected upload; trust only its own success line.
-if echo "$OUT" | grep -q "were not uploaded because" || ! echo "$OUT" | grep -q "were uploaded successfully"; then
+if echo "$OUT" | grep -q "were not uploaded because" || ! echo "$OUT" | grep -q -E "(was|were) uploaded successfully"; then
   echo "❌ upload not confirmed by iTMSTransporter"; exit 1
 fi
 
