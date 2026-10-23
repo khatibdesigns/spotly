@@ -29,7 +29,7 @@ export default {
     },
     android: {
       package: 'com.khd.spotly',
-      versionCode: 72,
+      versionCode: 73,
       googleServicesFile: './google-services.json', // Firebase (FCM + Analytics)
       // App Links — tapping https://meetspotly.com/join?code=… opens the app
       // (family invites). autoVerify uses the hosted assetlinks.json.
