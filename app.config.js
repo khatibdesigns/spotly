@@ -8,7 +8,7 @@ export default {
   expo: {
     name: 'Spotly',
     slug: 'spotly',
-    version: '1.0.3',
+    version: '1.0.4',
     orientation: 'portrait',
     icon: './assets/icon.png',
     scheme: 'spotly',
@@ -17,7 +17,7 @@ export default {
     ios: {
       supportsTablet: false,
       bundleIdentifier: 'com.khd.spotly',
-      buildNumber: '72',
+      buildNumber: '73',
       usesAppleSignIn: true,
       googleServicesFile: './GoogleService-Info.plist', // Firebase (FCM + Analytics)
       // Universal Links — tapping https://meetspotly.com/join?code=… opens the

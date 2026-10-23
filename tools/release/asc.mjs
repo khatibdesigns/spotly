@@ -55,7 +55,7 @@ async function resolve() {
   const app = (await api(`/v1/apps?filter[bundleId]=${BUNDLE}`)).data?.[0]
   if (!app) throw new Error(`no app for ${BUNDLE}`)
   const version = (await api(`/v1/apps/${app.id}/appStoreVersions?filter[versionString]=${VERSION}&limit=1`)).data?.[0]
-  if (!version) throw new Error(`version ${VERSION} does not exist in App Store Connect — create it there first`)
+  if (!version) throw new Error(`version ${VERSION} does not exist in App Store Connect — run: node tools/release/asc.mjs create --apply`)
   return { app, version }
 }
 
@@ -73,11 +73,9 @@ async function waitForBuild(appId) {
 
 // Release notes. Apple blocks an update with an empty whatsNew, and the failure reads as
 // a generic "not ready" rather than naming the field, so it is worth checking explicitly.
-const NOTES = `Faster, more reliable planning
-• The AI day planner and place screening now run on a new, secure connection.
-• Fewer failed plans when your connection is slow.
+const NOTES = `Fixes a crash on launch on iOS 27.
 
-Also: general stability improvements.`
+If Spotly closed as soon as you opened it after the last update, this version fixes it. Sorry about that!`
 
 const cmd = process.argv[2] || 'status'
 const APPLY = process.argv.includes('--apply') || process.argv.includes('--submit')
@@ -95,6 +93,17 @@ if (cmd === 'status') {
   console.log(`build ${BUILD}: ${b?.attributes?.processingState || 'not uploaded'} expired=${b?.attributes?.expired} encryption=${b?.attributes?.usesNonExemptEncryption}`)
   const subs = (await api(`/v1/apps/${app.id}/reviewSubmissions?limit=5`)).data || []
   subs.forEach((s) => console.log(`  submission ${s.id} ${s.attributes?.state}`))
+} else if (cmd === 'create') {
+  // Create the App Store version from Info.plist's CFBundleShortVersionString (iOS, released on approval).
+  const app = (await api(`/v1/apps?filter[bundleId]=${BUNDLE}`)).data?.[0]
+  if (!app) throw new Error(`no app for ${BUNDLE}`)
+  const have = (await api(`/v1/apps/${app.id}/appStoreVersions?filter[versionString]=${VERSION}&limit=1`)).data?.[0]
+  if (have) { console.log(`version ${VERSION} already exists: ${have.attributes.appStoreState}`); process.exit(0) }
+  if (!APPLY) { console.log(`would create iOS version ${VERSION} (AFTER_APPROVAL). Pass --apply.`); process.exit(0) }
+  const r = await api('/v1/appStoreVersions', { method: 'POST', body: JSON.stringify({ data: {
+    type: 'appStoreVersions', attributes: { platform: 'IOS', versionString: VERSION, releaseType: 'AFTER_APPROVAL' },
+    relationships: { app: { data: { type: 'apps', id: app.id } } } } }) })
+  console.log(`created version ${VERSION}: ${r.data.attributes.appStoreState}`)
 } else if (cmd === 'notes') {
   const { version } = await resolve()
   console.log(`${NOTES.length} chars (Apple allows 4000)\n${NOTES}\n`)
@@ -142,6 +151,6 @@ if (cmd === 'status') {
   })
   console.log(`SUBMITTED ${VERSION} (build ${BUILD}) for App Store review`)
 } else {
-  console.log('usage: node tools/release/asc.mjs [status|notes|submit] [--apply|--submit]')
+  console.log('usage: node tools/release/asc.mjs [status|create|notes|submit] [--apply|--submit]')
   process.exit(1)
 }
